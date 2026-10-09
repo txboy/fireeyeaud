@@ -74,3 +74,43 @@ def test_list_working_papers_newest_first(tmp_path):
 def test_list_working_papers_empty(tmp_path):
     (tmp_path / ".fireeye").mkdir()
     assert list_working_papers(tmp_path) == []
+
+
+def test_create_working_paper_xlsx(tmp_path):
+    finding = _seed(tmp_path)
+    manifest = create_working_paper(
+        tmp_path, format="xlsx", locale="zh-CN", finding_ids=None
+    )
+    assert manifest["files"] == ["底稿.xlsx"]
+    base = tmp_path / ".fireeye" / "artifacts" / "working-paper" / manifest["id"]
+    book = base / "底稿.xlsx"
+    assert book.exists() and book.stat().st_size > 0
+    from openpyxl import load_workbook
+
+    wb = load_workbook(book)
+    assert "疑点汇总" in wb.sheetnames
+    ws = wb["疑点汇总"]
+    assert ws.cell(row=1, column=1).value == "编号"
+    assert ws.cell(row=2, column=1).value == finding["id"]
+
+
+def test_create_working_paper_pdf(tmp_path):
+    _seed(tmp_path)
+    manifest = create_working_paper(
+        tmp_path, format="pdf", locale="zh-CN", finding_ids=None
+    )
+    assert manifest["files"] == ["底稿.pdf"]
+    base = tmp_path / ".fireeye" / "artifacts" / "working-paper" / manifest["id"]
+    pdf = base / "底稿.pdf"
+    assert pdf.exists() and pdf.stat().st_size > 0
+    assert pdf.read_bytes()[:5] == b"%PDF-"
+
+
+def test_create_working_paper_bad_format(tmp_path):
+    (tmp_path / ".fireeye").mkdir()
+    import pytest
+
+    from fireeyeaud_agent.errors import ApiError
+
+    with pytest.raises(ApiError):
+        create_working_paper(tmp_path, format="doc", locale="zh-CN", finding_ids=None)

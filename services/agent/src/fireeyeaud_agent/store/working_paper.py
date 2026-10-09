@@ -179,6 +179,121 @@ def _render_docx(base: Path, material: dict[str, Any], locale: str) -> None:
     doc.save(str(base / _FILE["word"]))
 
 
+def _render_xlsx(base: Path, material: dict[str, Any], locale: str) -> None:
+    from openpyxl import Workbook
+
+    L = _labels(locale)
+    sev = _SEVERITY.get(locale, _SEVERITY["zh-CN"])
+    st = _STATUS.get(locale, _STATUS["zh-CN"])
+    findings = material["findings"]
+    wb = Workbook()
+
+    summary = wb.active
+    summary.title = L["findings"]
+    summary.append(
+        [L["id"], L["severity"], L["status"], L["title"], L["amount"], L["subjects"]]
+    )
+    for f in findings:
+        summary.append(
+            [
+                f.get("id", ""),
+                sev.get(f.get("severity"), f.get("severity", "")),
+                st.get(f.get("status"), f.get("status", "")),
+                _finding_title(f),
+                str(f.get("amount") or ""),
+                "、".join(f.get("subjects") or []),
+            ]
+        )
+
+    evidence = wb.create_sheet(L["evidence"])
+    evidence.append([L["id"], L["tool"], L["step"], L["ts"]])
+    for f in findings:
+        for ev_id in f.get("evidenceRefs") or []:
+            ev = material["evidence"].get(ev_id)
+            if not ev:
+                continue
+            evidence.append(
+                [
+                    f.get("id", ""),
+                    ev.get("tool") or "",
+                    ev.get("step") or "",
+                    ev.get("ts") or "",
+                ]
+            )
+    wb.save(str(base / _FILE["xlsx"]))
+
+
+def _render_pdf(base: Path, material: dict[str, Any], locale: str) -> None:
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+    from reportlab.platypus import (
+        Paragraph,
+        SimpleDocTemplate,
+        Spacer,
+        Table,
+        TableStyle,
+    )
+
+    font = "STSong-Light"
+    pdfmetrics.registerFont(UnicodeCIDFont(font))
+    L = _labels(locale)
+    findings = material["findings"]
+    sev = _SEVERITY.get(locale, _SEVERITY["zh-CN"])
+    st = _STATUS.get(locale, _STATUS["zh-CN"])
+    title_style = ParagraphStyle("title", fontName=font, fontSize=18, leading=24)
+    head_style = ParagraphStyle("head", fontName=font, fontSize=13, leading=18)
+    body_style = ParagraphStyle("body", fontName=font, fontSize=10, leading=14)
+
+    story: list[Any] = [
+        Paragraph(_title(locale), title_style),
+        Spacer(1, 6 * mm),
+        Paragraph(f"{L['workspace']}: {material['workspaceName']}", body_style),
+        Paragraph(f"{L['generatedAt']}: {material['generatedAt']}", body_style),
+        Spacer(1, 4 * mm),
+        Paragraph(L["conclusion"], head_style),
+    ]
+    counts = _counts(findings)
+    story.append(
+        Paragraph(
+            f"{L['counts']}: " + ", ".join(f"{k}={v}" for k, v in counts.items()),
+            body_style,
+        )
+    )
+    story.append(Spacer(1, 4 * mm))
+    story.append(Paragraph(L["findings"], head_style))
+
+    data = [[L["id"], L["severity"], L["status"], L["title"], L["amount"]]]
+    for f in findings:
+        data.append(
+            [
+                f.get("id", ""),
+                sev.get(f.get("severity"), f.get("severity", "")),
+                st.get(f.get("status"), f.get("status", "")),
+                _finding_title(f),
+                str(f.get("amount") or ""),
+            ]
+        )
+    table = Table(data, colWidths=[22 * mm, 18 * mm, 24 * mm, 70 * mm, 30 * mm])
+    table.setStyle(
+        TableStyle(
+            [
+                ("FONTNAME", (0, 0), (-1, -1), font),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("GRID", (0, 0), (-1, -1), 0.4, colors.grey),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.whitesmoke),
+            ]
+        )
+    )
+    story.append(table)
+
+    doc = SimpleDocTemplate(str(base / _FILE["pdf"]), pagesize=A4)
+    doc.build(story)
+
+
 def create_working_paper(
     root: Path,
     *,
@@ -199,6 +314,10 @@ def create_working_paper(
 
     if format == "word":
         _render_docx(base, material, locale)
+    elif format == "xlsx":
+        _render_xlsx(base, material, locale)
+    elif format == "pdf":
+        _render_pdf(base, material, locale)
 
     manifest = {
         "id": wp_id,
