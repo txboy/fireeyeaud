@@ -43,3 +43,20 @@ def test_append_evidence_builds_hash_chain(tmp_path: Path) -> None:
     report = verify_evidence_chain(root)
     assert report["ok"] is True
     assert report["count"] == 2
+
+
+def test_verify_detects_tampering(tmp_path: Path) -> None:
+    root = tmp_path
+    (root / ".fireeye").mkdir()
+    append_evidence(root, session_id="s_1", step="tool_call", tool="a")
+    append_evidence(root, session_id="s_1", step="tool_result", tool="a")
+    append_evidence(root, session_id="s_1", step="tool_call", tool="b")
+
+    path = root / ".fireeye" / "evidence.jsonl"
+    lines = path.read_text("utf-8").splitlines()
+    lines[1] = lines[1].replace("tool_result", "tool_call")
+    path.write_text("\n".join(lines) + "\n", "utf-8")
+
+    report = verify_evidence_chain(root)
+    assert report["ok"] is False
+    assert report["breakAt"] == 2
