@@ -63,6 +63,25 @@ async def test_open_locked(tmp_path, monkeypatch) -> None:
     assert resp.json()["error"]["code"] == "E_WS_LOCKED"
 
 
+async def test_open_reports_evidence_status(tmp_path) -> None:
+    from fireeyeaud_agent.store.evidence import append_evidence
+
+    async with _client() as client:
+        opened = (
+            await client.post("/api/v1/workspaces/open", json={"path": str(tmp_path)})
+        ).json()
+        assert opened["evidence"]["ok"] is True
+        append_evidence(tmp_path, session_id="s_1", step="tool_call", tool="x")
+        await client.post("/api/v1/workspaces/close")
+
+        reopened = (
+            await client.post("/api/v1/workspaces/open", json={"path": str(tmp_path)})
+        ).json()
+        assert reopened["evidence"]["ok"] is True
+        assert reopened["evidence"]["count"] == 1
+        await client.post("/api/v1/workspaces/close")
+
+
 async def test_schema_too_new(tmp_path) -> None:
     fe = tmp_path / ".fireeye"
     fe.mkdir()

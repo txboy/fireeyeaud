@@ -15,6 +15,7 @@ from typing import Any
 from ..config.settings import settings
 from ..errors import ApiError
 from .duckdb import Database
+from .evidence import verify_evidence_chain
 
 _SUBDIRS = ["config", "templates", "index", "artifacts"]
 _COUNTERS = [
@@ -113,6 +114,7 @@ class WorkspaceManager:
         if self.db is not None:
             self.db.close()
         self.db = Database(fe / "workspace.duckdb")
+        project["evidence"] = verify_evidence_chain(root)
         return project
 
     def _load_or_init(
