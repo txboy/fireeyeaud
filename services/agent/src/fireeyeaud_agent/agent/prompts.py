@@ -25,6 +25,15 @@ _EN_DIRECTIVE = "\nRespond in English.\n"
 _ZH_DIRECTIVE = "\n请用简体中文回答。\n"
 
 
-def system_prompt(locale: str | None) -> str:
+def system_prompt(locale: str | None, prompt_rules: list[dict] | None = None) -> str:
     directive = _EN_DIRECTIVE if locale == "en-US" else _ZH_DIRECTIVE
-    return _BASE + directive
+    text = _BASE
+    if prompt_rules:
+        lines = [
+            "",
+            "须遵循的审计规则（命中时必须调用 report_finding，ruleKey 用规则 id）：",
+        ]
+        for rule in prompt_rules:
+            lines.append(f"- [{rule.get('id')}] {rule.get('definition', '')}")
+        text += "\n".join(lines) + "\n"
+    return text + directive

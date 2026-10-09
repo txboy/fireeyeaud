@@ -38,6 +38,7 @@ class ReportFindingArgs(BaseModel):
     severity: str = Field(default="medium", description="high | medium | low")
     subjects: list[str] = Field(default_factory=list, description="涉及科目")
     amount: str | None = Field(default=None, description="涉及金额（字符串十进制）")
+    ruleKey: str | None = Field(default=None, description="规则引用 id（规则型疑点）")
     dataRefs: list[dict[str, Any]] = Field(
         default_factory=list, description="[{sourceId, table, rowRef}]"
     )
@@ -126,7 +127,16 @@ async def run_agent(
     bound = _maybe_bind(active_model, tools)
     tool_dict = build_tool_dict()
 
-    messages: list[BaseMessage] = [SystemMessage(content=system_prompt(locale))]
+    from ..store.rules import list_rules
+
+    prompt_rules = [
+        r
+        for r in list_rules(root)
+        if r.get("enabled") and r.get("type") == "prompt" and r.get("definition")
+    ]
+    messages: list[BaseMessage] = [
+        SystemMessage(content=system_prompt(locale, prompt_rules))
+    ]
     if history:
         messages.extend(history)
     messages.append(HumanMessage(content=message))
@@ -145,6 +155,7 @@ async def run_agent(
                 lang=locale or "zh-CN",
                 subjects=args.get("subjects"),
                 amount=args.get("amount"),
+                ruleKey=args.get("ruleKey"),
                 origin="agent",
                 evidenceRefs=list(evidence_ids),
             )
