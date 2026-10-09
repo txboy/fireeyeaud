@@ -10,6 +10,7 @@ from .api import (
     datasources,
     evidence,
     findings,
+    graph,
     health,
     models,
     rules,
@@ -45,6 +46,7 @@ def create_app() -> FastAPI:
     app.include_router(evidence.router, prefix=API_PREFIX)
     app.include_router(models.router, prefix=API_PREFIX)
     app.include_router(rules.router, prefix=API_PREFIX)
+    app.include_router(graph.router, prefix=API_PREFIX)
     app.include_router(sessions.router, prefix=API_PREFIX)
     return app
 
