@@ -57,6 +57,21 @@ export interface DataSourceRef {
   importedAt?: string;
 }
 
+export interface DataSourceInfo {
+  id: string;
+  type: 'excel' | 'csv' | 'pdf' | 'db';
+  path?: string;
+  tables: string[];
+  importedAt?: string;
+}
+
+export interface ImportProgressData {
+  sourceId?: string;
+  phase: 'parse' | 'load' | 'index';
+  done: number;
+  total: number;
+}
+
 export interface WorkspaceInfo {
   schemaVersion: number;
   id: string;
