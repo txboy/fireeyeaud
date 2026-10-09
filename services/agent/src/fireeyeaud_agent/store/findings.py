@@ -17,8 +17,8 @@ def findings_path(root: Path) -> Path:
 def create_finding(
     root: Path,
     *,
-    title: str,
-    description: str,
+    title: str | None = None,
+    description: str | None = None,
     severity: str,
     dataRefs: list[dict[str, Any]],
     sessionId: str,
@@ -30,6 +30,7 @@ def create_finding(
     ruleKey: str | None = None,
     params: dict[str, Any] | None = None,
     origin: str = "agent",
+    evidenceRefs: list[str] | None = None,
 ) -> dict[str, Any]:
     root = Path(root)
     fe = root / ".fireeye"
@@ -52,7 +53,7 @@ def create_finding(
         "currency": currency,
         "confidence": confidence,
         "dataRefs": dataRefs,
-        "evidenceRefs": [],
+        "evidenceRefs": evidenceRefs or [],
         "sessionId": sessionId,
     }
     return append_event(findings_path(root), event)

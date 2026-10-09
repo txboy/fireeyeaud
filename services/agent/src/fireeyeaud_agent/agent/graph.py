@@ -145,6 +145,8 @@ async def run_agent(
                 lang=locale or "zh-CN",
                 subjects=args.get("subjects"),
                 amount=args.get("amount"),
+                origin="agent",
+                evidenceRefs=list(evidence_ids),
             )
             return {"id": record["id"], "status": record["status"]}
         if name not in tool_dict:

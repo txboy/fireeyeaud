@@ -53,3 +53,27 @@ def test_create_two_findings_increments(tmp_path):
     assert first["id"] == "F-0001"
     assert second["id"] == "F-0002"
     assert second["seq"] == 2
+
+
+def test_create_rule_finding_links_evidence(tmp_path):
+    from fireeyeaud_agent.store.evidence import append_evidence
+    from fireeyeaud_agent.store.findings import get_finding
+
+    root = _ws(tmp_path)
+    ev = append_evidence(root, session_id="s_1", step="tool_result", tool="t")
+    rec = create_finding(
+        root,
+        title=None,
+        description=None,
+        severity="high",
+        dataRefs=[],
+        sessionId="s_1",
+        origin="rule",
+        ruleKey="tie_check",
+        evidenceRefs=[ev["id"]],
+    )
+    assert rec["title"] is None
+    assert rec["description"] is None
+    assert rec["origin"] == "rule"
+    assert rec["ruleKey"] == "tie_check"
+    assert get_finding(root, rec["id"])["evidenceRefs"] == [ev["id"]]
