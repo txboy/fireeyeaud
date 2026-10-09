@@ -125,6 +125,143 @@ function registerIpc() {
     });
     return result.canceled ? [] : result.filePaths;
   });
+  ipcMain.handle('search:run', (_event, payload) => {
+    const { root, query, options } = payload ?? {};
+    return runSearch(root, query, options ?? {});
+  });
+}
+
+const SEARCH_SKIP_DIRS = new Set([
+  '.fireeye',
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+  '.cache',
+]);
+const SEARCH_BINARY_EXT = new Set([
+  '.xlsx',
+  '.xlsm',
+  '.xls',
+  '.duckdb',
+  '.sqlite',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.ico',
+  '.pdf',
+  '.zip',
+  '.gz',
+  '.woff',
+  '.woff2',
+  '.ttf',
+  '.exe',
+  '.dll',
+  '.so',
+]);
+const SEARCH_MAX_FILE_BYTES = 2 * 1024 * 1024;
+const SEARCH_MAX_PER_FILE = 200;
+const SEARCH_MAX_TOTAL = 2000;
+
+function escapeRegExp(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function buildSearchRegex(query, options) {
+  let pattern = options.regex ? query : escapeRegExp(query);
+  if (options.wholeWord) pattern = `\\b${pattern}\\b`;
+  return new RegExp(pattern, options.caseSensitive ? 'g' : 'gi');
+}
+
+function parseTokens(value) {
+  return String(value ?? '')
+    .split(/[,\s]+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
+}
+
+function tokenMatches(relPath, token) {
+  const clean = token.replace(/\*\*/g, '').replace(/\*/g, '').replace(/^[\\/]+/, '');
+  if (!clean) return false;
+  return relPath.toLowerCase().includes(clean.toLowerCase());
+}
+
+function isExcluded(relPath, tokens) {
+  return tokens.some((token) => tokenMatches(relPath, token));
+}
+
+function isIncluded(relPath, tokens) {
+  if (tokens.length === 0) return true;
+  return tokens.some((token) => tokenMatches(relPath, token));
+}
+
+function searchFile(absPath, relPath, regex) {
+  const stat = fs.statSync(absPath);
+  if (stat.size > SEARCH_MAX_FILE_BYTES) return null;
+  let content;
+  try {
+    content = fs.readFileSync(absPath, 'utf8');
+  } catch {
+    return null;
+  }
+  const matches = [];
+  const lines = content.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i += 1) {
+    regex.lastIndex = 0;
+    const m = regex.exec(lines[i]);
+    if (m) {
+      matches.push({ line: i + 1, column: m.index + 1, text: lines[i].trim().slice(0, 240) });
+      if (matches.length >= SEARCH_MAX_PER_FILE) break;
+    }
+  }
+  return matches.length > 0 ? { path: relPath, matches } : null;
+}
+
+function walkSearch(root, regex, includeTokens, excludeTokens, state) {
+  const stack = [''];
+  while (stack.length > 0 && state.total < SEARCH_MAX_TOTAL) {
+    const rel = stack.pop();
+    const abs = path.join(root, rel);
+    let entries;
+    try {
+      entries = fs.readdirSync(abs, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const childRel = rel ? `${rel}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        if (SEARCH_SKIP_DIRS.has(entry.name)) continue;
+        stack.push(childRel);
+      } else if (entry.isFile()) {
+        const ext = path.extname(entry.name).toLowerCase();
+        if (SEARCH_BINARY_EXT.has(ext)) continue;
+        if (!isIncluded(childRel, includeTokens)) continue;
+        if (isExcluded(childRel, excludeTokens)) continue;
+        const hit = searchFile(path.join(root, childRel), childRel, regex);
+        if (hit) {
+          state.files.push(hit);
+          state.total += hit.matches.length;
+          if (state.total >= SEARCH_MAX_TOTAL) return;
+        }
+      }
+    }
+  }
+}
+
+function runSearch(root, query, options = {}) {
+  if (!root || !query) return { files: [], total: 0 };
+  const regex = buildSearchRegex(query, options);
+  const state = { files: [], total: 0 };
+  walkSearch(
+    root,
+    regex,
+    parseTokens(options.include),
+    parseTokens(options.exclude),
+    state,
+  );
+  return state;
 }
 
 function hardenWebContents() {

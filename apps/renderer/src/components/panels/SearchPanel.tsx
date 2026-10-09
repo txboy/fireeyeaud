@@ -1,52 +1,154 @@
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FileSpreadsheet, FileText } from 'lucide-react';
+import { FileSpreadsheet, FileText, Loader2, SearchX } from 'lucide-react';
+import type { SearchResult } from '@fireeyeaud/shared';
+import { useWorkspaceStore } from '../../store/workspace';
 
-const GROUPS = [
-  {
-    file: '序时账.xlsx',
-    icon: FileSpreadsheet,
-    hits: [
-      { line: '1182', pre: '与', hit: '鑫源商贸', post: '往来款，借方 ¥12,480,000' },
-      { line: '2043', pre: '摘要：', hit: '鑫源商贸', post: '无合同' },
-    ],
-  },
-  {
-    file: '关联方清单.csv',
-    icon: FileText,
-    hits: [{ line: '7', pre: '', hit: '鑫源商贸', post: '— 实际控制人关联' }],
-  },
-];
+const SPREADSHEET_EXT = new Set(['.xlsx', '.xlsm', '.xls', '.csv']);
+
+function iconFor(filePath: string) {
+  const dot = filePath.lastIndexOf('.');
+  const ext = dot >= 0 ? filePath.slice(dot).toLowerCase() : '';
+  return SPREADSHEET_EXT.has(ext) ? FileSpreadsheet : FileText;
+}
 
 export function SearchPanel() {
   const { t } = useTranslation('search');
+  const { t: te } = useTranslation('error');
+  const root = useWorkspaceStore((s) => s.path);
+
+  const [query, setQuery] = useState('');
+  const [include, setInclude] = useState('');
+  const [exclude, setExclude] = useState('');
+  const [regex, setRegex] = useState(false);
+  const [caseSensitive, setCaseSensitive] = useState(false);
+  const [result, setResult] = useState<SearchResult | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (timer.current) clearTimeout(timer.current);
+    if (!root || !query.trim()) {
+      setResult(null);
+      setError(false);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    timer.current = setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await window.fireeyeaud?.searchRun({
+            root,
+            query,
+            options: { include, exclude, regex, caseSensitive },
+          });
+          setResult(res ?? { files: [], total: 0 });
+          setError(false);
+        } catch {
+          setError(true);
+          setResult(null);
+        } finally {
+          setLoading(false);
+        }
+      })();
+    }, 300);
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+    };
+  }, [root, query, include, exclude, regex, caseSensitive]);
+
   return (
     <>
-      <input className="searchbox" placeholder={t('placeholder')} defaultValue="鑫源商贸" />
+      <input
+        className="searchbox"
+        placeholder={t('placeholder')}
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
       <div className="field">
         <span className="field__label">{t('include')}</span>
-        <input className="searchbox" defaultValue="*.xlsx, 底稿/**" />
+        <input
+          className="searchbox"
+          value={include}
+          onChange={(e) => setInclude(e.target.value)}
+        />
       </div>
       <div className="field">
         <span className="field__label">{t('exclude')}</span>
-        <input className="searchbox" defaultValue=".fireeye/**, dist/**" />
+        <input
+          className="searchbox"
+          value={exclude}
+          onChange={(e) => setExclude(e.target.value)}
+        />
       </div>
-      <div className="sidebar__subtitle">{t('resultSummary', { files: 2, matches: 3 })}</div>
-      {GROUPS.map((group) => {
-        const Icon = group.icon;
+      <div className="search-opts">
+        <label className="search-opt">
+          <input
+            type="checkbox"
+            checked={caseSensitive}
+            onChange={(e) => setCaseSensitive(e.target.checked)}
+          />
+          <span>{t('caseSensitive')}</span>
+        </label>
+        <label className="search-opt">
+          <input
+            type="checkbox"
+            checked={regex}
+            onChange={(e) => setRegex(e.target.checked)}
+          />
+          <span>{t('regex')}</span>
+        </label>
+      </div>
+
+      {loading ? (
+        <div className="sidebar__subtitle">
+          <Loader2 size={13} strokeWidth={1.75} className="spin" />
+        </div>
+      ) : result ? (
+        <div className="sidebar__subtitle">
+          {t('resultSummary', {
+            files: result.files.length,
+            matches: result.total,
+          })}
+        </div>
+      ) : null}
+
+      {error && <span className="panel-error">{te('internal')}</span>}
+      {!root && <span className="panel-error">{t('noResults')}</span>}
+
+      {result && result.files.length === 0 && !loading && (
+        <div className="panel-empty">
+          <SearchX size={20} strokeWidth={1.5} />
+          <span>{t('noResults')}</span>
+        </div>
+      )}
+
+      {result?.files.map((group) => {
+        const Icon = iconFor(group.path);
         return (
-          <div key={group.file} className="tree">
+          <div key={group.path} className="tree">
             <div className="tree__row tree__row--folder">
               <Icon size={14} strokeWidth={1.75} />
-              <span>{group.file}</span>
+              <span>{group.path}</span>
             </div>
-            {group.hits.map((hit) => (
-              <div key={hit.line} className="tree__row" style={{ paddingLeft: 22 }}>
-                <span className="mono" style={{ color: 'var(--text-3)', width: 30, textAlign: 'right' }}>
+            {group.matches.map((hit) => (
+              <div
+                key={`${group.path}:${hit.line}:${hit.column}`}
+                className="tree__row"
+                style={{ paddingLeft: 22 }}
+                title={hit.text}
+              >
+                <span
+                  className="mono"
+                  style={{ color: 'var(--text-3)', width: 30, textAlign: 'right' }}
+                >
                   {hit.line}
                 </span>
-                <span>{hit.pre}</span>
-                <span className="hl">{hit.hit}</span>
-                <span>{hit.post}</span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {hit.text}
+                </span>
               </div>
             ))}
           </div>

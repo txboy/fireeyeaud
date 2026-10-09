@@ -104,6 +104,30 @@ export interface ImportProgressData {
   total: number;
 }
 
+export interface SearchMatch {
+  line: number;
+  column: number;
+  text: string;
+}
+
+export interface SearchFileResult {
+  path: string;
+  matches: SearchMatch[];
+}
+
+export interface SearchResult {
+  files: SearchFileResult[];
+  total: number;
+}
+
+export interface SearchOptions {
+  caseSensitive?: boolean;
+  wholeWord?: boolean;
+  regex?: boolean;
+  include?: string;
+  exclude?: string;
+}
+
 export interface WorkspaceInfo {
   schemaVersion: number;
   id: string;

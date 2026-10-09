@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('fireeyeaud', {
   getAppInfo: () => ipcRenderer.invoke('app:info'),
   openFolder: () => ipcRenderer.invoke('dialog:open-folder'),
   openFiles: () => ipcRenderer.invoke('dialog:open-files'),
+  searchRun: (payload) => ipcRenderer.invoke('search:run', payload),
   onSidecarStatus: (callback) => {
     const handler = (_event, info) => callback(info);
     ipcRenderer.on('sidecar:status', handler);
