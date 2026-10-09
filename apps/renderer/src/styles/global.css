@@ -529,6 +529,60 @@ body {
   padding: 4px 10px;
 }
 
+.button--ghost {
+  background: var(--hover);
+  color: var(--text-1);
+  border: 1px solid var(--border);
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  background: var(--hover);
+  color: var(--text-1);
+}
+
+.model-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--editor-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.model-form__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.model-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+}
+
+.model-status--ok {
+  color: var(--success);
+}
+
+.model-status--fail {
+  color: var(--danger);
+}
+
 .section-head {
   display: flex;
   align-items: center;

@@ -1,7 +1,9 @@
 import type {
   ApiErrorEnvelope,
+  ConfigScope,
   DataSourceInfo,
   Finding,
+  ModelProfile,
   SseEvent,
   WorkspaceInfo,
 } from '@fireeyeaud/shared';
@@ -189,4 +191,54 @@ export function listFindings(params?: {
 
 export function getFindingApi(id: string): Promise<Finding> {
   return request<Finding>(`/findings/${id}`);
+}
+
+export interface ModelsPage {
+  items: ModelProfile[];
+  nextCursor: string | null;
+}
+
+export function listModels(scope?: ConfigScope): Promise<ModelsPage> {
+  return request<ModelsPage>(`/models${scope ? `?scope=${scope}` : ''}`);
+}
+
+export interface ModelInput {
+  name: string;
+  provider: string;
+  baseUrl: string;
+  model: string;
+  temperature?: number;
+  apiKeyRef?: string | null;
+  isDefault?: boolean;
+  scope: ConfigScope;
+}
+
+export function createModel(input: ModelInput): Promise<ModelProfile> {
+  return request<ModelProfile>('/models', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateModel(
+  id: string,
+  scope: ConfigScope,
+  patch: Partial<ModelInput>,
+): Promise<ModelProfile> {
+  return request<ModelProfile>(`/models/${id}?scope=${scope}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+}
+
+export function deleteModelApi(id: string, scope: ConfigScope): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/models/${id}?scope=${scope}`, {
+    method: 'DELETE',
+  });
+}
+
+export function testModel(id: string, scope: ConfigScope): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/models/${id}/test?scope=${scope}`, {
+    method: 'POST',
+  });
 }

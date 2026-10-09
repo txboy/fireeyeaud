@@ -6,7 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .api import datasources, findings, health, sessions, workspaces
+from .api import datasources, findings, health, models, sessions, workspaces
 from .config.settings import settings
 from .errors import ApiError
 
@@ -33,6 +33,7 @@ def create_app() -> FastAPI:
     app.include_router(workspaces.router, prefix=API_PREFIX)
     app.include_router(datasources.router, prefix=API_PREFIX)
     app.include_router(findings.router, prefix=API_PREFIX)
+    app.include_router(models.router, prefix=API_PREFIX)
     app.include_router(sessions.router, prefix=API_PREFIX)
     return app
 

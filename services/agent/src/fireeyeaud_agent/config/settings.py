@@ -15,6 +15,7 @@ class Settings(BaseSettings):
 
     app_version: str = "0.0.0"
     schema_version: int = 1
+    global_dir: str = "~/.fireeye"
     host: str = "127.0.0.1"
     port: int = 8765
     token: str | None = None

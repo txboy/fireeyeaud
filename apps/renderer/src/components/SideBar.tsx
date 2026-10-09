@@ -4,6 +4,7 @@ import { useUiStore } from '../store/ui';
 import { ExplorerPanel } from './panels/ExplorerPanel';
 import { SearchPanel } from './panels/SearchPanel';
 import { KnowledgePanel } from './panels/KnowledgePanel';
+import { ModelsPanel } from './panels/ModelsPanel';
 import { SettingsPanel } from './panels/SettingsPanel';
 import { PlaceholderPanel } from './panels/PlaceholderPanel';
 
@@ -33,6 +34,8 @@ function PanelBody({ view }: { view: ActivityView }) {
       return <SearchPanel />;
     case 'knowledge':
       return <KnowledgePanel />;
+    case 'models':
+      return <ModelsPanel />;
     case 'settings':
       return <SettingsPanel />;
     default:

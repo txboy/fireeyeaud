@@ -104,6 +104,20 @@ export interface ImportProgressData {
   total: number;
 }
 
+export interface ModelProfile {
+  id: string;
+  name: string;
+  provider: string;
+  baseUrl: string;
+  model: string;
+  temperature?: number;
+  apiKeyRef?: string | null;
+  isDefault?: boolean;
+  scope: ConfigScope;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface SearchMatch {
   line: number;
   column: number;
