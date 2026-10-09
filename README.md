@@ -43,6 +43,36 @@ npm run renderer:build            # 构建渲染层（tsc --noEmit && vite build
 > 若 Electron 二进制下载缓慢 / 失败（GitHub Releases 受限），使用国内镜像：
 > `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ npx electron --version`
 
+## 模型配置（Phase 1）
+
+Phase 1 面向**本地 OpenAI-compatible 服务**（Ollama / vLLM），默认无需 API Key。可用环境变量覆盖：
+
+| 环境变量 | 默认值 | 说明 |
+|---|---|---|
+| `FIREYEAUD_MODEL_BASE_URL` | `http://127.0.0.1:11434/v1` | OpenAI-compatible 端点 |
+| `FIREYEAUD_MODEL_NAME` | `qwen2.5` | 模型名 |
+| `FIREYEAUD_MODEL_API_KEY` | 空（用 `not-needed`） | 云端服务鉴权 |
+| `FIREYEAUD_MODEL_TEMPERATURE` | `0.2` | 采样温度 |
+| `FIREYEAUD_GLOBAL_DIR` | `~/.fireeye` | 全局配置目录（Models 全局作用域） |
+
+示例（本地 Ollama）：
+
+```bash
+FIREYEAUD_MODEL_BASE_URL=http://127.0.0.1:11434/v1 FIREYEAUD_MODEL_NAME=qwen2.5 npm run desktop:dev
+```
+
+未配置或模型不可达时，对话会返回 `error.llmUnavailable` 提示而非崩溃。
+
+## 状态（Phase 1 · MVP 最小闭环）
+
+已实现：工作区打开、Excel/CSV 导入（SSE 进度）、审计工具（describe_source / sql_query /
+aggregate_subject / parse_ledger / check_tie）、对话 Agent（plan → tool_call → reflect，
+产出疑点）、疑点清单、工作区关键词搜索、Models 面板（global/project 作用域）。
+
+已知偏差（详见 [`docs/plans/2026-10-09-phase1-mvp.md`](docs/plans/2026-10-09-phase1-mvp.md)）：
+工具先用进程内 LangChain `StructuredTool`；搜索先用主进程 Node 遍历；模型密钥暂只支持
+无 key / 环境变量；会话/消息投影为简化实现。真实模型 E2E 需人工按计划 F4 步骤验证。
+
 ## 文档
 
 - 设计文档：[`docs/plans/fireeyeaud-design.md`](docs/plans/fireeyeaud-design.md)
