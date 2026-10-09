@@ -656,3 +656,76 @@ body {
   border-radius: 6px;
   padding: 6px 10px;
 }
+
+/* ---- Findings list ---- */
+.finding-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.finding {
+  background: var(--editor-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.finding__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.finding__id {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-3);
+}
+
+.finding__status {
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+.finding__title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.finding__desc {
+  font-size: 12px;
+  color: var(--text-2);
+  line-height: 1.6;
+}
+
+.finding__meta {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-3);
+}
+
+.severity {
+  font-size: 10px;
+  border-radius: 4px;
+  padding: 2px 7px;
+  line-height: 1.4;
+}
+
+.severity--high {
+  color: var(--danger);
+  background: var(--danger-weak);
+}
+
+.severity--medium {
+  color: var(--warning);
+  background: var(--warning-weak);
+}
+
+.severity--low {
+  color: var(--info);
+  background: var(--info-weak);
+}

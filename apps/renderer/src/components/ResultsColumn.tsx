@@ -1,5 +1,9 @@
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { Finding } from '@fireeyeaud/shared';
 import { useUiStore, type ResultsTab } from '../store/ui';
+import { useFindingsStore } from '../store/findings';
+import { useWorkspaceStore } from '../store/workspace';
 
 const TABS: ResultsTab[] = ['findings', 'graph', 'working-paper', 'evidence'];
 
@@ -10,27 +14,93 @@ const TAB_LABEL_KEY: Record<ResultsTab, string> = {
   evidence: 'evidence',
 };
 
+function FindingCard({ finding }: { finding: Finding }) {
+  const { t: ts } = useTranslation('enums');
+  const title = finding.title?.text ?? finding.ruleKey ?? finding.id;
+  const subjects = finding.subjects?.join('、') ?? '';
+  const meta = [subjects, finding.amount].filter(Boolean).join(' · ');
+
+  return (
+    <div className="finding">
+      <div className="finding__head">
+        <span className={`severity severity--${finding.severity}`}>
+          {ts(`severity.${finding.severity}`)}
+        </span>
+        <span className="finding__id">{finding.id}</span>
+        <span className="spacer" />
+        <span className="finding__status">{ts(`status.${finding.status}`)}</span>
+      </div>
+      <div className="finding__title">{title}</div>
+      {finding.description?.text && (
+        <div className="finding__desc">{finding.description.text}</div>
+      )}
+      {meta && <div className="finding__meta">{meta}</div>}
+    </div>
+  );
+}
+
 function FindingsView() {
   const { t } = useTranslation('findings');
+  const { t: tc } = useTranslation('common');
+  const { t: te } = useTranslation('error');
+  const items = useFindingsStore((s) => s.items);
+  const loading = useFindingsStore((s) => s.loading);
+  const errorKey = useFindingsStore((s) => s.errorKey);
+  const load = useFindingsStore((s) => s.load);
+  const workspace = useWorkspaceStore((s) => s.workspace);
+  const path = useWorkspaceStore((s) => s.path);
+
+  useEffect(() => {
+    void load();
+  }, [load, path]);
+
+  const count = (severity: string) =>
+    items.filter((i) => i.severity === severity).length;
+
   return (
     <>
       <div className="stat-row" style={{ marginBottom: 14 }}>
         <div className="stat">
-          <div className="stat__value" style={{ color: 'var(--danger)' }}>0</div>
+          <div className="stat__value" style={{ color: 'var(--danger)' }}>
+            {count('high')}
+          </div>
           <div className="stat__label">{t('statsHigh')}</div>
         </div>
         <div className="stat">
-          <div className="stat__value" style={{ color: 'var(--warning)' }}>0</div>
+          <div className="stat__value" style={{ color: 'var(--warning)' }}>
+            {count('medium')}
+          </div>
           <div className="stat__label">{t('statsMedium')}</div>
         </div>
         <div className="stat">
-          <div className="stat__value" style={{ color: 'var(--info)' }}>0</div>
+          <div className="stat__value" style={{ color: 'var(--info)' }}>
+            {count('low')}
+          </div>
           <div className="stat__label">{t('statsLow')}</div>
         </div>
       </div>
-      <div className="panel-empty">
-        <span>{t('empty')}</span>
-      </div>
+
+      {!workspace ? (
+        <div className="panel-empty">
+          <span>{tc('noWorkspace')}</span>
+        </div>
+      ) : errorKey ? (
+        <div className="panel-error">{te(errorKey.replace(/^error\./, ''))}</div>
+      ) : loading && items.length === 0 ? (
+        <div className="panel-empty">
+          <span>{tc('loading')}</span>
+        </div>
+      ) : items.length === 0 ? (
+        <div className="panel-empty">
+          <span>{t('empty')}</span>
+        </div>
+      ) : (
+        <div className="finding-list">
+          {items.map((f) => (
+            <FindingCard key={f.id} finding={f} />
+          ))}
+        </div>
+      )}
     </>
   );
 }

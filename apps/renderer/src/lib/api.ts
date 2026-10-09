@@ -1,4 +1,9 @@
-import type { ApiErrorEnvelope, SseEvent, WorkspaceInfo } from '@fireeyeaud/shared';
+import type {
+  ApiErrorEnvelope,
+  Finding,
+  SseEvent,
+  WorkspaceInfo,
+} from '@fireeyeaud/shared';
 import { useSidecarStore } from '../store/sidecar';
 
 export class ApiError extends Error {
@@ -130,4 +135,26 @@ export async function streamChat(
     }
   }
   if (buffer.trim()) dispatch(buffer);
+}
+
+export interface FindingsPage {
+  items: Finding[];
+  nextCursor: string | null;
+}
+
+export function listFindings(params?: {
+  severity?: string;
+  status?: string;
+  limit?: number;
+}): Promise<FindingsPage> {
+  const query = new URLSearchParams();
+  if (params?.severity) query.set('severity', params.severity);
+  if (params?.status) query.set('status', params.status);
+  if (params?.limit) query.set('limit', String(params.limit));
+  const qs = query.toString();
+  return request<FindingsPage>(`/findings${qs ? `?${qs}` : ''}`);
+}
+
+export function getFindingApi(id: string): Promise<Finding> {
+  return request<Finding>(`/findings/${id}`);
 }
