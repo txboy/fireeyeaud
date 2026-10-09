@@ -5,6 +5,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
+from ..errors import ApiError
+from ..store.evidence import verify_evidence_chain
 from ..store.workspace import workspace_manager
 from .deps import require_token
 
@@ -29,3 +31,10 @@ def current_workspace() -> dict:
 def close_workspace() -> dict:
     workspace_manager.close()
     return {"closed": True}
+
+
+@router.post("/workspaces/{workspace_id}/verify-evidence")
+def verify_evidence(workspace_id: str) -> dict:
+    if workspace_manager.root is None:
+        raise ApiError("E_NO_WORKSPACE", 409, "error.noWorkspace")
+    return verify_evidence_chain(workspace_manager.root)
