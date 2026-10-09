@@ -5,9 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 
 from ..errors import ApiError
-from ..store.findings import get_finding, load_findings
+from ..store.findings import get_finding, load_findings, review_finding
 from ..store.workspace import workspace_manager
 from .deps import require_token
 
@@ -39,9 +40,37 @@ def list_findings(
     return {"items": items[:limit], "nextCursor": None}
 
 
+class ReviewBody(BaseModel):
+    action: str
+    reviewer: str = "审计员"
+    comment: str | None = None
+    note: str | None = None
+    noteLang: str = "zh-CN"
+    severity: str | None = None
+    reason: str | None = None
+
+
 @router.get("/findings/{finding_id}")
 def finding_detail(finding_id: str) -> dict:
     item = get_finding(_root(), finding_id)
     if item is None:
         raise ApiError("E_NOT_FOUND", 404, "error.notFound", {"id": finding_id})
     return item
+
+
+@router.post("/findings/{finding_id}/review")
+def review(finding_id: str, body: ReviewBody) -> dict:
+    result = review_finding(
+        _root(),
+        finding_id,
+        action=body.action,
+        reviewer=body.reviewer,
+        comment=body.comment,
+        note=body.note,
+        note_lang=body.noteLang,
+        severity=body.severity,
+        reason=body.reason,
+    )
+    if result is None:
+        raise ApiError("E_NOT_FOUND", 404, "error.notFound", {"id": finding_id})
+    return result
