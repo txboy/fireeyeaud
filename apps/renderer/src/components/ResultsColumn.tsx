@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { Finding } from '@fireeyeaud/shared';
@@ -6,6 +6,7 @@ import { useUiStore, type ResultsTab } from '../store/ui';
 import { useFindingsStore } from '../store/findings';
 import { useWorkspaceStore } from '../store/workspace';
 import { FindingDetail } from './FindingDetail';
+import { GraphView } from './GraphView';
 
 const TABS: ResultsTab[] = ['findings', 'graph', 'working-paper', 'evidence'];
 
@@ -19,16 +20,36 @@ const TAB_LABEL_KEY: Record<ResultsTab, string> = {
 function FindingCard({ finding }: { finding: Finding }) {
   const { t: ts } = useTranslation('enums');
   const [open, setOpen] = useState(false);
+  const selectedFindingId = useUiStore((s) => s.selectedFindingId);
+  const setSelectedFindingId = useUiStore((s) => s.setSelectedFindingId);
+  const ref = useRef<HTMLDivElement>(null);
+  const highlighted = selectedFindingId === finding.id;
   const title = finding.title?.text ?? finding.ruleKey ?? finding.id;
   const subjects = finding.subjects?.join('、') ?? '';
   const meta = [subjects, finding.amount].filter(Boolean).join(' · ');
 
+  useEffect(() => {
+    if (highlighted) {
+      setOpen(true);
+      ref.current?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [highlighted]);
+
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    if (next) setSelectedFindingId(finding.id);
+  };
+
   return (
-    <div className={`finding${open ? ' finding--open' : ''}`}>
+    <div
+      ref={ref}
+      className={`finding${open ? ' finding--open' : ''}${highlighted ? ' finding--selected' : ''}`}
+    >
       <button
         type="button"
         className="finding__head"
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggle}
         style={{ background: 'none', border: 'none', cursor: 'pointer', width: '100%', padding: 0 }}
       >
         {open ? (
@@ -148,7 +169,13 @@ export function ResultsColumn() {
         ))}
       </div>
       <div className="results__body">
-        {resultsTab === 'findings' ? <FindingsView /> : <EmptyView />}
+        {resultsTab === 'findings' ? (
+          <FindingsView />
+        ) : resultsTab === 'graph' ? (
+          <GraphView />
+        ) : (
+          <EmptyView />
+        )}
       </div>
     </aside>
   );

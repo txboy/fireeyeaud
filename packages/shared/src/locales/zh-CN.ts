@@ -181,6 +181,11 @@ export default {
     evidenceChain: '证据链',
     noEvidence: '暂无证据记录',
   },
+  graph: {
+    hint: '点击节点查看详情；点击疑点节点跳转疑点清单',
+    empty: '暂无可视化数据',
+    openFinding: '查看疑点',
+  },
   agent: {
     name: '审计智能体',
     inputPlaceholder: '描述你的审计需求，或直接提问…',

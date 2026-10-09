@@ -181,6 +181,11 @@ export default {
     evidenceChain: 'Evidence chain',
     noEvidence: 'No evidence yet',
   },
+  graph: {
+    hint: 'Click a node for details; click a finding node to open it',
+    empty: 'No graph data yet',
+    openFinding: 'Open finding',
+  },
   agent: {
     name: 'Audit Agent',
     inputPlaceholder: 'Describe your audit task, or just ask…',
