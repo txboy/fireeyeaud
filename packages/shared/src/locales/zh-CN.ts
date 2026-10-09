@@ -153,6 +153,14 @@ export default {
     filterHigh: '高风险',
     filterPending: '待复核',
     empty: '暂无疑点',
+    confirm: '确认',
+    reject: '驳回',
+    mark: '复核中',
+    falsePositive: '误报',
+    addNote: '添加备注',
+    reviews: '复核记录',
+    evidenceChain: '证据链',
+    noEvidence: '暂无证据记录',
   },
   agent: {
     name: '审计智能体',
@@ -176,6 +184,11 @@ export default {
   evidence: {
     title: '证据日志',
     empty: '暂无证据记录',
+    chain: '哈希链',
+    verifyOk: '证据链完整',
+    verifyBroken: '证据链已损坏（首个断点：{{seq}}）',
+    noEvidence: '暂无证据记录',
+    step: { tool_call: '工具调用', tool_result: '工具结果' },
   },
   'working-paper': {
     title: '底稿预览',

@@ -1,9 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { Finding } from '@fireeyeaud/shared';
 import { useUiStore, type ResultsTab } from '../store/ui';
 import { useFindingsStore } from '../store/findings';
 import { useWorkspaceStore } from '../store/workspace';
+import { FindingDetail } from './FindingDetail';
 
 const TABS: ResultsTab[] = ['findings', 'graph', 'working-paper', 'evidence'];
 
@@ -16,25 +18,37 @@ const TAB_LABEL_KEY: Record<ResultsTab, string> = {
 
 function FindingCard({ finding }: { finding: Finding }) {
   const { t: ts } = useTranslation('enums');
+  const [open, setOpen] = useState(false);
   const title = finding.title?.text ?? finding.ruleKey ?? finding.id;
   const subjects = finding.subjects?.join('、') ?? '';
   const meta = [subjects, finding.amount].filter(Boolean).join(' · ');
 
   return (
-    <div className="finding">
-      <div className="finding__head">
+    <div className={`finding${open ? ' finding--open' : ''}`}>
+      <button
+        type="button"
+        className="finding__head"
+        onClick={() => setOpen((v) => !v)}
+        style={{ background: 'none', border: 'none', cursor: 'pointer', width: '100%', padding: 0 }}
+      >
+        {open ? (
+          <ChevronDown size={13} strokeWidth={1.75} />
+        ) : (
+          <ChevronRight size={13} strokeWidth={1.75} />
+        )}
         <span className={`severity severity--${finding.severity}`}>
           {ts(`severity.${finding.severity}`)}
         </span>
         <span className="finding__id">{finding.id}</span>
         <span className="spacer" />
         <span className="finding__status">{ts(`status.${finding.status}`)}</span>
-      </div>
+      </button>
       <div className="finding__title">{title}</div>
       {finding.description?.text && (
         <div className="finding__desc">{finding.description.text}</div>
       )}
       {meta && <div className="finding__meta">{meta}</div>}
+      {open && <FindingDetail finding={finding} />}
     </div>
   );
 }

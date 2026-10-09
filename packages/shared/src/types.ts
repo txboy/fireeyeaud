@@ -60,6 +60,15 @@ export interface FindingNote {
   ts?: string;
 }
 
+export interface FindingReview {
+  event: string;
+  status?: FindingStatus;
+  severity?: Severity;
+  reviewer?: string;
+  comment?: string | null;
+  ts?: string;
+}
+
 export interface Finding {
   id: string;
   origin: 'rule' | 'agent' | 'manual';
@@ -78,6 +87,21 @@ export interface Finding {
   seq: number;
   ts: string;
   notes?: FindingNote[];
+  reviews?: FindingReview[];
+}
+
+export interface EvidenceItem {
+  seq: number;
+  id: string;
+  sessionId: string;
+  ts: string;
+  step: 'tool_call' | 'tool_result';
+  tool: string | null;
+  params: Record<string, unknown>;
+  resultSummary: string | null;
+  artifactRef: string | null;
+  durationMs?: number | null;
+  lang?: string;
 }
 
 export interface DataSourceRef {

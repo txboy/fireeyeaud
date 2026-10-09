@@ -153,6 +153,14 @@ export default {
     filterHigh: 'High risk',
     filterPending: 'Pending',
     empty: 'No findings yet',
+    confirm: 'Confirm',
+    reject: 'Reject',
+    mark: 'In review',
+    falsePositive: 'False positive',
+    addNote: 'Add note',
+    reviews: 'Reviews',
+    evidenceChain: 'Evidence chain',
+    noEvidence: 'No evidence yet',
   },
   agent: {
     name: 'Audit Agent',
@@ -176,6 +184,11 @@ export default {
   evidence: {
     title: 'Evidence log',
     empty: 'No evidence records yet',
+    chain: 'Hash chain',
+    verifyOk: 'Evidence chain intact',
+    verifyBroken: 'Evidence chain broken (first break: {{seq}})',
+    noEvidence: 'No evidence records yet',
+    step: { tool_call: 'Tool call', tool_result: 'Tool result' },
   },
   'working-paper': {
     title: 'Working paper',

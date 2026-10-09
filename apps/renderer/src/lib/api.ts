@@ -2,6 +2,7 @@ import type {
   ApiErrorEnvelope,
   ConfigScope,
   DataSourceInfo,
+  EvidenceItem,
   Finding,
   ModelProfile,
   SseEvent,
@@ -191,6 +192,27 @@ export function listFindings(params?: {
 
 export function getFindingApi(id: string): Promise<Finding> {
   return request<Finding>(`/findings/${id}`);
+}
+
+export interface ReviewInput {
+  action: string;
+  reviewer?: string;
+  comment?: string;
+  note?: string;
+  severity?: string;
+  reason?: string;
+}
+
+export function reviewFindingApi(id: string, body: ReviewInput): Promise<unknown> {
+  return request(`/findings/${id}/review`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function listEvidence(findingId?: string): Promise<{ items: EvidenceItem[] }> {
+  const qs = findingId ? `?findingId=${encodeURIComponent(findingId)}` : '';
+  return request<{ items: EvidenceItem[] }>(`/evidence${qs}`);
 }
 
 export interface ModelsPage {
