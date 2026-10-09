@@ -10,7 +10,17 @@
   "scripts": {
     "agent:dev": "uv run --project services/agent uvicorn fireeyeaud_agent.main:app --host 127.0.0.1 --port 8765 --reload",
     "agent:test": "uv run --project services/agent pytest",
-    "desktop:dev": "npm run dev -w @fireeyeaud/desktop",
-    "desktop:test": "npm run test -w @fireeyeaud/desktop"
+    "renderer:dev": "npm run dev -w @fireeyeaud/renderer",
+    "renderer:build": "npm run build -w @fireeyeaud/renderer",
+    "renderer:typecheck": "npm run typecheck -w @fireeyeaud/renderer",
+    "desktop:dev": "npm run dev",
+    "desktop:test": "npm run test -w @fireeyeaud/desktop",
+    "dev": "concurrently -k -n renderer,electron -c cyan,magenta \"npm run renderer:dev\" \"npm run dev:electron\"",
+    "dev:electron": "wait-on tcp:127.0.0.1:5173 && cross-env FIREEYEAUD_DEV_SERVER_URL=http://127.0.0.1:5173 electron apps/desktop"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0",
+    "cross-env": "^7.0.0",
+    "wait-on": "^8.0.0"
   }
 }

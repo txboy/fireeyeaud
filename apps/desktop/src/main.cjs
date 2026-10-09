@@ -11,6 +11,8 @@ const { loadWindowState, saveWindowState } = require('./window-state.cjs');
 app.setName('fireeyeaud');
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
+const DEV_SERVER_URL = process.env.FIREEYEAUD_DEV_SERVER_URL;
+const RENDERER_DIST = path.join(REPO_ROOT, 'apps', 'renderer', 'dist', 'index.html');
 const SIDECAR_TOKEN = crypto.randomBytes(24).toString('hex');
 
 let mainWindow = null;
@@ -67,7 +69,30 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => mainWindow.show());
   mainWindow.on('close', () => saveWindowState(app.getPath('userData'), mainWindow.getBounds()));
-  mainWindow.loadFile(path.join(__dirname, 'loading.html'));
+
+  mainWindow.webContents.on('did-finish-load', () =>
+    logger.info(`[renderer] loaded ${mainWindow.webContents.getURL()}`),
+  );
+  mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) =>
+    logger.error(`[renderer] did-fail-load ${code} ${desc} ${url}`),
+  );
+  mainWindow.webContents.on('render-process-gone', (_e, details) =>
+    logger.error(`[renderer] process gone ${JSON.stringify(details)}`),
+  );
+  mainWindow.webContents.on('console-message', (...args) => {
+    const detail = args[1];
+    const text = typeof detail === 'object' && detail ? detail.message : args[2];
+    logger.info(`[renderer] ${text}`);
+  });
+
+  if (DEV_SERVER_URL) {
+    mainWindow.loadURL(DEV_SERVER_URL);
+  } else if (fs.existsSync(RENDERER_DIST)) {
+    mainWindow.loadFile(RENDERER_DIST);
+  } else {
+    // 渲染层尚未构建时的自检回退页。
+    mainWindow.loadFile(path.join(__dirname, 'loading.html'));
+  }
 
   return mainWindow;
 }
@@ -98,17 +123,19 @@ app.whenReady().then(async () => {
   registerIpc();
   hardenWebContents();
 
-  // 加载页的 CSP：只允许同源与本地 sidecar 连接。
-  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Content-Security-Policy': [
-          "default-src 'self'; connect-src 'self' http://127.0.0.1:*; style-src 'self' 'unsafe-inline'; script-src 'self'",
-        ],
-      },
+  // CSP：仅在生产（非 dev server）注入，避免影响 Vite HMR。
+  if (!DEV_SERVER_URL) {
+    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': [
+            "default-src 'self'; connect-src 'self' http://127.0.0.1:*; style-src 'self' 'unsafe-inline'; script-src 'self'",
+          ],
+        },
+      });
     });
-  });
+  }
 
   sidecar.onStatus = broadcastStatus;
   createWindow();
