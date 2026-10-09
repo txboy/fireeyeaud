@@ -81,6 +81,8 @@ export default {
     newFolder: '新建文件夹',
     refresh: '刷新',
     more: '更多',
+    openFolderHint: '打开一个文件夹作为审计工作区',
+    closeWorkspace: '关闭工作区',
   },
   search: {
     title: '搜索',
@@ -154,6 +156,10 @@ export default {
     thinking: '推理中…',
     empty: '开始对话，让 Agent 分析工作区数据',
     followUps: '追问建议',
+    you: '你',
+    assistant: '审计智能体',
+    streaming: '正在回复…',
+    phase: { planning: '规划中…', executing: '执行中…', reflecting: '复核中…' },
   },
   evidence: {
     title: '证据日志',
@@ -165,6 +171,13 @@ export default {
     exportExcel: '导出 Excel',
     print: '打印',
     empty: '暂无底稿',
+  },
+  error: {
+    internal: '发生内部错误',
+    pathInvalid: '路径无效或文件夹不存在',
+    wsLocked: '该工作区已被其它实例占用',
+    wsSchemaTooNew: '工作区数据版本高于当前应用，请升级应用',
+    sidecarNotReady: 'Agent 服务尚未就绪',
   },
   settings: {
     title: '设置',

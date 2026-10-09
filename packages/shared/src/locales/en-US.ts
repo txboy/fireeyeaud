@@ -81,6 +81,8 @@ export default {
     newFolder: 'New folder',
     refresh: 'Refresh',
     more: 'More',
+    openFolderHint: 'Open a folder as an audit workspace',
+    closeWorkspace: 'Close workspace',
   },
   search: {
     title: 'Search',
@@ -154,6 +156,10 @@ export default {
     thinking: 'Thinking…',
     empty: 'Start a conversation to let the agent analyze workspace data',
     followUps: 'Suggested follow-ups',
+    you: 'You',
+    assistant: 'Audit Agent',
+    streaming: 'Replying…',
+    phase: { planning: 'Planning…', executing: 'Working…', reflecting: 'Reviewing…' },
   },
   evidence: {
     title: 'Evidence log',
@@ -165,6 +171,13 @@ export default {
     exportExcel: 'Export Excel',
     print: 'Print',
     empty: 'No working paper yet',
+  },
+  error: {
+    internal: 'An internal error occurred',
+    pathInvalid: 'Invalid path or folder does not exist',
+    wsLocked: 'This workspace is already open in another instance',
+    wsSchemaTooNew: 'Workspace data version is newer than this app; please upgrade',
+    sidecarNotReady: 'Agent service is not ready yet',
   },
   settings: {
     title: 'Settings',

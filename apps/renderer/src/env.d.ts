@@ -7,6 +7,7 @@ declare global {
     fireeyeaud?: {
       getSidecarInfo: () => Promise<SidecarInfo>;
       getAppInfo: () => Promise<AppInfo>;
+      openFolder: () => Promise<string | null>;
       onSidecarStatus: (callback: (info: SidecarInfo) => void) => () => void;
     };
   }

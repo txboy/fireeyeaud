@@ -1,9 +1,25 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Paperclip, Send, Sparkles, Wrench } from 'lucide-react';
+import { AlertTriangle, Paperclip, Send, Sparkles, Wrench } from 'lucide-react';
+import { useChatStore } from '../store/chat';
 
 export function AgentColumn() {
-  const { t } = useTranslation('agent');
+  const { t, i18n } = useTranslation('agent');
   const { t: tc } = useTranslation('common');
+  const { t: te } = useTranslation('error');
+  const [text, setText] = useState('');
+
+  const messages = useChatStore((s) => s.messages);
+  const streaming = useChatStore((s) => s.streaming);
+  const send = useChatStore((s) => s.send);
+
+  const submit = () => {
+    if (!text.trim() || streaming) return;
+    void send(text, i18n.language);
+    setText('');
+  };
+
+  const errorText = (key: string) => te(key.replace(/^error\./, ''));
 
   return (
     <main className="agent">
@@ -15,10 +31,37 @@ export function AgentColumn() {
       </div>
 
       <div className="agent__conv">
-        <div className="panel-empty">
-          <Sparkles size={26} strokeWidth={1.5} />
-          <span>{t('empty')}</span>
-        </div>
+        {messages.length === 0 ? (
+          <div className="panel-empty">
+            <Sparkles size={26} strokeWidth={1.5} />
+            <span>{t('empty')}</span>
+          </div>
+        ) : (
+          messages.map((m) => (
+            <div key={m.id} className={`msg msg--${m.role}`}>
+              <div className="msg__head">
+                {m.role === 'assistant' && (
+                  <Sparkles size={13} strokeWidth={1.75} color="var(--accent)" />
+                )}
+                <span className="msg__role">{t(m.role)}</span>
+                {m.streaming && m.phase && (
+                  <span className="msg__phase">{t(`phase.${m.phase}`)}</span>
+                )}
+              </div>
+              {m.thinking && <div className="msg__thinking">{m.thinking}</div>}
+              <div className="msg__body">
+                {m.content}
+                {m.streaming && <span className="msg__caret" />}
+              </div>
+              {m.errorKey && (
+                <div className="msg__error">
+                  <AlertTriangle size={13} strokeWidth={1.75} />
+                  <span>{errorText(m.errorKey)}</span>
+                </div>
+              )}
+            </div>
+          ))
+        )}
       </div>
 
       <div className="agent__input">
@@ -28,8 +71,22 @@ export function AgentColumn() {
         <button type="button" className="activitybar__item" title={t('selectTool')}>
           <Wrench size={16} strokeWidth={1.75} />
         </button>
-        <input className="searchbox" placeholder={t('inputPlaceholder')} />
-        <button type="button" className="button" title={t('send')} disabled>
+        <input
+          className="searchbox"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.nativeEvent.isComposing) submit();
+          }}
+          placeholder={t('inputPlaceholder')}
+        />
+        <button
+          type="button"
+          className="button"
+          title={t('send')}
+          onClick={submit}
+          disabled={!text.trim() || streaming}
+        >
           <Send size={15} strokeWidth={1.9} />
         </button>
       </div>

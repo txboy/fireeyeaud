@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, session } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, session } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
@@ -110,6 +110,13 @@ function registerIpc() {
     platform: process.platform,
     userData: app.getPath('userData'),
   }));
+  ipcMain.handle('dialog:open-folder', async () => {
+    const result = await dialog.showOpenDialog(mainWindow ?? undefined, {
+      title: '打开工作区文件夹',
+      properties: ['openDirectory'],
+    });
+    return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0];
+  });
 }
 
 function hardenWebContents() {

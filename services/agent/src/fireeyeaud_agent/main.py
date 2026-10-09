@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
-from .api import health, sessions
+from .api import health, sessions, workspaces
 from .config.settings import settings
+from .errors import ApiError
 
 API_PREFIX = "/api/v1"
 
@@ -21,7 +23,14 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    @app.exception_handler(ApiError)
+    async def _api_error_handler(request: Request, exc: ApiError) -> JSONResponse:
+        envelope = exc.envelope
+        envelope["error"]["traceId"] = request.headers.get("x-trace-id")
+        return JSONResponse(status_code=exc.http_status, content=envelope)
+
     app.include_router(health.router, prefix=API_PREFIX)
+    app.include_router(workspaces.router, prefix=API_PREFIX)
     app.include_router(sessions.router, prefix=API_PREFIX)
     return app
 

@@ -47,3 +47,32 @@ export type FindingStatus = 'pending' | 'in_review' | 'confirmed' | 'rejected' |
 export interface ScopeBadgeProps {
   scope: ConfigScope;
 }
+
+export interface DataSourceRef {
+  id: string;
+  type: 'excel' | 'csv' | 'pdf' | 'db';
+  path?: string;
+  connectionId?: string;
+  tables?: string[];
+  importedAt?: string;
+}
+
+export interface WorkspaceInfo {
+  schemaVersion: number;
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  defaultModelId: string | null;
+  counters: Record<string, number>;
+  dataSources: DataSourceRef[];
+}
+
+export interface ApiErrorEnvelope {
+  error: {
+    code: string;
+    messageKey: string;
+    params?: Record<string, unknown>;
+    traceId?: string | null;
+  };
+}

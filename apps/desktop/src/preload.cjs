@@ -6,6 +6,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('fireeyeaud', {
   getSidecarInfo: () => ipcRenderer.invoke('sidecar:info'),
   getAppInfo: () => ipcRenderer.invoke('app:info'),
+  openFolder: () => ipcRenderer.invoke('dialog:open-folder'),
   onSidecarStatus: (callback) => {
     const handler = (_event, info) => callback(info);
     ipcRenderer.on('sidecar:status', handler);
