@@ -200,3 +200,31 @@ export interface ApiErrorEnvelope {
     traceId?: string | null;
   };
 }
+
+export type GraphNodeType = 'finding' | 'dataset' | 'voucher' | 'rule' | 'tool';
+
+export type GraphEdgeType =
+  | 'derived_from'
+  | 'references'
+  | 'involves'
+  | 'verified_by';
+
+export interface GraphNode {
+  id: string;
+  nodeType: GraphNodeType;
+  refId: string;
+  label: string;
+  meta: Record<string, unknown>;
+}
+
+export interface GraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  edgeType: GraphEdgeType;
+}
+
+export interface GraphData {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}

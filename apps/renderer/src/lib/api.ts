@@ -5,6 +5,7 @@ import type {
   DataSourceInfo,
   EvidenceItem,
   Finding,
+  GraphData,
   ModelProfile,
   SseEvent,
   WorkspaceInfo,
@@ -214,6 +215,11 @@ export function reviewFindingApi(id: string, body: ReviewInput): Promise<unknown
 export function listEvidence(findingId?: string): Promise<{ items: EvidenceItem[] }> {
   const qs = findingId ? `?findingId=${encodeURIComponent(findingId)}` : '';
   return request<{ items: EvidenceItem[] }>(`/evidence${qs}`);
+}
+
+export function getGraph(findingId?: string): Promise<GraphData> {
+  const qs = findingId ? `?findingId=${encodeURIComponent(findingId)}` : '';
+  return request<GraphData>(`/graph${qs}`);
 }
 
 export interface RulesPage {
