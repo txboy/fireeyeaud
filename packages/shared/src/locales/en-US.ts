@@ -159,6 +159,9 @@ export default {
     you: 'You',
     assistant: 'Audit Agent',
     streaming: 'Replying…',
+    toolCall: 'Calling tool…',
+    toolResult: 'Tool result',
+    findingCreated: 'Finding {{id}} created',
     phase: { planning: 'Planning…', executing: 'Working…', reflecting: 'Reviewing…' },
   },
   evidence: {

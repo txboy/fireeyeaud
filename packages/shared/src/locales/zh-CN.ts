@@ -159,6 +159,9 @@ export default {
     you: '你',
     assistant: '审计智能体',
     streaming: '正在回复…',
+    toolCall: '调用工具…',
+    toolResult: '工具结果',
+    findingCreated: '发现疑点 {{id}}',
     phase: { planning: '规划中…', executing: '执行中…', reflecting: '复核中…' },
   },
   evidence: {

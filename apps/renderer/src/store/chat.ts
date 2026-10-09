@@ -1,8 +1,17 @@
 import { create } from 'zustand';
 import type { SseEvent } from '@fireeyeaud/shared';
 import { ApiError, createSessionApi, streamChat } from '../lib/api';
+import { useFindingsStore } from './findings';
 
 export type ChatRole = 'user' | 'assistant';
+
+export interface ToolCall {
+  callId: string;
+  tool: string;
+  params: Record<string, unknown>;
+  summary?: string;
+  ok?: boolean;
+}
 
 export interface ChatMessage {
   id: string;
@@ -12,6 +21,8 @@ export interface ChatMessage {
   phase: string | null;
   streaming: boolean;
   errorKey: string | null;
+  tools: ToolCall[];
+  findingIds: string[];
 }
 
 interface ChatState {
@@ -34,6 +45,36 @@ function applyEvent(message: ChatMessage, event: SseEvent): ChatMessage {
       return { ...message, thinking: String(data.text ?? '') };
     case 'token':
       return { ...message, content: message.content + String(data.delta ?? '') };
+    case 'tool_call':
+      return {
+        ...message,
+        tools: [
+          ...message.tools,
+          {
+            callId: String(data.callId ?? ''),
+            tool: String(data.tool ?? ''),
+            params: (data.params as Record<string, unknown>) ?? {},
+          },
+        ],
+      };
+    case 'tool_result':
+      return {
+        ...message,
+        tools: message.tools.map((tool) =>
+          tool.callId === String(data.callId)
+            ? {
+                ...tool,
+                summary: String(data.summary ?? ''),
+                ok: Boolean(data.ok),
+              }
+            : tool,
+        ),
+      };
+    case 'finding':
+      return {
+        ...message,
+        findingIds: [...message.findingIds, String(data.id ?? '')],
+      };
     case 'error':
       return {
         ...message,
@@ -76,6 +117,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
             phase: null,
             streaming: false,
             errorKey: e.messageKey ?? 'error.sidecarNotReady',
+            tools: [],
+            findingIds: [],
           },
         ],
       }));
@@ -90,6 +133,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       phase: null,
       streaming: false,
       errorKey: null,
+      tools: [],
+      findingIds: [],
     };
     const assistantMessage: ChatMessage = {
       id: nextId(),
@@ -99,13 +144,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
       phase: null,
       streaming: true,
       errorKey: null,
+      tools: [],
+      findingIds: [],
     };
     set((s) => ({
       messages: [...s.messages, userMessage, assistantMessage],
       streaming: true,
     }));
 
-    const update = (event: SseEvent) =>
+    const update = (event: SseEvent) => {
       set((s) => ({
         messages: s.messages.map((m) =>
           m.id === assistantMessage.id ? applyEvent(m, event) : m,
@@ -113,6 +160,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
         streaming:
           event.type === 'done' || event.type === 'error' ? false : s.streaming,
       }));
+      if (event.type === 'finding') {
+        void useFindingsStore.getState().load();
+      }
+    };
 
     try {
       await streamChat(sessionId, trimmed, { onEvent: update }, locale);

@@ -49,6 +49,33 @@ export function AgentColumn() {
                 )}
               </div>
               {m.thinking && <div className="msg__thinking">{m.thinking}</div>}
+              {m.tools.length > 0 && (
+                <div className="msg__tools">
+                  {m.tools.map((tool) => (
+                    <div key={tool.callId} className="tool-card">
+                      <Wrench size={12} strokeWidth={1.75} />
+                      <span className="tool-card__name">{tool.tool}</span>
+                      <span className="tool-card__sep">·</span>
+                      <span className="tool-card__summary">
+                        {tool.ok === undefined
+                          ? t('toolCall')
+                          : tool.ok
+                            ? tool.summary
+                            : te('internal')}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {m.findingIds.length > 0 && (
+                <div className="msg__findings">
+                  {m.findingIds.map((id) => (
+                    <span key={id} className="finding-badge">
+                      {t('findingCreated', { id })}
+                    </span>
+                  ))}
+                </div>
+              )}
               <div className="msg__body">
                 {m.content}
                 {m.streaming && <span className="msg__caret" />}
