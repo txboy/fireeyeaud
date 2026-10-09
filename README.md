@@ -80,11 +80,21 @@ aggregate_subject / parse_ledger / check_tie）、对话 Agent（plan → tool_c
   可启停/覆盖 severity；项目自定义规则（`rules.jsonl` 事件流，`R-<n>`）CRUD；
   `POST /rules/{id}/run` 干跑预览、`POST /rules/run` 批量产出疑点；启用的 prompt 规则注入 Agent 系统提示词。
 
+### Phase 3 · 证据图谱可视化（已完成）
+- **后端派生**：`GET /graph?findingId` 由 `findings` + `evidence` + `schema` **实时派生**
+  `{nodes, edges}`（不落盘）；节点 `finding` / `dataset` / `voucher` / `rule` / `tool`，
+  边 `derived_from` / `references` / `verified_by`；节点 id `<nodeType>:<refId>`。
+- **前端图谱**：成果栏「证据图谱」tab 用 Cytoscape.js 渲染（≤30 节点用 `breadthfirst`，
+  否则 `cose`）；点击节点弹详情卡，点击疑点节点「查看疑点」跳回清单并选中；
+  疑点列表选中某条时图谱聚焦/高亮其子图。
+
 已知偏差（详见 [`docs/plans/2026-10-09-phase1-mvp.md`](docs/plans/2026-10-09-phase1-mvp.md)、
-[`docs/plans/2026-10-09-phase2-evidence-review.md`](docs/plans/2026-10-09-phase2-evidence-review.md)）：
+[`docs/plans/2026-10-09-phase2-evidence-review.md`](docs/plans/2026-10-09-phase2-evidence-review.md)、
+[`docs/plans/2026-10-09-phase3-evidence-graph.md`](docs/plans/2026-10-09-phase3-evidence-graph.md)）：
 工具先用进程内 LangChain `StructuredTool`；搜索先用主进程 Node 遍历；模型密钥暂只支持
 无 key / 环境变量；会话/消息投影为简化实现；证据仅记 tool_call/tool_result 两档；
-打开工作区同步校验证据链。真实模型 E2E 需人工按计划步骤验证。
+打开工作区同步校验证据链；图谱 `subject`/`party` 节点推迟；主题切换后需重挂 tab 才更新图谱配色。
+真实模型 E2E 需人工按计划步骤验证。
 
 ## 文档
 

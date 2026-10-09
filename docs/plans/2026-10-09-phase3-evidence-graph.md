@@ -715,6 +715,35 @@ git commit -m "docs: Phase 3 验收记录与偏差说明"
 
 ---
 
+## Phase 3 实现记录（2026-10-09 完成）
+
+里程碑 K–L 均已完成并逐任务提交：
+
+- **K 后端图谱派生 + REST**：`store/graph.py` 由 `findings` + `evidence` + `schema` 实时派生
+  `{nodes, edges}`（不落盘），支持 `?findingId` 子图过滤；`api/graph.py` 提供 `GET /graph`，
+  未打开工作区返回空图。
+- **L 前端图谱视图 + 联动**：安装 `cytoscape` + `@types/cytoscape`；`packages/shared` 增
+  `GraphNode`/`GraphEdge`/`GraphData` 类型；`lib/api.ts` 增 `getGraph`；`store/graph.ts`
+  管理数据与选中节点；`store/ui.ts` 增 `selectedFindingId`；`GraphView.tsx` 渲染图谱 +
+  节点详情卡；`ResultsColumn` 挂载 `graph` tab；疑点卡片与图谱双向联动；i18n（`graph` 命名空间）
+  + CSS。
+
+**验证：** 后端 `uv run pytest` → 88 passed（较 Phase 2 的 83 增 5）；`renderer:typecheck` /
+`renderer:build` / `desktop:test`（2 pass）均通过。真实模型端到端流程需按 M1 Step 3 人工验证。
+
+**实现期间的说明：**
+
+1. `packages/shared/src/locales/index.ts` 的 `namespaces` 由 `Object.keys(zhCN)` 自动派生，
+   新增 `graph` 命名空间后无需手动登记。
+2. `GraphView` 的 `faded`/`focused` 类需在 cytoscape style 数组中映射（已加 `.faded { opacity }`、
+   `.focused { border }` 选择器）；节点配色用主题令牌，主题切换后需重挂 tab 才能刷新。
+3. cytoscape 样式对象用 `as unknown as cytoscape.StylesheetStyle[]` 断言（@types/cytoscape 的
+   `Stylesheet` 别名未导出）。
+4. 疑点卡片与图谱联动：卡片展开时写 `selectedFindingId`；图谱点击 `finding` 节点回写并使卡片
+   自动展开 + 滚动进入视图；图谱在 `selectedFindingId` 变化时聚焦其子图。
+
+---
+
 ## Execution Handoff
 
 Plan complete and saved to `docs/plans/2026-10-09-phase3-evidence-graph.md`. Two execution options:
