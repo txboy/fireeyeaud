@@ -188,6 +188,7 @@ export default {
     llmAuth: '模型鉴权失败',
     artifactNotFound: '产物不存在或已清理',
     notFound: '未找到指定对象',
+    agentLimit: '已达到单轮步数或时间上限，请补充说明后重试',
   },
   import: {
     title: '导入数据',

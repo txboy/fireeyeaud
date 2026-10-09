@@ -1,7 +1,10 @@
 import json
 
 import httpx
+from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+from langchain_core.messages import AIMessage
 
+from fireeyeaud_agent.agent import graph as graph_mod
 from fireeyeaud_agent.main import app
 
 
@@ -13,9 +16,13 @@ def _parse_sse(text: str) -> list[dict]:
     return events
 
 
-async def test_chat_streams_sse_envelope() -> None:
+async def test_chat_streams_sse_envelope(tmp_path, monkeypatch) -> None:
+    fake = GenericFakeChatModel(messages=iter([AIMessage(content="你好，这是回答")]))
+    monkeypatch.setattr(graph_mod, "build_chat_model", lambda: fake)
+
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        await client.post("/api/v1/workspaces/open", json={"path": str(tmp_path)})
         created = await client.post("/api/v1/sessions", json={"title": "t"})
         assert created.status_code == 200
         session_id = created.json()["id"]
@@ -27,6 +34,7 @@ async def test_chat_streams_sse_envelope() -> None:
         ) as resp:
             assert resp.status_code == 200
             text = "".join([chunk async for chunk in resp.aiter_text()])
+        await client.post("/api/v1/workspaces/close")
 
     events = _parse_sse(text)
     types = [e["type"] for e in events]
@@ -39,3 +47,4 @@ async def test_chat_streams_sse_envelope() -> None:
 
     streamed = "".join(e["data"]["delta"] for e in events if e["type"] == "token")
     assert "你好" in streamed
+    assert "这是回答" in streamed

@@ -188,6 +188,7 @@ export default {
     llmAuth: 'Model authentication failed',
     artifactNotFound: 'Artifact missing or cleaned up',
     notFound: 'The requested item was not found',
+    agentLimit: 'Reached the per-turn step/time limit; add details and retry',
   },
   import: {
     title: 'Import data',
