@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from .api import (
     datasources,
     evidence,
+    export,
     findings,
     graph,
     health,
@@ -47,6 +48,7 @@ def create_app() -> FastAPI:
     app.include_router(models.router, prefix=API_PREFIX)
     app.include_router(rules.router, prefix=API_PREFIX)
     app.include_router(graph.router, prefix=API_PREFIX)
+    app.include_router(export.router, prefix=API_PREFIX)
     app.include_router(sessions.router, prefix=API_PREFIX)
     return app
 
