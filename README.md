@@ -63,15 +63,28 @@ FIREYEAUD_MODEL_BASE_URL=http://127.0.0.1:11434/v1 FIREYEAUD_MODEL_NAME=qwen2.5 
 
 未配置或模型不可达时，对话会返回 `error.llmUnavailable` 提示而非崩溃。
 
-## 状态（Phase 1 · MVP 最小闭环）
+## 状态
 
-已实现：工作区打开、Excel/CSV 导入（SSE 进度）、审计工具（describe_source / sql_query /
+### Phase 1 · MVP 最小闭环（已完成）
+工作区打开、Excel/CSV 导入（SSE 进度）、审计工具（describe_source / sql_query /
 aggregate_subject / parse_ledger / check_tie）、对话 Agent（plan → tool_call → reflect，
 产出疑点）、疑点清单、工作区关键词搜索、Models 面板（global/project 作用域）。
 
-已知偏差（详见 [`docs/plans/2026-10-09-phase1-mvp.md`](docs/plans/2026-10-09-phase1-mvp.md)）：
+### Phase 2 · 证据与复核（已完成）
+- **证据链**：每次工具调用/结果写 `.fireeye/evidence.jsonl`，SHA-256 哈希链
+  （`hash = sha256(prevHash + canonical)`）；大结果（>16KB）落 `.fireeye/artifacts/ev_<seq>.json`；
+  打开工作区时校验链完整性；`GET /evidence`、`POST /workspaces/{id}/verify-evidence`。
+- **疑点复核**：`POST /findings/{id}/review`（确认/驳回/复核中/误报/备注/改级别），
+  事件追加到 `findings.jsonl`；前端疑点卡片可展开证据链与复核记录。复核人暂为占位「审计员」。
+- **规则库**：内置 `tie_check`（代码检测器）+ `related_party_undisclosed`（prompt 规则）
+  可启停/覆盖 severity；项目自定义规则（`rules.jsonl` 事件流，`R-<n>`）CRUD；
+  `POST /rules/{id}/run` 干跑预览、`POST /rules/run` 批量产出疑点；启用的 prompt 规则注入 Agent 系统提示词。
+
+已知偏差（详见 [`docs/plans/2026-10-09-phase1-mvp.md`](docs/plans/2026-10-09-phase1-mvp.md)、
+[`docs/plans/2026-10-09-phase2-evidence-review.md`](docs/plans/2026-10-09-phase2-evidence-review.md)）：
 工具先用进程内 LangChain `StructuredTool`；搜索先用主进程 Node 遍历；模型密钥暂只支持
-无 key / 环境变量；会话/消息投影为简化实现。真实模型 E2E 需人工按计划 F4 步骤验证。
+无 key / 环境变量；会话/消息投影为简化实现；证据仅记 tool_call/tool_result 两档；
+打开工作区同步校验证据链。真实模型 E2E 需人工按计划步骤验证。
 
 ## 文档
 

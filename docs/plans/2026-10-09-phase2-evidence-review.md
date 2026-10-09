@@ -1494,6 +1494,25 @@ git commit -m "docs: Phase 2 验收记录与偏差说明"
 
 ---
 
+## Phase 2 实现记录（2026-10-09 完成）
+
+里程碑 G–J 均已完成并逐任务提交：
+
+- **G 证据链基础**：`store/evidence.py`（canonical + SHA-256 哈希链 + 大结果落 artifacts）；篡改检测；`GET /evidence`、`POST /workspaces/{id}/verify-evidence`；打开工作区返回 `evidence` 校验状态。
+- **H Agent 证据写入 + 疑点复核**：`agent/graph.py` 每次工具调用前后写 `tool_call`/`tool_result` 证据；疑点反向关联 `evidenceRefs`；`review_finding`（确认/驳回/标记/备注/改级别）+ `POST /findings/{id}/review`；前端疑点卡片可展开证据链与复核记录。
+- **I 规则库后端**：`store/rules.py`（内置 + 自定义事件流折叠）、`store/rule_engine.py`（试跑预览 + 批量产出疑点）、`api/rules.py`（CRUD/试跑/批量运行）、prompt 规则注入系统提示词、`report_finding.ruleKey`。
+- **J 前端**：规则库设置页（启停/覆盖 severity/试跑/批量运行）、i18n、类型与样式。
+
+**验证：** 后端 `uv run pytest` 全绿（83 passed）；`renderer:typecheck` / `renderer:build` / `desktop:test` 均通过。真实模型端到端流程需按 J2 Step 3 人工验证。
+
+**实现期间的说明：**
+
+1. `tie_check` 内置规则以 `detector` 字段标识代码实现（设计 §14.12 未定义，属实现补充）；其试跑与批量运行扫描「科目/借方/贷方」列齐全的表。
+2. 内置规则文案 key 由 `rules.builtin.<slug>` 调整为 `rules.builtinRules.<slug>`，避免与 `rules.builtin`（分组标题）冲突。
+3. evidence 的 `seq` 参与哈希；`append_event` 以事件自带 `seq` 覆盖，值一致，保证 `verify` 与 `append` 一致。
+
+---
+
 ## Execution Handoff
 
 Plan complete and saved to `docs/plans/2026-10-09-phase2-evidence-review.md`. Two execution options:
