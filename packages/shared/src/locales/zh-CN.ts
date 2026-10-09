@@ -187,6 +187,7 @@ export default {
     llmUnavailable: '模型不可达，请在 Models 面板检查配置',
     llmAuth: '模型鉴权失败',
     artifactNotFound: '产物不存在或已清理',
+    notFound: '未找到指定对象',
   },
   import: {
     title: '导入数据',

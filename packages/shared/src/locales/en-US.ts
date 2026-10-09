@@ -187,6 +187,7 @@ export default {
     llmUnavailable: 'Model unreachable; check the Models panel',
     llmAuth: 'Model authentication failed',
     artifactNotFound: 'Artifact missing or cleaned up',
+    notFound: 'The requested item was not found',
   },
   import: {
     title: 'Import data',

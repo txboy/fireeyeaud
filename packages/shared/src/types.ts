@@ -48,6 +48,38 @@ export interface ScopeBadgeProps {
   scope: ConfigScope;
 }
 
+export interface FindingDataRef {
+  sourceId: string;
+  table: string;
+  rowRef: string;
+}
+
+export interface FindingNote {
+  note: { lang: string; text: string } | null;
+  author?: string;
+  ts?: string;
+}
+
+export interface Finding {
+  id: string;
+  origin: 'rule' | 'agent' | 'manual';
+  ruleKey: string | null;
+  title: { lang: string; text: string } | null;
+  description: { lang: string; text: string } | null;
+  severity: Severity;
+  status: FindingStatus;
+  subjects?: string[];
+  amount?: string | null;
+  currency?: string;
+  confidence?: number | null;
+  dataRefs: FindingDataRef[];
+  evidenceRefs: string[];
+  sessionId?: string;
+  seq: number;
+  ts: string;
+  notes?: FindingNote[];
+}
+
 export interface DataSourceRef {
   id: string;
   type: 'excel' | 'csv' | 'pdf' | 'db';
