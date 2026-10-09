@@ -21,5 +21,12 @@ class Settings(BaseSettings):
     max_steps: int = 12
     turn_timeout_seconds: int = 300
 
+    model_base_url: str = "http://127.0.0.1:11434/v1"
+    model_name: str = "qwen2.5"
+    model_api_key: str | None = None
+    model_temperature: float = 0.2
+    sql_row_limit: int = 200
+    sql_timeout_seconds: int = 30
+
 
 settings = Settings()
