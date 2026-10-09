@@ -1,0 +1,14 @@
+{
+  "name": "fireeyeaud",
+  "private": true,
+  "version": "0.0.0",
+  "description": "火眼审计助手 — 纯本地财务/会计审计桌面助手",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "agent:dev": "uv run --project services/agent uvicorn fireeyeaud_agent.main:app --host 127.0.0.1 --port 8765 --reload",
+    "agent:test": "uv run --project services/agent pytest"
+  }
+}

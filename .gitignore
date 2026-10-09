@@ -1,0 +1,51 @@
+# --- Node / Electron ---
+node_modules/
+dist/
+out/
+release/
+*.tsbuildinfo
+.vite/
+.eslintcache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Python / uv ---
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+*.spec
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+uv-cache/
+
+# --- App / workspace artifacts ---
+.fireeye/
+*.duckdb
+*.duckdb.wal
+*.sqlite
+*.sqlite-journal
+
+# --- Logs / diagnostics ---
+*.log
+logs/
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# --- Local env ---
+.env
+.env.local
