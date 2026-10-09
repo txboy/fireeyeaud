@@ -14,6 +14,7 @@ from typing import Any
 
 from ..config.settings import settings
 from ..errors import ApiError
+from .duckdb import Database
 
 _SUBDIRS = ["config", "templates", "index", "artifacts"]
 _COUNTERS = [
@@ -57,6 +58,7 @@ class WorkspaceManager:
     def __init__(self) -> None:
         self.current: dict[str, Any] | None = None
         self.root: Path | None = None
+        self.db: Database | None = None
 
     def open(self, path: str) -> dict[str, Any]:
         root = Path(path).expanduser()
@@ -108,6 +110,9 @@ class WorkspaceManager:
 
         self.root = root
         self.current = project
+        if self.db is not None:
+            self.db.close()
+        self.db = Database(fe / "workspace.duckdb")
         return project
 
     def _load_or_init(
@@ -150,6 +155,9 @@ class WorkspaceManager:
                 lock.unlink()
         self.root = None
         self.current = None
+        if self.db is not None:
+            self.db.close()
+            self.db = None
 
 
 workspace_manager = WorkspaceManager()

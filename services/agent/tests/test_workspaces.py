@@ -28,10 +28,12 @@ async def test_open_current_close(tmp_path) -> None:
 
         current = (await client.get("/api/v1/workspaces/current")).json()["workspace"]
         assert current["id"] == ws["id"]
+        assert ws_mod.workspace_manager.db is not None
 
         closed = (await client.post("/api/v1/workspaces/close")).json()
         assert closed["closed"] is True
         assert not (tmp_path / ".fireeye" / ".lock").exists()
+        assert ws_mod.workspace_manager.db is None
         assert (await client.get("/api/v1/workspaces/current")).json()[
             "workspace"
         ] is None
