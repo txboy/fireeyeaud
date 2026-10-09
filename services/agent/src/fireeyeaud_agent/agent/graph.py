@@ -205,9 +205,24 @@ async def run_agent(
     yield event("done", {"usage": {}})
 
 
+def _load_history(fe: Path, session_id: str) -> list[BaseMessage]:
+    from ..store.sessions import get_messages
+
+    history: list[BaseMessage] = []
+    for item in get_messages(fe, session_id):
+        content = item.get("content")
+        text = content.get("text", "") if isinstance(content, dict) else str(content)
+        if item.get("role") == "user":
+            history.append(HumanMessage(content=text))
+        elif item.get("role") == "assistant" and text:
+            history.append(AIMessage(content=text))
+    return history
+
+
 async def stream_chat(
     session_id: str, message: str, locale: str | None = None
 ) -> AsyncIterator[dict[str, Any]]:
+    from ..store.sessions import add_message
     from ..store.workspace import workspace_manager
 
     def _wrap(envelope: dict[str, Any]) -> dict[str, str]:
@@ -229,5 +244,17 @@ async def stream_chat(
         )
         yield _wrap(event("done", {"usage": {}}))
         return
-    async for ev in run_agent(root, session_id, message, locale):
+
+    fe = root / ".fireeye"
+    history = _load_history(fe, session_id)
+    add_message(fe, root, session_id, "user", {"text": message})
+
+    answer_parts: list[str] = []
+    async for ev in run_agent(root, session_id, message, locale, history=history):
+        if ev.get("type") == "token":
+            answer_parts.append(str(ev.get("data", {}).get("delta", "")))
         yield _wrap(ev)
+
+    answer = "".join(answer_parts).strip()
+    if answer:
+        add_message(fe, root, session_id, "assistant", {"text": answer})

@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import uuid
-
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
 from ..agent import stream_chat
-from ..util import now_iso
+from ..errors import ApiError
+from ..store import sessions as sessions_store
+from ..store.workspace import workspace_manager
 from .deps import require_token
 
 router = APIRouter(tags=["sessions"], dependencies=[Depends(require_token)])
@@ -27,13 +27,36 @@ class ChatBody(BaseModel):
     attachments: list[dict] | None = None
 
 
+def _root():
+    root = workspace_manager.root
+    if root is None:
+        raise ApiError("E_NO_WORKSPACE", 400, "error.noWorkspace", {})
+    return root
+
+
 @router.post("/sessions")
 def create_session(body: CreateSessionBody) -> dict[str, object]:
-    return {
-        "id": f"s_{uuid.uuid4().hex[:8]}",
-        "title": body.title,
-        "createdAt": now_iso(),
-    }
+    root = _root()
+    return sessions_store.create_session(root / ".fireeye", root, body.title)
+
+
+@router.get("/sessions")
+def list_sessions() -> dict[str, object]:
+    root = _root()
+    return {"items": sessions_store.list_sessions(root / ".fireeye")}
+
+
+@router.get("/sessions/{session_id}/messages")
+def get_messages(session_id: str) -> dict[str, object]:
+    root = _root()
+    return {"items": sessions_store.get_messages(root / ".fireeye", session_id)}
+
+
+@router.delete("/sessions/{session_id}")
+def delete_session(session_id: str) -> dict[str, object]:
+    root = _root()
+    sessions_store.delete_session(root / ".fireeye", session_id)
+    return {"ok": True}
 
 
 @router.post("/sessions/{session_id}/chat")
