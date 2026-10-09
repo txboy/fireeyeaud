@@ -128,6 +128,21 @@ export interface ImportProgressData {
   total: number;
 }
 
+export interface AuditRule {
+  id: string;
+  scope: 'builtin' | 'custom';
+  type: 'sql' | 'prompt';
+  detector?: string;
+  name?: { lang: string; text: string } | null;
+  nameKey?: string;
+  descriptionKey?: string;
+  definition?: string;
+  severity: Severity;
+  params?: Record<string, unknown>;
+  enabled: boolean;
+  builtin: boolean;
+}
+
 export interface ModelProfile {
   id: string;
   name: string;

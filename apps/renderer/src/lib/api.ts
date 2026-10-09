@@ -1,5 +1,6 @@
 import type {
   ApiErrorEnvelope,
+  AuditRule,
   ConfigScope,
   DataSourceInfo,
   EvidenceItem,
@@ -213,6 +214,52 @@ export function reviewFindingApi(id: string, body: ReviewInput): Promise<unknown
 export function listEvidence(findingId?: string): Promise<{ items: EvidenceItem[] }> {
   const qs = findingId ? `?findingId=${encodeURIComponent(findingId)}` : '';
   return request<{ items: EvidenceItem[] }>(`/evidence${qs}`);
+}
+
+export interface RulesPage {
+  items: AuditRule[];
+  nextCursor: string | null;
+}
+
+export function listRules(): Promise<RulesPage> {
+  return request<RulesPage>('/rules');
+}
+
+export interface RuleInput {
+  name?: string;
+  type?: 'sql' | 'prompt';
+  definition?: string;
+  severity?: string;
+  params?: Record<string, unknown>;
+  enabled?: boolean;
+}
+
+export function createRule(input: RuleInput): Promise<AuditRule> {
+  return request<AuditRule>('/rules', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateRuleApi(id: string, patch: RuleInput): Promise<AuditRule> {
+  return request<AuditRule>(`/rules/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+}
+
+export function deleteRuleApi(id: string): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/rules/${id}`, { method: 'DELETE' });
+}
+
+export function runRuleApi(id: string): Promise<Record<string, unknown>> {
+  return request<Record<string, unknown>>(`/rules/${id}/run`, { method: 'POST' });
+}
+
+export function runAllRulesApi(): Promise<{ created: string[]; count: number }> {
+  return request<{ created: string[]; count: number }>('/rules/run', {
+    method: 'POST',
+  });
 }
 
 export interface ModelsPage {

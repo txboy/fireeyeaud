@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Radio, Select } from 'antd';
 import { supportedLocales } from '@fireeyeaud/shared/locales';
 import { useSettingsStore } from '../../store/settings';
+import { RulesPanel } from './RulesPanel';
 
 type NavKey = 'appearance' | 'rules' | 'web' | 'data' | 'about';
 
@@ -57,6 +58,8 @@ export function SettingsPanel() {
               />
             </div>
           </>
+        ) : nav === 'rules' ? (
+          <RulesPanel />
         ) : (
           <div className="panel-empty">
             <span>{tc('comingSoon')}</span>
