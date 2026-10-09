@@ -12,6 +12,11 @@ dependencies = [
   "pydantic-settings",
   "langgraph",
   "langchain-core",
+  "langchain-openai",
+  "langgraph-checkpoint-sqlite",
+  "duckdb",
+  "pandas",
+  "openpyxl",
   "openai",
 ]
 
