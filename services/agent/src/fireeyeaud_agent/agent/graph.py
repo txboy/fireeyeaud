@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
@@ -24,6 +25,7 @@ from pydantic import BaseModel, Field
 
 from ..config.models import build_chat_model
 from ..config.settings import settings
+from ..store.evidence import append_evidence
 from ..store.findings import create_finding
 from ..tools.registry import build_langchain_tools, build_tool_dict
 from ..util import now_iso
@@ -129,6 +131,8 @@ async def run_agent(
         messages.extend(history)
     messages.append(HumanMessage(content=message))
 
+    evidence_ids: list[str] = []
+
     def execute_tool(name: str, args: dict[str, Any]) -> Any:
         if name == "report_finding":
             record = create_finding(
@@ -183,6 +187,15 @@ async def run_agent(
             call_id = call.get("id") or f"call_{step}"
             name = call.get("name", "")
             args = call.get("args") or {}
+            started = time.monotonic()
+            append_evidence(
+                root,
+                session_id=session_id,
+                step="tool_call",
+                tool=name,
+                params=args,
+                lang=locale or "zh-CN",
+            )
             yield event("tool_call", {"callId": call_id, "tool": name, "params": args})
             try:
                 result = execute_tool(name, args)
@@ -194,6 +207,18 @@ async def run_agent(
                 ok = False
                 result = {"error": str(exc)}
                 summary = str(exc)
+            recorded = append_evidence(
+                root,
+                session_id=session_id,
+                step="tool_result",
+                tool=name,
+                params=args,
+                result_summary=summary,
+                result=result,
+                duration_ms=int((time.monotonic() - started) * 1000),
+                lang=locale or "zh-CN",
+            )
+            evidence_ids.append(recorded["id"])
             yield event(
                 "tool_result", {"callId": call_id, "summary": summary, "ok": ok}
             )
