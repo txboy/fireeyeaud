@@ -8,6 +8,7 @@ declare global {
       getSidecarInfo: () => Promise<SidecarInfo>;
       getAppInfo: () => Promise<AppInfo>;
       openFolder: () => Promise<string | null>;
+      openFiles: () => Promise<string[]>;
       onSidecarStatus: (callback: (info: SidecarInfo) => void) => () => void;
     };
   }

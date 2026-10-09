@@ -523,6 +523,68 @@ body {
   cursor: default;
 }
 
+.button--sm {
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 4px 10px;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.datasource-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.import-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.import-progress__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11.5px;
+}
+
+.import-progress__name {
+  color: var(--text-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-progress__phase {
+  color: var(--text-3);
+  flex: 0 0 auto;
+}
+
+.progress {
+  height: 4px;
+  background: var(--hover);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress__bar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.2s ease;
+}
+
 .checkbox {
   width: 15px;
   height: 15px;

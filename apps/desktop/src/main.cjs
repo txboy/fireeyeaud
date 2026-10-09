@@ -117,6 +117,14 @@ function registerIpc() {
     });
     return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0];
   });
+  ipcMain.handle('dialog:open-files', async () => {
+    const result = await dialog.showOpenDialog(mainWindow ?? undefined, {
+      title: '选择数据文件',
+      filters: [{ name: '表格', extensions: ['xlsx', 'xlsm', 'csv'] }],
+      properties: ['openFile', 'multiSelections'],
+    });
+    return result.canceled ? [] : result.filePaths;
+  });
 }
 
 function hardenWebContents() {

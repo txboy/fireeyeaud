@@ -1,5 +1,6 @@
 import type {
   ApiErrorEnvelope,
+  DataSourceInfo,
   Finding,
   SseEvent,
   WorkspaceInfo,
@@ -91,19 +92,11 @@ export interface ChatHandlers {
   signal?: AbortSignal;
 }
 
-/** 发送一条消息并逐条回调 SSE 事件（POST + ReadableStream 解析）。 */
-export async function streamChat(
-  sessionId: string,
-  message: string,
-  { onEvent, signal }: ChatHandlers,
-  locale?: string,
+/** 消费 POST 返回的 SSE 流并逐条回调事件。 */
+async function consumeSse(
+  res: Response,
+  onEvent: (event: SseEvent) => void,
 ): Promise<void> {
-  const res = await fetch(`${baseUrl()}/sessions/${sessionId}/chat`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify({ message, locale }),
-    signal,
-  });
   if (!res.ok || !res.body) throw await toApiError(res);
 
   const reader = res.body.getReader();
@@ -135,6 +128,45 @@ export async function streamChat(
     }
   }
   if (buffer.trim()) dispatch(buffer);
+}
+
+/** 发送一条消息并逐条回调 SSE 事件（POST + ReadableStream 解析）。 */
+export async function streamChat(
+  sessionId: string,
+  message: string,
+  { onEvent, signal }: ChatHandlers,
+  locale?: string,
+): Promise<void> {
+  const res = await fetch(`${baseUrl()}/sessions/${sessionId}/chat`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ message, locale }),
+    signal,
+  });
+  await consumeSse(res, onEvent);
+}
+
+export interface DatasourcesPage {
+  items: DataSourceInfo[];
+  nextCursor: string | null;
+}
+
+export function listDatasources(): Promise<DatasourcesPage> {
+  return request<DatasourcesPage>('/datasources');
+}
+
+/** 导入单个数据文件并回调 SSE 进度事件。 */
+export async function importDataSource(
+  path: string,
+  { onEvent, signal }: ChatHandlers,
+): Promise<void> {
+  const res = await fetch(`${baseUrl()}/datasources/import`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ path }),
+    signal,
+  });
+  await consumeSse(res, onEvent);
 }
 
 export interface FindingsPage {

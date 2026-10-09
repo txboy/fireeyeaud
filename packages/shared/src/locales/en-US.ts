@@ -201,6 +201,7 @@ export default {
     indexing: 'Indexing…',
     done: 'Imported {{table}} ({{count}} rows)',
     failed: 'Import failed',
+    tables: '{{count}} tables',
   },
   settings: {
     title: 'Settings',

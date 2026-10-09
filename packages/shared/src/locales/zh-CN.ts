@@ -201,6 +201,7 @@ export default {
     indexing: '建立索引…',
     done: '导入完成：{{table}}（{{count}} 行）',
     failed: '导入失败',
+    tables: '{{count}} 张表',
   },
   settings: {
     title: '设置',

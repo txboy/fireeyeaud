@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Braces,
@@ -6,9 +7,11 @@ import {
   FileText,
   Folder,
   FolderOpen,
+  Upload,
   type LucideIcon,
 } from 'lucide-react';
 import { useWorkspaceStore } from '../../store/workspace';
+import { useDatasourcesStore } from '../../store/datasources';
 
 interface TreeEntry {
   label: string;
@@ -40,11 +43,22 @@ export function ExplorerPanel() {
   const { t } = useTranslation('explorer');
   const { t: tc } = useTranslation('common');
   const { t: te } = useTranslation('error');
+  const { t: ti } = useTranslation('import');
   const workspace = useWorkspaceStore((s) => s.workspace);
   const path = useWorkspaceStore((s) => s.path);
   const loading = useWorkspaceStore((s) => s.loading);
   const error = useWorkspaceStore((s) => s.error);
   const openFromDialog = useWorkspaceStore((s) => s.openFromDialog);
+
+  const items = useDatasourcesStore((s) => s.items);
+  const importing = useDatasourcesStore((s) => s.importing);
+  const importError = useDatasourcesStore((s) => s.errorKey);
+  const load = useDatasourcesStore((s) => s.load);
+  const importFiles = useDatasourcesStore((s) => s.importFiles);
+
+  useEffect(() => {
+    if (workspace) void load();
+  }, [workspace, load]);
 
   if (!workspace) {
     return (
@@ -73,6 +87,69 @@ export function ExplorerPanel() {
         </div>
         <div className="card__meta">{path}</div>
       </div>
+
+      <div className="section-head">
+        <span>{ti('title')}</span>
+        <button
+          type="button"
+          className="button button--sm"
+          onClick={() => void importFiles()}
+          disabled={Boolean(importing)}
+        >
+          <Upload size={13} strokeWidth={1.9} />
+          {ti('button')}
+        </button>
+      </div>
+
+      {importing && (
+        <div className="import-progress">
+          <div className="import-progress__head">
+            <span className="import-progress__name">
+              {importing.path.split(/[\\/]/).pop()}
+            </span>
+            <span className="import-progress__phase">
+              {ti(importing.phase === 'parse' ? 'parsing' : importing.phase === 'index' ? 'indexing' : 'loading')}
+            </span>
+          </div>
+          <div className="progress">
+            <div
+              className="progress__bar"
+              style={{
+                width: `${
+                  importing.total > 0
+                    ? Math.round((importing.done / importing.total) * 100)
+                    : 0
+                }%`,
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {importError && (
+        <span className="panel-error">
+          {te(importError.replace(/^error\./, ''))}
+        </span>
+      )}
+
+      {items.length > 0 && (
+        <div className="datasource-list">
+          {items.map((ds) => (
+            <div key={ds.id} className="card">
+              <div className="card__row">
+                <Database size={14} strokeWidth={1.75} />
+                <span className="card__name">
+                  {ds.path ? ds.path.split(/[\\/]/).pop() : ds.id}
+                </span>
+              </div>
+              <div className="card__meta">
+                {ti('tables', { count: ds.tables.length })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="tree">
         {TREE.map((entry) => {
           const Icon = entry.folder ? Folder : entry.icon ?? FileText;
