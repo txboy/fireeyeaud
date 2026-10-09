@@ -1,0 +1,20 @@
+appId: com.fireeyeaud.app
+productName: fireeyeaud
+directories:
+  output: release
+files:
+  - src/**/*
+  - package.json
+# 生产环境 sidecar（PyInstaller 产物）通过 extraResources 注入，Phase 6 接入：
+# extraResources:
+#   - from: ../../dist/sidecar
+#     to: sidecar
+win:
+  target:
+    - nsis
+mac:
+  target:
+    - dmg
+linux:
+  target:
+    - AppImage

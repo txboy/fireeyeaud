@@ -28,19 +28,19 @@ fireeyeaud/
 前置：Node ≥ 20、`uv`、Python 3.12（由 uv 自动获取）。
 
 ```bash
-# Agent sidecar
-cd services/agent
-uv sync                 # 创建 .venv 并安装依赖
-uv run pytest           # 测试
-uv run uvicorn fireeyeaud_agent.main:app --host 127.0.0.1 --port 8765
+# 1) 安装依赖
+npm install                       # JS 工作区（含 Electron）
+cd services/agent && uv sync      # Agent sidecar（.venv + 依赖）
+
+# 2) 从仓库根运行
+npm run agent:test                # sidecar 冒烟测试（pytest）
+npm run agent:dev                 # 单独启动 sidecar（固定 8765，热重载）
+npm run desktop:dev               # 启动 Electron（自动 spawn sidecar：随机端口 + 健康检查 + 退出回收）
+npm run desktop:test              # Electron 壳的 sidecar 生命周期测试（node --test）
 ```
 
-或从仓库根：
-
-```bash
-npm run agent:dev
-npm run agent:test
-```
+> 若 Electron 二进制下载缓慢 / 失败（GitHub Releases 受限），使用国内镜像：
+> `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ npx electron --version`
 
 ## 文档
 

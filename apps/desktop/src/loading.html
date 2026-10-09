@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>火眼审计助手</title>
+    <link rel="stylesheet" href="loading.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="brand">
+        <span class="flame"></span>
+        <h1>火眼审计助手</h1>
+        <span class="tag">Phase 0 · 骨架自检</span>
+      </header>
+
+      <section class="row">
+        <span class="label">sidecar 状态</span>
+        <span id="status" class="pill pill--pending">启动中…</span>
+      </section>
+      <section class="row">
+        <span class="label">端口 / 健康检查</span>
+        <span id="health" class="mono">—</span>
+      </section>
+
+      <section class="probe">
+        <input id="message" class="input" value="端到端连通性测试" />
+        <button id="send" class="button">发送测试消息</button>
+      </section>
+      <pre id="stream" class="stream"></pre>
+    </main>
+    <script src="loading.js"></script>
+  </body>
+</html>
