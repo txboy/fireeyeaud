@@ -15,16 +15,17 @@ interface DatabaseState {
   loading: boolean;
   errorKey: string | null;
   reflectByConn: Record<string, DbTableSchema[]>;
+  authByConn: Record<string, Record<string, string[]>>;
   load: () => Promise<void>;
   create: (input: DbConnectionInput) => Promise<boolean>;
   remove: (id: string, scope: DbConnection['scope']) => Promise<void>;
   test: (id: string, scope: DbConnection['scope']) => Promise<boolean>;
   reflect: (id: string, scope: DbConnection['scope']) => Promise<void>;
+  setAuthDraft: (id: string, tables: Record<string, string[]>) => void;
   saveAuthorization: (
     id: string,
     tables: Record<string, string[]>,
   ) => Promise<void>;
-  setReflect: (id: string, tables: DbTableSchema[]) => void;
   reset: () => void;
 }
 
@@ -33,6 +34,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
   loading: false,
   errorKey: null,
   reflectByConn: {},
+  authByConn: {},
 
   load: async () => {
     set({ loading: true, errorKey: null });
@@ -78,27 +80,26 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
   reflect: async (id, scope) => {
     set({ errorKey: null });
     try {
-      await reflectDbConnection(id, scope);
-      // reflect 返回表名列表；列结构不随响应返回，标为已反射（表级勾选即可）
+      const res = await reflectDbConnection(id, scope);
       set((s) => ({
-        reflectByConn: {
-          ...s.reflectByConn,
-          [id]: s.reflectByConn[id] ?? [],
-        },
+        reflectByConn: { ...s.reflectByConn, [id]: res.schema ?? [] },
+        authByConn: { ...s.authByConn, [id]: res.authorization ?? {} },
       }));
     } catch (err) {
       set({ errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal' });
     }
   },
 
+  setAuthDraft: (id, tables) =>
+    set((s) => ({ authByConn: { ...s.authByConn, [id]: tables } })),
+
   saveAuthorization: async (id, tables) => {
     await setDbAuthorization(id, tables);
+    set((s) => ({ authByConn: { ...s.authByConn, [id]: tables } }));
   },
 
-  setReflect: (id, tables) =>
-    set((s) => ({ reflectByConn: { ...s.reflectByConn, [id]: tables } })),
-
-  reset: () => set({ items: [], loading: false, errorKey: null, reflectByConn: {} }),
+  reset: () =>
+    set({ items: [], loading: false, errorKey: null, reflectByConn: {}, authByConn: {} }),
 }));
 
 export type { DbDriver };

@@ -3,6 +3,7 @@ import type { ActivityView } from '@fireeyeaud/shared';
 import { useUiStore } from '../store/ui';
 import { ExplorerPanel } from './panels/ExplorerPanel';
 import { SearchPanel } from './panels/SearchPanel';
+import { DatabasePanel } from './panels/DatabasePanel';
 import { KnowledgePanel } from './panels/KnowledgePanel';
 import { ModelsPanel } from './panels/ModelsPanel';
 import { SettingsPanel } from './panels/SettingsPanel';
@@ -32,6 +33,8 @@ function PanelBody({ view }: { view: ActivityView }) {
       return <ExplorerPanel />;
     case 'search':
       return <SearchPanel />;
+    case 'database':
+      return <DatabasePanel />;
     case 'knowledge':
       return <KnowledgePanel />;
     case 'models':

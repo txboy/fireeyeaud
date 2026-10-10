@@ -5,6 +5,7 @@ import type {
   DataSourceInfo,
   DbConnection,
   DbDriver,
+  DbTableSchema,
   EvidenceItem,
   Finding,
   GraphData,
@@ -388,6 +389,7 @@ export function testDbConnection(
 export interface ReflectResult {
   sourceId: string;
   tables: string[];
+  schema: DbTableSchema[];
   authorization: Record<string, string[]>;
 }
 
