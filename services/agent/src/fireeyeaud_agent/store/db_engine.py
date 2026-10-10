@@ -203,5 +203,6 @@ def reflect_and_register(
     return {
         "sourceId": ds_id,
         "tables": [e["table"] for e in schema],
+        "schema": schema,
         "authorization": authorization.get(root, conn["id"]),
     }
