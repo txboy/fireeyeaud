@@ -354,5 +354,14 @@ export default {
     themeLight: 'Light',
     themeDark: 'Dark',
     language: 'Language',
+    webEnabled: 'Enable web search',
+    webProvider: 'Provider',
+    webKey: 'API Key',
+    webKeySet: 'Configured (leave blank to keep)',
+    webBaseUrl: 'Custom endpoint URL',
+    webHint:
+      'When enabled, the agent may call web_search; query text is sent to the chosen provider. Off by default.',
+    save: 'Save',
+    saved: 'Saved',
   },
 } as const;

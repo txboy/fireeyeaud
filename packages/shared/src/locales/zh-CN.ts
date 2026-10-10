@@ -354,5 +354,13 @@ export default {
     themeLight: '浅色',
     themeDark: '深色',
     language: '界面语言',
+    webEnabled: '启用联网检索',
+    webProvider: '检索提供方',
+    webKey: 'API Key',
+    webKeySet: '已配置（留空则保留）',
+    webBaseUrl: '自定义接口地址',
+    webHint: '开启后 Agent 可调用 web_search 联网检索；查询文本将发送至所选服务方，默认关闭。',
+    save: '保存',
+    saved: '已保存',
   },
 } as const;

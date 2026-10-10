@@ -1,5 +1,6 @@
 import type {
   ApiErrorEnvelope,
+  AppSettings,
   AuditRule,
   ConfigScope,
   DataSourceInfo,
@@ -568,4 +569,26 @@ export function updateSkill(
 
 export function deleteSkill(id: string, scope: ConfigScope): Promise<{ ok: boolean }> {
   return request<{ ok: boolean }>(`/skills/${id}?scope=${scope}`, { method: 'DELETE' });
+}
+
+export function getSettings(): Promise<AppSettings> {
+  return request<AppSettings>('/settings');
+}
+
+export interface SettingsPatch {
+  locale?: string;
+  theme?: string;
+  webSearch?: {
+    enabled?: boolean;
+    provider?: string;
+    keyRef?: string | null;
+    baseUrl?: string | null;
+  };
+}
+
+export function patchSettings(patch: SettingsPatch): Promise<AppSettings> {
+  return request<AppSettings>('/settings', {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
 }

@@ -336,3 +336,17 @@ export interface Skill {
   createdAt?: string;
   updatedAt?: string;
 }
+
+export interface WebSearchSettings {
+  enabled: boolean;
+  provider: string;
+  keyRef?: string | null;
+  baseUrl?: string | null;
+}
+
+export interface AppSettings {
+  locale: string;
+  theme: ThemeMode;
+  webSearch: WebSearchSettings;
+  telemetry: boolean;
+}

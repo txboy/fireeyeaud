@@ -16,6 +16,8 @@ declare global {
       }) => Promise<SearchResult>;
       openPath: (filePath: string) => Promise<{ ok: boolean }>;
       showItemInFolder: (filePath: string) => Promise<{ ok: boolean }>;
+      putSecret?: (plaintext: string) => Promise<string>;
+      deleteSecret?: (ref: string) => Promise<{ ok: boolean }>;
       onSidecarStatus: (callback: (info: SidecarInfo) => void) => () => void;
     };
   }
