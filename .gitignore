@@ -20,6 +20,7 @@ __pycache__/
 .eggs/
 build/
 *.spec
+!services/agent/fireeyeaud-agent.spec
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
