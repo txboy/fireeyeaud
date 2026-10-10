@@ -67,3 +67,16 @@ def set_authorization(connection_id: str, body: AuthorizationBody) -> dict:
         raise ApiError("E_NO_WORKSPACE", 409, "error.noWorkspace")
     authorization.set_entry(root, connection_id, body.tables)
     return {"ok": True, "tables": body.tables}
+
+
+@router.post("/db/connections/{connection_id}/reflect")
+def reflect_connection(
+    connection_id: str, scope: str = Query(default="global")
+) -> dict:
+    root = workspace_manager.root
+    if root is None:
+        raise ApiError("E_NO_WORKSPACE", 409, "error.noWorkspace")
+    conn = db.get_connection(connection_id, scope, root)
+    if conn is None:
+        raise ApiError("E_NOT_FOUND", 404, "error.notFound", {"id": connection_id})
+    return db_engine.reflect_and_register(root, conn, db.get_secret(connection_id))

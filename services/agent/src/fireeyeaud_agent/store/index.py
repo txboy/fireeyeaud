@@ -30,7 +30,12 @@ def save_schema(path: Path, entries: list[dict[str, Any]]) -> None:
 
 
 def upsert_schema_entry(path: Path, entry: dict[str, Any]) -> None:
-    entries = [e for e in load_schema(path) if e.get("table") != entry.get("table")]
+    entries = [
+        e
+        for e in load_schema(path)
+        if (e.get("sourceId"), e.get("table"))
+        != (entry.get("sourceId"), entry.get("table"))
+    ]
     entries.append(entry)
     save_schema(path, entries)
 
