@@ -36,7 +36,10 @@ def sql_query(root: Path, params: dict[str, Any]) -> dict[str, Any]:
         except (TypeError, ValueError):
             limit = DEFAULT_LIMIT
         return db_engine.run_query(
-            conn, sql, db_store.get_secret(conn["id"]), limit=limit
+            conn,
+            sql,
+            db_store.get_secret(conn.get("credRef") or conn["id"]),
+            limit=limit,
         )
 
     text = validate_sql(params.get("sql", ""))

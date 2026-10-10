@@ -35,7 +35,7 @@ def kb_search(root: Path, params: dict[str, Any]) -> dict[str, Any]:
         if provider is None:
             continue
         adapter = kb.adapter_for(provider["type"])
-        key = knowledge.get_secret(provider_id) or ""
+        key = knowledge.get_secret(provider.get("apiKeyRef") or provider_id) or ""
         defaults = provider.get("defaults") or {}
         top_k = int(params.get("topK") or defaults.get("topK") or DEFAULT_TOPK)
         threshold = params.get("scoreThreshold")
