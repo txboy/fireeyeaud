@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from .aggregate_subject import aggregate_subject
 from .check_tie import check_tie
 from .describe_source import describe_source
+from .kb_search import kb_search
 from .parse_ledger import parse_ledger
 from .sql_query import sql_query
 
@@ -28,6 +29,15 @@ class SqlQueryArgs(BaseModel):
     sourceId: str | None = Field(
         default=None, description="数据库数据源 id；缺省查询工作区 DuckDB"
     )
+
+
+class KbSearchArgs(BaseModel):
+    query: str = Field(description="检索查询文本")
+    kbIds: list[str] | None = Field(
+        default=None, description="限定的知识库 id（缺省用全部启用库）"
+    )
+    topK: int | None = Field(default=None, description="返回片段数上限")
+    scoreThreshold: float | None = Field(default=None, description="相似度阈值")
 
 
 class ParseLedgerArgs(BaseModel):
@@ -62,6 +72,12 @@ _SPECS: list[tuple[str, str, ToolFn, type[BaseModel]]] = [
         "对原始表执行只读 SQL 查询；仅允许 SELECT/WITH/EXPLAIN/DESCRIBE。",
         sql_query,
         SqlQueryArgs,
+    ),
+    (
+        "kb_search",
+        "检索已接入的知识库，返回归一化命中片段（依据审计准则/法规时使用）。",
+        kb_search,
+        KbSearchArgs,
     ),
     (
         "parse_ledger",

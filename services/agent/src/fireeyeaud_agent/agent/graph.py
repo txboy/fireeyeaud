@@ -96,6 +96,8 @@ def _summarize(result: Any) -> str:
             return f"{len(result['vouchers'])} 条凭证"
         if "rows" in result:
             return f"{result.get('rowCount', len(result['rows']))} 行"
+        if "chunks" in result:
+            return f"{len(result['chunks'])} 段"
         if "balanced" in result:
             return (
                 "平衡"

@@ -9,6 +9,7 @@ def test_registry_has_phase1_tools():
         "parse_ledger",
         "aggregate_subject",
         "check_tie",
+        "kb_search",
     } <= names
 
 
@@ -16,4 +17,5 @@ def test_build_langchain_tools(tmp_path):
     tools = build_langchain_tools(tmp_path)
     names = {t.name for t in tools}
     assert "describe_source" in names
-    assert len(tools) == 5
+    assert "kb_search" in names
+    assert len(tools) == 6
