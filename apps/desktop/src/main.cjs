@@ -5,7 +5,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 
-const { SidecarManager, pythonExeFor } = require('./sidecar.cjs');
+const { SidecarManager, pythonExeFor, bundledAgentExe } = require('./sidecar.cjs');
 const { createSecretsStore } = require('./secrets.cjs');
 const { loadWindowState, saveWindowState } = require('./window-state.cjs');
 
@@ -41,10 +41,12 @@ function createLogger() {
 }
 
 const logger = createLogger();
+const BUNDLED_AGENT = bundledAgentExe();
 const sidecar = new SidecarManager({
   repoRoot: REPO_ROOT,
   token: SIDECAR_TOKEN,
   pythonExe: pythonExeFor(REPO_ROOT),
+  agentExe: BUNDLED_AGENT,
   logger,
 });
 

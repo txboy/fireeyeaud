@@ -11,6 +11,26 @@
     "test": "node --test",
     "dist": "electron-builder"
   },
+  "build": {
+    "appId": "com.fireeyeaud.app",
+    "productName": "火眼审计助手",
+    "files": [
+      "src/**/*",
+      "loading.html"
+    ],
+    "extraResources": [
+      {
+        "from": "../../services/agent/dist/fireeyeaud-agent.exe",
+        "to": "agent/fireeyeaud-agent.exe"
+      }
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": "nsis"
+    }
+  },
   "devDependencies": {
     "electron": "^44.0.0",
     "electron-builder": "^26.0.0"

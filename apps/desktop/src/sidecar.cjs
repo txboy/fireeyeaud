@@ -68,6 +68,14 @@ function pythonExeFor(repoRoot) {
     : path.join(base, 'bin', 'python');
 }
 
+/** 打包态：PyInstaller 产出的 sidecar 可执行（`extraResources/agent/`）。 */
+function bundledAgentExe() {
+  if (!process.resourcesPath) return null;
+  const name = process.platform === 'win32' ? 'fireeyeaud-agent.exe' : 'fireeyeaud-agent';
+  const candidate = path.join(process.resourcesPath, 'agent', name);
+  return fs.existsSync(candidate) ? candidate : null;
+}
+
 /**
  * 管理 Python sidecar 的启动、健康检查、崩溃重启与退出回收。
  * 纯 Node 模块（不依赖 electron），便于独立测试。
@@ -78,6 +86,7 @@ class SidecarManager {
     this.token = options.token;
     this.host = options.host || '127.0.0.1';
     this.pythonExe = options.pythonExe || pythonExeFor(options.repoRoot);
+    this.agentExe = options.agentExe || null;
     this.uvBin = options.uvBin || 'uv';
     this.logger = options.logger || console;
     this.maxRestarts = options.maxRestarts ?? 3;
@@ -104,6 +113,9 @@ class SidecarManager {
   }
 
   _buildCommand(port) {
+    if (this.agentExe) {
+      return { cmd: this.agentExe, args: [], cwd: path.dirname(this.agentExe) };
+    }
     const agentDir = path.join(this.repoRoot, 'services', 'agent');
     const uvicornArgs = [
       '-m',
@@ -220,4 +232,11 @@ class SidecarManager {
   }
 }
 
-module.exports = { SidecarManager, findFreePort, waitForHealth, getHealth, pythonExeFor };
+module.exports = {
+  SidecarManager,
+  findFreePort,
+  waitForHealth,
+  getHealth,
+  pythonExeFor,
+  bundledAgentExe,
+};
