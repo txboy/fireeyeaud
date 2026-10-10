@@ -249,6 +249,9 @@ export default {
     ruleNotRunnable: 'This rule cannot be previewed (prompt rule)',
     exportFormat: 'Unsupported export format',
     exportEmpty: 'Nothing to export',
+    dbDriver: 'Unsupported database driver',
+    dbConn: 'Database connection failed',
+    dbUnauthorized: 'Access to unauthorized table / column',
     agentLimit: 'Reached the per-turn step/time limit; add details and retry',
   },
   import: {
