@@ -20,14 +20,14 @@ class ProviderBody(BaseModel):
     name: str
     baseUrl: str
     scope: str = "global"
-    apiKey: str | None = None
+    apiKeyRef: str | None = None
     defaults: dict | None = None
 
 
 class ProviderPatch(BaseModel):
     name: str | None = None
     baseUrl: str | None = None
-    apiKey: str | None = None
+    apiKeyRef: str | None = None
     defaults: dict | None = None
 
 
@@ -54,8 +54,8 @@ def list_providers(scope: str | None = Query(default=None)) -> dict:
 @router.post("/kb/providers")
 def create_provider(body: ProviderBody) -> dict:
     data = body.model_dump()
-    api_key = data.pop("apiKey", None)
-    return knowledge.create_provider(data, api_key=api_key, root=_root())
+    api_key_ref = data.pop("apiKeyRef", None)
+    return knowledge.create_provider(data, api_key_ref=api_key_ref, root=_root())
 
 
 @router.patch("/kb/providers/{provider_id}")
@@ -63,9 +63,9 @@ def update_provider(
     provider_id: str, body: ProviderPatch, scope: str = Query(default="global")
 ) -> dict:
     patch = body.model_dump(exclude_unset=True)
-    api_key = patch.pop("apiKey", None)
+    api_key_ref = patch.pop("apiKeyRef", None)
     return knowledge.update_provider(
-        provider_id, scope, patch, api_key=api_key, root=_root()
+        provider_id, scope, patch, api_key_ref=api_key_ref, root=_root()
     )
 
 
@@ -82,7 +82,8 @@ def test_provider(provider_id: str, scope: str = Query(default="global")) -> dic
         raise ApiError("E_NOT_FOUND", 404, "error.notFound", {"id": provider_id})
     try:
         items = kb.adapter_for(provider["type"]).list_knowledge(
-            provider["baseUrl"], knowledge.get_secret(provider_id) or ""
+            provider["baseUrl"],
+            knowledge.get_secret(provider.get("apiKeyRef") or provider_id) or "",
         )
     except ApiError:
         raise
@@ -100,7 +101,8 @@ def list_remote_knowledge(
         raise ApiError("E_NOT_FOUND", 404, "error.notFound", {"id": provider_id})
     try:
         items = kb.adapter_for(provider["type"]).list_knowledge(
-            provider["baseUrl"], knowledge.get_secret(provider_id) or ""
+            provider["baseUrl"],
+            knowledge.get_secret(provider.get("apiKeyRef") or provider_id) or "",
         )
     except ApiError:
         raise

@@ -1,11 +1,12 @@
 from pathlib import Path
 
-from fireeyeaud_agent.store import db
+from fireeyeaud_agent.store import db, secrets
 
 
 def test_connection_crud_and_secret(tmp_path, monkeypatch):
     monkeypatch.setenv("FIREYEAUD_GLOBAL_DIR", str(tmp_path / "global"))
     (tmp_path / "ws" / ".fireeye").mkdir(parents=True)
+    secrets.clear()
 
     conn = db.create_connection(
         {
@@ -27,9 +28,32 @@ def test_connection_crud_and_secret(tmp_path, monkeypatch):
 
     db.set_secret("conn_1", "p@ss")
     assert db.get_secret("conn_1") == "p@ss"
+    assert secrets.get("conn_1") == "p@ss"
 
     db.delete_connection("conn_1", "project", root=tmp_path / "ws")
     assert db.list_connections(root=tmp_path / "ws") == []
+    assert secrets.get("conn_1") is None
+
+
+def test_connection_cred_ref_from_body(tmp_path, monkeypatch):
+    monkeypatch.setenv("FIREYEAUD_GLOBAL_DIR", str(tmp_path / "global"))
+    (tmp_path / "ws" / ".fireeye").mkdir(parents=True)
+    secrets.clear()
+
+    conn = db.create_connection(
+        {
+            "name": "pg",
+            "driver": "postgresql",
+            "host": "h",
+            "database": "d",
+            "username": "u",
+            "scope": "project",
+        },
+        cred_ref="sec_abc",
+        root=tmp_path / "ws",
+    )
+    assert conn["credRef"] == "sec_abc"
+    assert "password" not in conn
 
 
 def test_url_builders():

@@ -1,50 +1,31 @@
 """数据库连接存储与连接串构造（设计 §14.9 / §14.16）。
 
 - 元数据：`config.store(kind="db")` → `<scope>/db.json`（不含明文密码）。
-- 密码：`<global_dir>/config/db_secrets.json`（keyed by connectionId）。
+- 密码：由 Electron 主进程经 `/secrets` 下发，仅内存持有（设计 §17.2）。
 """
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
 from ..config import store
+from . import secrets
 
 KIND = "db"
 _DRIVERS = {"sqlite", "postgresql", "mysql", "mssql", "access"}
 
 
-def _secrets_path() -> Path:
-    return store.global_config_dir() / "db_secrets.json"
-
-
-def _load_secrets() -> dict[str, str]:
-    path = _secrets_path()
-    if not path.exists():
-        return {}
-    try:
-        data = json.loads(path.read_text("utf-8"))
-        return data if isinstance(data, dict) else {}
-    except (OSError, json.JSONDecodeError):
-        return {}
-
-
-def set_secret(connection_id: str, password: str | None) -> None:
-    secrets = _load_secrets()
+def set_secret(ref: str, password: str | None) -> None:
     if password:
-        secrets[connection_id] = password
+        secrets.set_one(ref, password)
     else:
-        secrets.pop(connection_id, None)
-    path = _secrets_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(secrets, ensure_ascii=False, indent=2), "utf-8")
+        secrets.remove(ref)
 
 
-def get_secret(connection_id: str) -> str | None:
-    return _load_secrets().get(connection_id)
+def get_secret(ref: str | None) -> str | None:
+    return secrets.get(ref)
 
 
 def list_connections(root: Path | None = None) -> list[dict[str, Any]]:
@@ -58,27 +39,35 @@ def get_connection(
 
 
 def create_connection(
-    data: dict[str, Any], *, password: str | None, root: Path | None = None
+    data: dict[str, Any],
+    *,
+    password: str | None = None,
+    cred_ref: str | None = None,
+    root: Path | None = None,
 ) -> dict[str, Any]:
     from ..errors import ApiError
 
     driver = str(data.get("driver") or "").lower()
     if driver not in _DRIVERS:
         raise ApiError("E_DB_DRIVER", 400, "error.dbDriver", {"driver": driver})
-    payload = {k: v for k, v in data.items() if k != "password"}
+    payload = {k: v for k, v in data.items() if k not in ("password", "credRef")}
     payload["driver"] = driver
     item = store.create_item(KIND, payload, root)
-    updated = store.update_item(
-        KIND, item["id"], item["scope"], {"credRef": item["id"]}, root
-    )
+    ref = cred_ref or item["id"]
+    updated = store.update_item(KIND, item["id"], item["scope"], {"credRef": ref}, root)
     if password:
-        set_secret(item["id"], password)
+        set_secret(ref, password)
     return updated
 
 
 def delete_connection(connection_id: str, scope: str, root: Path | None = None) -> None:
+    conn = store.get_item(KIND, connection_id, scope, root)
     store.delete_item(KIND, connection_id, scope, root)
-    set_secret(connection_id, None)
+    refs = {connection_id}
+    if conn and conn.get("credRef"):
+        refs.add(str(conn["credRef"]))
+    for ref in refs:
+        set_secret(ref, None)
 
 
 def build_url(conn: dict[str, Any], password: str | None = None) -> str:

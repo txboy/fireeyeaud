@@ -15,7 +15,9 @@ def _client() -> httpx.AsyncClient:
 async def test_session_messages_persisted(tmp_path, monkeypatch) -> None:
     answers = iter([AIMessage(content="第一次回答"), AIMessage(content="第二次回答")])
     monkeypatch.setattr(
-        graph_mod, "build_chat_model", lambda: GenericFakeChatModel(messages=answers)
+        graph_mod,
+        "build_chat_model",
+        lambda *_a, **_k: GenericFakeChatModel(messages=answers),
     )
 
     async with _client() as client:

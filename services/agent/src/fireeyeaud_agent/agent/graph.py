@@ -124,7 +124,7 @@ async def run_agent(
 ) -> AsyncIterator[dict[str, Any]]:
     root = Path(root)
     event = _event_factory(session_id)
-    active_model = model or build_chat_model()
+    active_model = model or build_chat_model(root)
     tools = [*build_langchain_tools(root), _report_finding_tool()]
     bound = _maybe_bind(active_model, tools)
     tool_dict = build_tool_dict(root)

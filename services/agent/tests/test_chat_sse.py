@@ -18,7 +18,7 @@ def _parse_sse(text: str) -> list[dict]:
 
 async def test_chat_streams_sse_envelope(tmp_path, monkeypatch) -> None:
     fake = GenericFakeChatModel(messages=iter([AIMessage(content="你好，这是回答")]))
-    monkeypatch.setattr(graph_mod, "build_chat_model", lambda: fake)
+    monkeypatch.setattr(graph_mod, "build_chat_model", lambda *_a, **_k: fake)
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:

@@ -1,9 +1,10 @@
-from fireeyeaud_agent.store import knowledge
+from fireeyeaud_agent.store import knowledge, secrets
 
 
 def test_provider_crud_and_secret(tmp_path, monkeypatch):
     monkeypatch.setenv("FIREYEAUD_GLOBAL_DIR", str(tmp_path / "global"))
     (tmp_path / "ws" / ".fireeye").mkdir(parents=True)
+    secrets.clear()
 
     p = knowledge.create_provider(
         {

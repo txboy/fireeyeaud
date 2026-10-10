@@ -18,13 +18,14 @@ async def test_kb_providers_api(tmp_path, monkeypatch):
                 "type": "dify",
                 "name": "法规库",
                 "baseUrl": "https://api.dify.ai/v1",
-                "apiKey": "sk-1",
+                "apiKeyRef": "sec_kb",
                 "scope": "project",
             },
         )
         assert res.status_code == 200
         provider = res.json()
         assert provider["id"] == "kb_1"
+        assert provider["apiKeyRef"] == "sec_kb"
         assert "apiKey" not in provider
 
         listed = (await client.get("/api/v1/kb/providers")).json()["items"]

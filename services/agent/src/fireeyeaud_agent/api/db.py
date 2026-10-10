@@ -21,7 +21,7 @@ class ConnectionBody(BaseModel):
     port: int | None = None
     database: str | None = None
     username: str | None = None
-    password: str | None = None
+    credRef: str | None = None
     path: str | None = None
 
 
@@ -41,8 +41,8 @@ def list_connections(scope: str | None = Query(default=None)) -> dict:
 def create_connection(body: ConnectionBody) -> dict:
     root = workspace_manager.root
     data = body.model_dump()
-    password = data.pop("password", None)
-    return db.create_connection(data, password=password, root=root)
+    cred_ref = data.pop("credRef", None)
+    return db.create_connection(data, cred_ref=cred_ref, root=root)
 
 
 @router.delete("/db/connections/{connection_id}")
@@ -56,7 +56,9 @@ def test_connection(connection_id: str, scope: str = Query(default="global")) ->
     conn = db.get_connection(connection_id, scope, workspace_manager.root)
     if conn is None:
         raise ApiError("E_NOT_FOUND", 404, "error.notFound", {"id": connection_id})
-    ok = db_engine.test_connection(conn, db.get_secret(connection_id))
+    ok = db_engine.test_connection(
+        conn, db.get_secret(conn.get("credRef") or connection_id)
+    )
     return {"ok": ok}
 
 
@@ -79,4 +81,6 @@ def reflect_connection(
     conn = db.get_connection(connection_id, scope, root)
     if conn is None:
         raise ApiError("E_NOT_FOUND", 404, "error.notFound", {"id": connection_id})
-    return db_engine.reflect_and_register(root, conn, db.get_secret(connection_id))
+    return db_engine.reflect_and_register(
+        root, conn, db.get_secret(conn.get("credRef") or connection_id)
+    )
