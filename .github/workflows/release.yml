@@ -1,0 +1,46 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Build sidecar (PyInstaller)
+        working-directory: services/agent
+        run: |
+          uv sync --dev
+          uv run pyinstaller fireeyeaud-agent.spec --noconfirm --clean
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build renderer
+        run: npm run renderer:build
+
+      - name: Package app (electron-builder, unsigned)
+        working-directory: apps/desktop
+        run: npx electron-builder --win --publish never
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fireeyeaud-windows
+          path: apps/desktop/release/**
+          if-no-files-found: warn
