@@ -77,6 +77,10 @@ export function KnowledgePanel() {
   const submit = async () => {
     if (!form.name.trim() || !form.baseUrl.trim()) return;
     setBusy(true);
+    let apiKeyRef: string | undefined;
+    if (form.apiKey && window.fireeyeaud?.putSecret) {
+      apiKeyRef = (await window.fireeyeaud.putSecret(form.apiKey)) ?? undefined;
+    }
     const defaults: Record<string, unknown> = {};
     if (form.topK.trim()) defaults.topK = Number(form.topK);
     if (form.scoreThreshold.trim()) defaults.scoreThreshold = Number(form.scoreThreshold);
@@ -85,7 +89,7 @@ export function KnowledgePanel() {
       name: form.name.trim(),
       baseUrl: form.baseUrl.trim(),
       scope: form.scope,
-      apiKey: form.apiKey || undefined,
+      apiKeyRef,
       defaults: Object.keys(defaults).length ? defaults : undefined,
     });
     setBusy(false);

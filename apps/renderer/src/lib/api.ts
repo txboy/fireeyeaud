@@ -366,7 +366,7 @@ export interface DbConnectionInput {
   port?: number | null;
   database?: string | null;
   username?: string | null;
-  password?: string | null;
+  credRef?: string | null;
   path?: string | null;
 }
 
@@ -435,7 +435,7 @@ export interface KbProviderInput {
   name: string;
   baseUrl: string;
   scope: ConfigScope;
-  apiKey?: string | null;
+  apiKeyRef?: string | null;
   defaults?: KbProviderDefaults;
 }
 

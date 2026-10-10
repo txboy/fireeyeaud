@@ -67,6 +67,10 @@ export function DatabasePanel() {
   const submit = async () => {
     if (!form.name.trim()) return;
     setBusy(true);
+    let credRef: string | undefined;
+    if (form.password && window.fireeyeaud?.putSecret) {
+      credRef = (await window.fireeyeaud.putSecret(form.password)) ?? undefined;
+    }
     const ok = await create({
       name: form.name.trim(),
       driver: form.driver,
@@ -76,7 +80,7 @@ export function DatabasePanel() {
       port: isFile || !form.port ? undefined : Number(form.port),
       database: isFile ? undefined : form.database.trim() || undefined,
       username: isFile ? undefined : form.username.trim() || undefined,
-      password: form.password || undefined,
+      credRef,
     });
     setBusy(false);
     if (ok) {

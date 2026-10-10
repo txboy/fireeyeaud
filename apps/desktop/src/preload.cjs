@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld('fireeyeaud', {
   searchRun: (payload) => ipcRenderer.invoke('search:run', payload),
   openPath: (filePath) => ipcRenderer.invoke('shell:open-path', filePath),
   showItemInFolder: (filePath) => ipcRenderer.invoke('shell:show-item', filePath),
+  putSecret: (plaintext) => ipcRenderer.invoke('secret:put', plaintext),
+  deleteSecret: (ref) => ipcRenderer.invoke('secret:delete', ref),
   onSidecarStatus: (callback) => {
     const handler = (_event, info) => callback(info);
     ipcRenderer.on('sidecar:status', handler);

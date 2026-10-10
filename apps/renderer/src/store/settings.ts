@@ -56,7 +56,8 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     try {
       let keyRef: string | undefined;
       if (input.apiKey && window.fireeyeaud?.putSecret) {
-        keyRef = await window.fireeyeaud.putSecret(input.apiKey);
+        const ref = await window.fireeyeaud.putSecret(input.apiKey);
+        if (ref) keyRef = ref;
       }
       const settings = await patchSettings({
         webSearch: {

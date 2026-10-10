@@ -1,11 +1,12 @@
 'use strict';
 
-const { app, BrowserWindow, dialog, ipcMain, session, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, safeStorage, session, shell } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 
 const { SidecarManager, pythonExeFor } = require('./sidecar.cjs');
+const { createSecretsStore } = require('./secrets.cjs');
 const { loadWindowState, saveWindowState } = require('./window-state.cjs');
 
 app.setName('fireeyeaud');
@@ -17,6 +18,7 @@ const SIDECAR_TOKEN = crypto.randomBytes(24).toString('hex');
 
 let mainWindow = null;
 let quitting = false;
+let secrets = null;
 
 function createLogger() {
   const dir = path.join(app.getPath('userData'), 'logs');
@@ -103,6 +105,24 @@ function broadcastStatus(info) {
   }
 }
 
+/** 把主进程内存中的全部明文凭据推送给 sidecar（仅内存持有）。 */
+async function pushSecretsToSidecar(info = sidecar.getInfo()) {
+  if (!secrets || !info || info.status !== 'running' || !info.port) return;
+  try {
+    const res = await fetch(`http://127.0.0.1:${info.port}/api/v1/secrets`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(info.token ? { Authorization: `Bearer ${info.token}` } : {}),
+      },
+      body: JSON.stringify({ items: secrets.all() }),
+    });
+    if (!res.ok) logger.error(`[secrets] push status ${res.status}`);
+  } catch (err) {
+    logger.error(`[secrets] push failed: ${err}`);
+  }
+}
+
 function registerIpc() {
   ipcMain.handle('sidecar:info', () => sidecar.getInfo());
   ipcMain.handle('app:info', () => ({
@@ -138,6 +158,18 @@ function registerIpc() {
     shell.showItemInFolder(filePath);
     return { ok: true };
   });
+  ipcMain.handle('secret:put', async (_event, plaintext) => {
+    if (typeof plaintext !== 'string' || !plaintext) return null;
+    const ref = secrets.put(plaintext);
+    await pushSecretsToSidecar();
+    return ref;
+  });
+  ipcMain.handle('secret:delete', async (_event, ref) => {
+    if (typeof ref === 'string' && ref) secrets.remove(ref);
+    await pushSecretsToSidecar();
+    return { ok: true };
+  });
+  ipcMain.handle('secret:refs', () => (secrets ? secrets.refs() : []));
 }
 
 const SEARCH_SKIP_DIRS = new Set([
@@ -281,6 +313,11 @@ function hardenWebContents() {
 }
 
 app.whenReady().then(async () => {
+  secrets = createSecretsStore({
+    dir: app.getPath('userData'),
+    safeStorage,
+    logger,
+  });
   registerIpc();
   hardenWebContents();
 
@@ -298,7 +335,10 @@ app.whenReady().then(async () => {
     });
   }
 
-  sidecar.onStatus = broadcastStatus;
+  sidecar.onStatus = (info) => {
+    broadcastStatus(info);
+    if (info.status === 'running') void pushSecretsToSidecar(info);
+  };
   createWindow();
 
   sidecar
