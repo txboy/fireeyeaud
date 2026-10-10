@@ -14,6 +14,7 @@ from .describe_source import describe_source
 from .kb_search import kb_search
 from .parse_ledger import parse_ledger
 from .sql_query import sql_query
+from .web_search import web_search
 
 ToolFn = Callable[[Path, dict[str, Any]], dict[str, Any]]
 
@@ -60,6 +61,11 @@ class CheckTieArgs(BaseModel):
     )
 
 
+class WebSearchArgs(BaseModel):
+    query: str = Field(description="搜索查询")
+    maxResults: int | None = Field(default=None, description="结果条数上限")
+
+
 _SPECS: list[tuple[str, str, ToolFn, type[BaseModel]]] = [
     (
         "describe_source",
@@ -100,13 +106,33 @@ _SPECS: list[tuple[str, str, ToolFn, type[BaseModel]]] = [
 ]
 
 
-def build_tool_dict() -> dict[str, ToolFn]:
-    return {name: fn for name, _desc, fn, _schema in _SPECS}
+def build_tool_dict(root: Path | None = None) -> dict[str, ToolFn]:
+    return {name: fn for name, _desc, fn, _schema in _specs()}
+
+
+def _web_enabled() -> bool:
+    from ..store import app_settings
+
+    return bool((app_settings.load().get("webSearch") or {}).get("enabled"))
+
+
+def _specs() -> list[tuple[str, str, ToolFn, type[BaseModel]]]:
+    specs = list(_SPECS)
+    if _web_enabled():
+        specs.append(
+            (
+                "web_search",
+                "联网搜索（需在设置页开启）。",
+                web_search,
+                WebSearchArgs,
+            )
+        )
+    return specs
 
 
 def build_langchain_tools(root: Path) -> list[StructuredTool]:
     tools: list[StructuredTool] = []
-    for name, desc, fn, schema in _SPECS:
+    for name, desc, fn, schema in _specs():
 
         def _run(_fn: ToolFn = fn, _root: Path = root, **kwargs: Any) -> dict[str, Any]:
             return _fn(_root, kwargs)

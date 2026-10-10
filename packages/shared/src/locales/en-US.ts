@@ -326,6 +326,9 @@ export default {
     mcpTransport: 'Unsupported MCP transport',
     mcpStart: 'Failed to start MCP server',
     skillBuiltin: 'Built-in skills cannot be deleted',
+    webDisabled: 'Web search is disabled; enable it in settings',
+    webConn: 'Web search request failed',
+    webProvider: 'Unsupported web search provider',
     agentLimit: 'Reached the per-turn step/time limit; add details and retry',
   },
   import: {

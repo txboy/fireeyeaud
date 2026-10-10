@@ -326,6 +326,9 @@ export default {
     mcpTransport: '不支持的 MCP 传输方式',
     mcpStart: 'MCP Server 启动失败',
     skillBuiltin: '内置技能不可删除',
+    webDisabled: '联网检索未开启，请在设置中启用',
+    webConn: '联网检索请求失败',
+    webProvider: '不支持的联网检索提供方',
     agentLimit: '已达到单轮步数或时间上限，请补充说明后重试',
   },
   import: {
