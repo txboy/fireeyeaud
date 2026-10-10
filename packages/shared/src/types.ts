@@ -241,3 +241,28 @@ export interface WorkingPaperManifest {
   artifactRef: string;
   files: string[];
 }
+
+export type DbDriver = 'sqlite' | 'postgresql' | 'mysql' | 'mssql' | 'access';
+
+export interface DbConnection {
+  id: string;
+  name: string;
+  driver: DbDriver;
+  scope: ConfigScope;
+  host?: string | null;
+  port?: number | null;
+  database?: string | null;
+  username?: string | null;
+  path?: string | null;
+  credRef?: string;
+}
+
+export interface DbColumn {
+  name: string;
+  type: string;
+}
+
+export interface DbTableSchema {
+  table: string;
+  columns: DbColumn[];
+}

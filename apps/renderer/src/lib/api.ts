@@ -3,6 +3,8 @@ import type {
   AuditRule,
   ConfigScope,
   DataSourceInfo,
+  DbConnection,
+  DbDriver,
   EvidenceItem,
   Finding,
   GraphData,
@@ -335,4 +337,75 @@ export function testModel(id: string, scope: ConfigScope): Promise<{ ok: boolean
   return request<{ ok: boolean }>(`/models/${id}/test?scope=${scope}`, {
     method: 'POST',
   });
+}
+
+export interface DbConnectionsPage {
+  items: DbConnection[];
+  nextCursor: string | null;
+}
+
+export function listDbConnections(scope?: ConfigScope): Promise<DbConnectionsPage> {
+  return request<DbConnectionsPage>(`/db/connections${scope ? `?scope=${scope}` : ''}`);
+}
+
+export interface DbConnectionInput {
+  name: string;
+  driver: DbDriver;
+  scope: ConfigScope;
+  host?: string | null;
+  port?: number | null;
+  database?: string | null;
+  username?: string | null;
+  password?: string | null;
+  path?: string | null;
+}
+
+export function createDbConnection(input: DbConnectionInput): Promise<DbConnection> {
+  return request<DbConnection>('/db/connections', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteDbConnection(
+  id: string,
+  scope: ConfigScope,
+): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/db/connections/${id}?scope=${scope}`, {
+    method: 'DELETE',
+  });
+}
+
+export function testDbConnection(
+  id: string,
+  scope: ConfigScope,
+): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/db/connections/${id}/test?scope=${scope}`, {
+    method: 'POST',
+  });
+}
+
+export interface ReflectResult {
+  sourceId: string;
+  tables: string[];
+  authorization: Record<string, string[]>;
+}
+
+export function reflectDbConnection(
+  id: string,
+  scope: ConfigScope,
+): Promise<ReflectResult> {
+  return request<ReflectResult>(`/db/connections/${id}/reflect?scope=${scope}`, {
+    method: 'POST',
+  });
+}
+
+export function setDbAuthorization(
+  id: string,
+  tables: Record<string, string[]>,
+): Promise<{ ok: boolean; tables: Record<string, string[]> }> {
+  return request<{ ok: boolean; tables: Record<string, string[]> }>(
+    `/db/connections/${id}/authorization`,
+    { method: 'PATCH', body: JSON.stringify({ tables }) },
+  );
 }
