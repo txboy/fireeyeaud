@@ -20,6 +20,12 @@ dependencies = [
   "openai",
   "python-docx>=1.2.0",
   "reportlab>=5.0.1",
+  "sqlalchemy>=2.1.4",
+  "sqlglot>=30.22.0",
+  "psycopg[binary]>=3.3.6",
+  "pymysql>=1.2.3",
+  "pyodbc>=5.3.0",
+  "sqlalchemy-access>=2.0.3",
 ]
 
 [dependency-groups]
