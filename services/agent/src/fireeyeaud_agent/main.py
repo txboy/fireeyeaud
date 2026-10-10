@@ -15,6 +15,7 @@ from .api import (
     graph,
     health,
     knowledge as knowledge_api,
+    mcp as mcp_api,
     models,
     rules,
     sessions,
@@ -53,6 +54,7 @@ def create_app() -> FastAPI:
     app.include_router(export.router, prefix=API_PREFIX)
     app.include_router(db.router, prefix=API_PREFIX)
     app.include_router(knowledge_api.router, prefix=API_PREFIX)
+    app.include_router(mcp_api.router, prefix=API_PREFIX)
     app.include_router(sessions.router, prefix=API_PREFIX)
     return app
 

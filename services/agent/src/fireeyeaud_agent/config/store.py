@@ -17,7 +17,7 @@ from ..errors import ApiError
 from ..util import now_iso
 from .settings import settings
 
-_ID_PREFIX = {"models": "mdl", "db": "conn", "knowledge": "kb"}
+_ID_PREFIX = {"models": "mdl", "db": "conn", "knowledge": "kb", "mcp": "mcp"}
 
 
 def global_config_dir() -> Path:

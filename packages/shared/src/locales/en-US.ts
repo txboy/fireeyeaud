@@ -299,6 +299,8 @@ export default {
     dbUnauthorized: 'Access to unauthorized table / column',
     kbType: 'Unsupported knowledge base type',
     kbConn: 'Knowledge base connection failed',
+    mcpTransport: 'Unsupported MCP transport',
+    mcpStart: 'Failed to start MCP server',
     agentLimit: 'Reached the per-turn step/time limit; add details and retry',
   },
   import: {

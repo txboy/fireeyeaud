@@ -299,6 +299,8 @@ export default {
     dbUnauthorized: '访问了未授权的表 / 字段',
     kbType: '不支持的知识库类型',
     kbConn: '知识库连接失败',
+    mcpTransport: '不支持的 MCP 传输方式',
+    mcpStart: 'MCP Server 启动失败',
     agentLimit: '已达到单轮步数或时间上限，请补充说明后重试',
   },
   import: {
