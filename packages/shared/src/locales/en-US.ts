@@ -280,6 +280,8 @@ export default {
     dbDriver: 'Unsupported database driver',
     dbConn: 'Database connection failed',
     dbUnauthorized: 'Access to unauthorized table / column',
+    kbType: 'Unsupported knowledge base type',
+    kbConn: 'Knowledge base connection failed',
     agentLimit: 'Reached the per-turn step/time limit; add details and retry',
   },
   import: {

@@ -280,6 +280,8 @@ export default {
     dbDriver: '不支持的数据库驱动',
     dbConn: '数据库连接失败',
     dbUnauthorized: '访问了未授权的表 / 字段',
+    kbType: '不支持的知识库类型',
+    kbConn: '知识库连接失败',
     agentLimit: '已达到单轮步数或时间上限，请补充说明后重试',
   },
   import: {
