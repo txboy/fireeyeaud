@@ -105,18 +105,27 @@ aggregate_subject / parse_ledger / check_tie）、对话 Agent（plan → tool_c
 - **Agent 查询**：`sql_query` 增 `sourceId`，命中 DB 源时经 SQLAlchemy 只读连接执行，
   用 sqlglot 强制表级 / 显式列级授权（`E_DB_UNAUTHORIZED`）；`describe_source` 对 DB 源按授权过滤列。
 
+### Phase 5.5 · 知识库接入（仅检索）（已完成）
+- **Provider 管理**：活动栏「知识库」面板配置 Dify / RAGFlow 连接（base URL + API Key，作用域 global/project），
+  测试连通、浏览远端知识库并勾选启用；元数据存 `knowledge.json`，API Key 存 `<global_dir>/config/kb_secrets.json`（不入项目库）。
+- **启用集**：`GET/PATCH /kb/enabled`（按作用域，global ⊕ project 合并，project 覆盖）。
+- **Agent 检索**：`kb_search({ query, kbIds?, topK?, scoreThreshold? })` 读有效启用集 fan-out（`kb/` 适配器归一化
+  `RetrievedChunk`），按 `score` 合并；命中片段由 Agent 工具循环写入证据链。仅检索，不在应用内创建 / 上传 / 切分知识库。
+
 已知偏差（详见 [`docs/plans/2026-10-09-phase1-mvp.md`](docs/plans/2026-10-09-phase1-mvp.md)、
 [`docs/plans/2026-10-09-phase2-evidence-review.md`](docs/plans/2026-10-09-phase2-evidence-review.md)、
 [`docs/plans/2026-10-09-phase3-evidence-graph.md`](docs/plans/2026-10-09-phase3-evidence-graph.md)、
 [`docs/plans/2026-10-09-phase4-working-paper-export.md`](docs/plans/2026-10-09-phase4-working-paper-export.md)、
-[`docs/plans/2026-10-09-phase5-database-connections.md`](docs/plans/2026-10-09-phase5-database-connections.md)）：
+[`docs/plans/2026-10-09-phase5-database-connections.md`](docs/plans/2026-10-09-phase5-database-connections.md)、
+[`docs/plans/2026-10-10-phase5.5-knowledge-base.md`](docs/plans/2026-10-10-phase5.5-knowledge-base.md)）：
 工具先用进程内 LangChain `StructuredTool`；搜索先用主进程 Node 遍历；模型密钥暂只支持
-无 key / 环境变量；DB 凭据明文存本机 `db_secrets.json`（safeStorage 推迟 Phase 6）；
+无 key / 环境变量；DB / 知识库凭据明文存本机 `db_secrets.json` / `kb_secrets.json`（safeStorage 推迟 Phase 6）；
 会话/消息投影为简化实现；证据仅记 tool_call/tool_result 两档；打开工作区同步校验证据链；
 图谱 `subject`/`party` 节点推迟；主题切换后需重挂 tab 才更新图谱配色；
 底稿仅内置默认模板（不读 `.fireeye/templates/`），产物目录用 `wp_<n>`；
-DB 只读依赖 SQL 白名单（非数据库侧强制），字段级授权为 best-effort（`SELECT *` 不裁剪返回列）。
-真实模型 / 非 SQLite 数据库 E2E 需人工按计划步骤验证。
+DB 只读依赖 SQL 白名单（非数据库侧强制），字段级授权为 best-effort（`SELECT *` 不裁剪返回列）；
+知识库为外部服务（命中片段写入证据链，非本机 base URL 会外发查询文本）。
+真实模型 / 非 SQLite 数据库 / Dify·RAGFlow 知识库 E2E 需人工按计划步骤验证。
 
 ## 文档
 
