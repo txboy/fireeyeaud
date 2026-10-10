@@ -266,3 +266,37 @@ export interface DbTableSchema {
   table: string;
   columns: DbColumn[];
 }
+
+export type KbProviderType = 'dify' | 'ragflow';
+
+export interface KbProviderDefaults {
+  topK?: number;
+  scoreThreshold?: number;
+  searchMethod?: string;
+}
+
+export interface KbProvider {
+  id: string;
+  type: KbProviderType;
+  name: string;
+  baseUrl: string;
+  scope: ConfigScope;
+  apiKeyRef?: string;
+  defaults?: KbProviderDefaults;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface KbKnowledge {
+  id: string;
+  name: string;
+  documentCount?: number;
+}
+
+export interface KbEnabledEntry {
+  providerId: string;
+  knowledgeId: string;
+  name?: string;
+  scope: ConfigScope;
+  enabled: boolean;
+}
