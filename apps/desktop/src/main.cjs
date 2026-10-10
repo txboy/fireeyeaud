@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, dialog, ipcMain, session } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, session, shell } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
@@ -128,6 +128,15 @@ function registerIpc() {
   ipcMain.handle('search:run', (_event, payload) => {
     const { root, query, options } = payload ?? {};
     return runSearch(root, query, options ?? {});
+  });
+  ipcMain.handle('shell:open-path', (_event, filePath) => {
+    if (typeof filePath !== 'string' || !filePath) return { ok: false };
+    return shell.openPath(filePath).then((err) => ({ ok: !err }));
+  });
+  ipcMain.handle('shell:show-item', (_event, filePath) => {
+    if (typeof filePath !== 'string' || !filePath) return { ok: false };
+    shell.showItemInFolder(filePath);
+    return { ok: true };
   });
 }
 
