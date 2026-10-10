@@ -18,6 +18,7 @@ from .api import (
     mcp as mcp_api,
     models,
     rules,
+    secrets as secrets_api,
     sessions,
     skills as skills_api,
     workspaces,
@@ -57,6 +58,7 @@ def create_app() -> FastAPI:
     app.include_router(knowledge_api.router, prefix=API_PREFIX)
     app.include_router(mcp_api.router, prefix=API_PREFIX)
     app.include_router(skills_api.router, prefix=API_PREFIX)
+    app.include_router(secrets_api.router, prefix=API_PREFIX)
     app.include_router(sessions.router, prefix=API_PREFIX)
     return app
 
