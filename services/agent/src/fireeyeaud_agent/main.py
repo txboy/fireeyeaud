@@ -20,6 +20,7 @@ from .api import (
     rules,
     secrets as secrets_api,
     sessions,
+    settings as settings_api,
     skills as skills_api,
     workspaces,
 )
@@ -60,6 +61,7 @@ def create_app() -> FastAPI:
     app.include_router(skills_api.router, prefix=API_PREFIX)
     app.include_router(secrets_api.router, prefix=API_PREFIX)
     app.include_router(sessions.router, prefix=API_PREFIX)
+    app.include_router(settings_api.router, prefix=API_PREFIX)
     return app
 
 
