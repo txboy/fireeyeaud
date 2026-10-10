@@ -228,3 +228,16 @@ export interface GraphData {
   nodes: GraphNode[];
   edges: GraphEdge[];
 }
+
+export type WorkingPaperFormat = 'word' | 'xlsx' | 'pdf';
+
+export interface WorkingPaperManifest {
+  id: string;
+  createdAt: string;
+  format: WorkingPaperFormat;
+  locale: string;
+  templateId: string;
+  findingIds: string[];
+  artifactRef: string;
+  files: string[];
+}

@@ -8,6 +8,8 @@ import type {
   GraphData,
   ModelProfile,
   SseEvent,
+  WorkingPaperFormat,
+  WorkingPaperManifest,
   WorkspaceInfo,
 } from '@fireeyeaud/shared';
 import { useSidecarStore } from '../store/sidecar';
@@ -220,6 +222,23 @@ export function listEvidence(findingId?: string): Promise<{ items: EvidenceItem[
 export function getGraph(findingId?: string): Promise<GraphData> {
   const qs = findingId ? `?findingId=${encodeURIComponent(findingId)}` : '';
   return request<GraphData>(`/graph${qs}`);
+}
+
+export function listWorkingPapers(): Promise<{ items: WorkingPaperManifest[] }> {
+  return request<{ items: WorkingPaperManifest[] }>('/export/working-paper');
+}
+
+export interface ExportInput {
+  format: WorkingPaperFormat;
+  locale?: string;
+  findingIds?: string[];
+}
+
+export function exportWorkingPaper(input: ExportInput): Promise<WorkingPaperManifest> {
+  return request<WorkingPaperManifest>('/export/working-paper', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
 }
 
 export interface RulesPage {
