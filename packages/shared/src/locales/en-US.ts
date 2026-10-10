@@ -317,6 +317,7 @@ export default {
     kbConn: 'Knowledge base connection failed',
     mcpTransport: 'Unsupported MCP transport',
     mcpStart: 'Failed to start MCP server',
+    skillBuiltin: 'Built-in skills cannot be deleted',
     agentLimit: 'Reached the per-turn step/time limit; add details and retry',
   },
   import: {

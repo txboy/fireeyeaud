@@ -17,7 +17,13 @@ from ..errors import ApiError
 from ..util import now_iso
 from .settings import settings
 
-_ID_PREFIX = {"models": "mdl", "db": "conn", "knowledge": "kb", "mcp": "mcp"}
+_ID_PREFIX = {
+    "models": "mdl",
+    "db": "conn",
+    "knowledge": "kb",
+    "mcp": "mcp",
+    "skills": "sk",
+}
 
 
 def global_config_dir() -> Path:
@@ -139,6 +145,20 @@ def update_item(
             _write_items(_items_path(kind, scope, root), items)
             return updated
     raise ApiError("E_NOT_FOUND", 404, "error.notFound", {"id": item_id})
+
+
+def put_item(
+    kind: str, item: dict[str, Any], root: Path | None = None
+) -> dict[str, Any]:
+    """按显式 id 写入/覆盖某项（用于覆盖只读内置项，如 skills）。"""
+    scope = item.get("scope") or "global"
+    stored = {**item, "scope": scope, "updatedAt": now_iso()}
+    items = [
+        i for i in list_items(kind, scope, root) if i.get("id") != stored.get("id")
+    ]
+    items.append(stored)
+    _write_items(_items_path(kind, scope, root), items)
+    return stored
 
 
 def delete_item(kind: str, item_id: str, scope: str, root: Path | None = None) -> None:

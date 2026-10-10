@@ -25,7 +25,11 @@ _EN_DIRECTIVE = "\nRespond in English.\n"
 _ZH_DIRECTIVE = "\n请用简体中文回答。\n"
 
 
-def system_prompt(locale: str | None, prompt_rules: list[dict] | None = None) -> str:
+def system_prompt(
+    locale: str | None,
+    prompt_rules: list[dict] | None = None,
+    skills: list[dict] | None = None,
+) -> str:
     directive = _EN_DIRECTIVE if locale == "en-US" else _ZH_DIRECTIVE
     text = _BASE
     if prompt_rules:
@@ -35,5 +39,10 @@ def system_prompt(locale: str | None, prompt_rules: list[dict] | None = None) ->
         ]
         for rule in prompt_rules:
             lines.append(f"- [{rule.get('id')}] {rule.get('definition', '')}")
+        text += "\n".join(lines) + "\n"
+    if skills:
+        lines = ["", "可参考的审计技能（方法与视角，非强制流程）："]
+        for skill in skills:
+            lines.append(f"- {skill.get('name', '')}：{skill.get('prompt', '')}")
         text += "\n".join(lines) + "\n"
     return text + directive

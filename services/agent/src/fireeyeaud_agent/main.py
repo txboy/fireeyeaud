@@ -19,6 +19,7 @@ from .api import (
     models,
     rules,
     sessions,
+    skills as skills_api,
     workspaces,
 )
 from .config.settings import settings
@@ -55,6 +56,7 @@ def create_app() -> FastAPI:
     app.include_router(db.router, prefix=API_PREFIX)
     app.include_router(knowledge_api.router, prefix=API_PREFIX)
     app.include_router(mcp_api.router, prefix=API_PREFIX)
+    app.include_router(skills_api.router, prefix=API_PREFIX)
     app.include_router(sessions.router, prefix=API_PREFIX)
     return app
 

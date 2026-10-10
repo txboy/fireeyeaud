@@ -130,6 +130,7 @@ async def run_agent(
     tool_dict = build_tool_dict()
 
     from ..store.rules import list_rules
+    from ..store.skills import enabled_prompts
 
     prompt_rules = [
         r
@@ -137,7 +138,7 @@ async def run_agent(
         if r.get("enabled") and r.get("type") == "prompt" and r.get("definition")
     ]
     messages: list[BaseMessage] = [
-        SystemMessage(content=system_prompt(locale, prompt_rules))
+        SystemMessage(content=system_prompt(locale, prompt_rules, enabled_prompts(root)))
     ]
     if history:
         messages.extend(history)
