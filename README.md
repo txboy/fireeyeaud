@@ -88,12 +88,23 @@ aggregate_subject / parse_ledger / check_tie）、对话 Agent（plan → tool_c
   否则 `cose`）；点击节点弹详情卡，点击疑点节点「查看疑点」跳回清单并选中；
   疑点列表选中某条时图谱聚焦/高亮其子图。
 
+### Phase 4 · 审计底稿导出（已完成）
+- **生成**：`store/working_paper.py` 由疑点 + 证据 + 工作区信息生成
+  **Word（python-docx）/ Excel（openpyxl）/ PDF（reportlab + 内置 CJK 字体 `STSong-Light`）**；
+  结构为封面 / 审计结论 / 疑点汇总 / 证据索引 / 附录；产物落
+  `.fireeye/artifacts/working-paper/wp_<n>/`（文档 + `manifest.json`）。
+- **REST**：`POST /export/working-paper {findingIds?, format, locale, templateId?}`、
+  `GET /export/working-paper`（历史）、`GET /artifacts/{path}`（读取产物，含目录穿越防护）。
+- **前端**：成果栏「底稿预览」tab 导出并列出历史产物，经 Electron `shell` IPC「打开文件」/「在文件夹中显示」。
+
 已知偏差（详见 [`docs/plans/2026-10-09-phase1-mvp.md`](docs/plans/2026-10-09-phase1-mvp.md)、
 [`docs/plans/2026-10-09-phase2-evidence-review.md`](docs/plans/2026-10-09-phase2-evidence-review.md)、
-[`docs/plans/2026-10-09-phase3-evidence-graph.md`](docs/plans/2026-10-09-phase3-evidence-graph.md)）：
+[`docs/plans/2026-10-09-phase3-evidence-graph.md`](docs/plans/2026-10-09-phase3-evidence-graph.md)、
+[`docs/plans/2026-10-09-phase4-working-paper-export.md`](docs/plans/2026-10-09-phase4-working-paper-export.md)）：
 工具先用进程内 LangChain `StructuredTool`；搜索先用主进程 Node 遍历；模型密钥暂只支持
 无 key / 环境变量；会话/消息投影为简化实现；证据仅记 tool_call/tool_result 两档；
-打开工作区同步校验证据链；图谱 `subject`/`party` 节点推迟；主题切换后需重挂 tab 才更新图谱配色。
+打开工作区同步校验证据链；图谱 `subject`/`party` 节点推迟；主题切换后需重挂 tab 才更新图谱配色；
+底稿仅内置默认模板（不读 `.fireeye/templates/`），产物目录用 `wp_<n>` 而非设计示例的 `<ts>`。
 真实模型 E2E 需人工按计划步骤验证。
 
 ## 文档

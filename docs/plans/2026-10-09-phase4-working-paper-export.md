@@ -1083,6 +1083,38 @@ git commit -m "docs: Phase 4 验收记录与偏差说明"
 
 ---
 
+## Phase 4 实现记录（2026-10-09 完成）
+
+里程碑 N–P 均已完成并逐任务提交：
+
+- **N 后端底稿生成**：新增依赖 `python-docx`、`reportlab`（`openpyxl` 已有）；
+  `store/working_paper.py` 汇总材料并生成 Word / Excel / PDF + `manifest.json`，
+  `list_working_papers` 按时间倒序（次键 id）列出历史。PDF 用 `UnicodeCIDFont('STSong-Light')`，
+  无外部字体依赖。
+- **O 导出 REST**：`api/export.py`（`GET/POST /export/working-paper`、`GET /artifacts/{path}`，
+  resolve + `parents` 校验防目录穿越）；`main.py` 注册。
+- **P 前端**：Electron IPC `shell:open-path` / `shell:show-item` + preload + 渲染层类型；
+  `packages/shared` 增 `WorkingPaperFormat`/`WorkingPaperManifest`；`lib/api.ts`、`store/workingPaper.ts`；
+  i18n（`working-paper` 扩充 + `error.exportFormat`/`exportEmpty`）；`WorkingPaperView` 挂载
+  `working-paper` tab（导出 Word/Excel/PDF、仅选中疑点、历史列表、打开文件/所在目录）+ CSS。
+
+**验证：** 后端 `uv run pytest` → 98 passed（较 Phase 3 的 88 增 10）；`renderer:typecheck` /
+`renderer:build` / `desktop:test`（2 pass）均通过。真实 GUI 流程需按 Q1 Step 3 人工验证。
+
+**实现期间的说明：**
+
+1. `errors.py` 无需改动——错误码为 `ApiError(...)` 调用处传入，项目无集中错误码注册表。
+2. PDF 中文依赖 reportlab 内置 Adobe CJK 字体 `STSong-Light`（已单独验证可注册）；测试仅断言
+   `%PDF-` 头与文件非空（不做文本抽取）。
+3. `GET /artifacts/{path:path}` 无需 URL 解码特殊处理：`%2F` 场景经 resolve + `parents` 校验或
+   文件不存在，两种路径均返回 404。
+4. `desktop:test` 在刚新增依赖后的冷启动首跑可能超 30s 健康检查超时（导入 reportlab/pillow/lxml）；
+   预热后约 2.4s 通过——非回归，属冷启动抖动。
+5. 产物目录用 `wp_<n>`（4 位补零，`project.counters.workingPaper`）而非设计示例的 `<ts>`；
+   模板仅内置默认结构，不读 `.fireeye/templates/`（`templateId` 参数保留占位）。
+
+---
+
 ## Execution Handoff
 
 Plan complete and saved to `docs/plans/2026-10-09-phase4-working-paper-export.md`. Two execution options:
