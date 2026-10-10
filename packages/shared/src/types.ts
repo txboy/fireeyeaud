@@ -300,3 +300,26 @@ export interface KbEnabledEntry {
   scope: ConfigScope;
   enabled: boolean;
 }
+
+export type McpTransport = 'stdio' | 'sse' | 'http';
+
+export interface McpPermissions {
+  fsScope?: 'workspace' | 'none';
+  net?: boolean;
+  toolsAllow?: string[];
+}
+
+export interface McpServer {
+  id: string;
+  name: string;
+  transport: McpTransport;
+  command?: string | null;
+  args?: string[] | null;
+  env?: Record<string, string> | null;
+  url?: string | null;
+  enabled: boolean;
+  scope: ConfigScope;
+  permissions?: McpPermissions;
+  createdAt?: string;
+  updatedAt?: string;
+}

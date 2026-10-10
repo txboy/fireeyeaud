@@ -14,6 +14,8 @@ import type {
   KbProvider,
   KbProviderDefaults,
   KbProviderType,
+  McpServer,
+  McpTransport,
   ModelProfile,
   SseEvent,
   WorkingPaperFormat,
@@ -484,5 +486,53 @@ export function setKbEnabled(
   return request('/kb/enabled', {
     method: 'PATCH',
     body: JSON.stringify({ scope, items }),
+  });
+}
+
+export interface McpServersPage {
+  items: McpServer[];
+  nextCursor: string | null;
+}
+
+export function listMcpServers(scope?: ConfigScope): Promise<McpServersPage> {
+  return request<McpServersPage>(`/mcp/servers${scope ? `?scope=${scope}` : ''}`);
+}
+
+export interface McpServerInput {
+  name: string;
+  transport: McpTransport;
+  command?: string | null;
+  args?: string[] | null;
+  url?: string | null;
+  enabled?: boolean;
+  scope: ConfigScope;
+  permissions?: {
+    fsScope?: 'workspace' | 'none';
+    net?: boolean;
+    toolsAllow?: string[];
+  };
+}
+
+export function createMcpServer(input: McpServerInput): Promise<McpServer> {
+  return request<McpServer>('/mcp/servers', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateMcpServer(
+  id: string,
+  scope: ConfigScope,
+  patch: Partial<McpServerInput>,
+): Promise<McpServer> {
+  return request<McpServer>(`/mcp/servers/${id}?scope=${scope}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+}
+
+export function deleteMcpServer(id: string, scope: ConfigScope): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/mcp/servers/${id}?scope=${scope}`, {
+    method: 'DELETE',
   });
 }
