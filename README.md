@@ -99,7 +99,7 @@ aggregate_subject / parse_ledger / check_tie）、对话 Agent（plan → tool_c
 
 ### Phase 5 · 数据库连接（只读直连）（已完成）
 - **连接管理**：活动栏「数据库连接」面板配置只读连接（SQLite / PostgreSQL / MySQL / SQL Server / Access）；
-  元数据存 `db.json`（global/project 作用域合并），密码单独存 `<global_dir>/config/db_secrets.json`（不入项目库）。
+  元数据存 `db.json`（global/project 作用域合并），密码由 Electron `safeStorage` 加密存本机、sidecar 仅内存持有（不入项目库）。
 - **反射与授权**：`POST /db/connections/{id}/reflect` 反射表结构 → 写 `index/schema.json` 并注册为数据源；
   `PATCH /db/connections/{id}/authorization` 保存表 / 字段白名单（`.fireeye/authorization.json`）。
 - **Agent 查询**：`sql_query` 增 `sourceId`，命中 DB 源时经 SQLAlchemy 只读连接执行，
@@ -107,25 +107,42 @@ aggregate_subject / parse_ledger / check_tie）、对话 Agent（plan → tool_c
 
 ### Phase 5.5 · 知识库接入（仅检索）（已完成）
 - **Provider 管理**：活动栏「知识库」面板配置 Dify / RAGFlow 连接（base URL + API Key，作用域 global/project），
-  测试连通、浏览远端知识库并勾选启用；元数据存 `knowledge.json`，API Key 存 `<global_dir>/config/kb_secrets.json`（不入项目库）。
+  测试连通、浏览远端知识库并勾选启用；元数据存 `knowledge.json`，API Key 由 `safeStorage` 加密 / sidecar 内存持有（不入项目库）。
 - **启用集**：`GET/PATCH /kb/enabled`（按作用域，global ⊕ project 合并，project 覆盖）。
 - **Agent 检索**：`kb_search({ query, kbIds?, topK?, scoreThreshold? })` 读有效启用集 fan-out（`kb/` 适配器归一化
   `RetrievedChunk`），按 `score` 合并；命中片段由 Agent 工具循环写入证据链。仅检索，不在应用内创建 / 上传 / 切分知识库。
+
+### Phase 6 · 联网检索 + MCP/Skills 面板 + safeStorage + 打包（已完成）
+- **MCP 面板**：活动栏「MCP」配置 MCP Server（stdio/sse/http、command/args 或 url、启停、权限
+  `fsScope`/`net`/`toolsAllow`），元数据存 `mcp.json`（global/project 作用域）。本期**仅配置**：不真实启动 / 调用 MCP Server。
+- **Skills 面板**：活动栏「Skills」管理审计技能（内置只读 + 自定义 CRUD）；启用技能的 `prompt`
+  注入 Agent 系统提示词；`toolIds` 本期仅存储不联动执行。
+- **联网检索**：设置页「联网检索」默认关闭；开启并配置 provider（`tavily` / 自定义 HTTP）与 API Key 后，
+  Agent 可调用 `web_search`（唯一新增出站点，查询文本会发送至所选服务方）。
+- **safeStorage 全量迁移**：模型 key / DB 密码 / KB key 一律由主进程 `safeStorage` 加密存
+  `<userData>/secrets.json`（密文），sidecar 经 `POST /secrets` 仅内存持有；删除明文 `db_secrets.json` / `kb_secrets.json`。
+- **设置端点**：新增 `GET/PATCH /settings`（仅 global：`locale`/`theme`/`webSearch`/`telemetry=false`），
+  前端设置页以后端为权威（localStorage 仅首屏快照）。
+- **打包**：`services/agent/fireeyeaud-agent.spec`（PyInstaller 单文件 sidecar）、`apps/desktop/package.json`
+  electron-builder 配置、`.github/workflows/release.yml`（windows-latest，不签名）。
 
 已知偏差（详见 [`docs/plans/2026-10-09-phase1-mvp.md`](docs/plans/2026-10-09-phase1-mvp.md)、
 [`docs/plans/2026-10-09-phase2-evidence-review.md`](docs/plans/2026-10-09-phase2-evidence-review.md)、
 [`docs/plans/2026-10-09-phase3-evidence-graph.md`](docs/plans/2026-10-09-phase3-evidence-graph.md)、
 [`docs/plans/2026-10-09-phase4-working-paper-export.md`](docs/plans/2026-10-09-phase4-working-paper-export.md)、
 [`docs/plans/2026-10-09-phase5-database-connections.md`](docs/plans/2026-10-09-phase5-database-connections.md)、
-[`docs/plans/2026-10-10-phase5.5-knowledge-base.md`](docs/plans/2026-10-10-phase5.5-knowledge-base.md)）：
-工具先用进程内 LangChain `StructuredTool`；搜索先用主进程 Node 遍历；模型密钥暂只支持
-无 key / 环境变量；DB / 知识库凭据明文存本机 `db_secrets.json` / `kb_secrets.json`（safeStorage 推迟 Phase 6）；
+[`docs/plans/2026-10-10-phase5.5-knowledge-base.md`](docs/plans/2026-10-10-phase5.5-knowledge-base.md)、
+[`docs/plans/2026-10-10-phase6-websearch-mcp-packaging.md`](docs/plans/2026-10-10-phase6-websearch-mcp-packaging.md)）：
+工具先用进程内 LangChain `StructuredTool`（MCP 仅配置级，不加载执行）；搜索先用主进程 Node 遍历；
+MCP / Skills 为配置 + 面板（Skills 提示词注入生效，`toolIds` 不联动执行）；`web_search` 默认关闭；
 会话/消息投影为简化实现；证据仅记 tool_call/tool_result 两档；打开工作区同步校验证据链；
 图谱 `subject`/`party` 节点推迟；主题切换后需重挂 tab 才更新图谱配色；
 底稿仅内置默认模板（不读 `.fireeye/templates/`），产物目录用 `wp_<n>`；
 DB 只读依赖 SQL 白名单（非数据库侧强制），字段级授权为 best-effort（`SELECT *` 不裁剪返回列）；
-知识库为外部服务（命中片段写入证据链，非本机 base URL 会外发查询文本）。
-真实模型 / 非 SQLite 数据库 / Dify·RAGFlow 知识库 E2E 需人工按计划步骤验证。
+知识库为外部服务（命中片段写入证据链，非本机 base URL 会外发查询文本）；
+打包仅产出配置 + CI（本地仅验证 PyInstaller 可构建 sidecar、electron-builder 配置有效），
+安装包未签名（Windows 安装提示）。
+真实模型 / 非 SQLite 数据库 / Dify·RAGFlow 知识库 / Tavily 联网检索 E2E 需人工按计划步骤验证。
 
 ## 文档
 
