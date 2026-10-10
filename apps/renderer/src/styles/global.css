@@ -1087,3 +1087,54 @@ textarea.searchbox {
   white-space: pre-wrap;
   margin: 6px 0 0;
 }
+
+.wp-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wp-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.wp-hint {
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.wp-history__title {
+  font-size: 11px;
+  color: var(--text-3);
+  margin-top: 4px;
+}
+
+.wp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wp-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--editor-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.wp-item__id {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-1);
+}
+
+.wp-item__meta {
+  font-size: 11px;
+  color: var(--text-3);
+}

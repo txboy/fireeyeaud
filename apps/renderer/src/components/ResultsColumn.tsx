@@ -7,6 +7,7 @@ import { useFindingsStore } from '../store/findings';
 import { useWorkspaceStore } from '../store/workspace';
 import { FindingDetail } from './FindingDetail';
 import { GraphView } from './GraphView';
+import { WorkingPaperView } from './WorkingPaperView';
 
 const TABS: ResultsTab[] = ['findings', 'graph', 'working-paper', 'evidence'];
 
@@ -173,6 +174,8 @@ export function ResultsColumn() {
           <FindingsView />
         ) : resultsTab === 'graph' ? (
           <GraphView />
+        ) : resultsTab === 'working-paper' ? (
+          <WorkingPaperView />
         ) : (
           <EmptyView />
         )}
