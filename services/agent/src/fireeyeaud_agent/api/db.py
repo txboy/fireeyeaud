@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from ..errors import ApiError
-from ..store import db, db_engine
+from ..store import authorization, db, db_engine
 from ..store.workspace import workspace_manager
 from .deps import require_token
 
@@ -23,6 +23,10 @@ class ConnectionBody(BaseModel):
     username: str | None = None
     password: str | None = None
     path: str | None = None
+
+
+class AuthorizationBody(BaseModel):
+    tables: dict[str, list[str]]
 
 
 @router.get("/db/connections")
@@ -54,3 +58,12 @@ def test_connection(connection_id: str, scope: str = Query(default="global")) ->
         raise ApiError("E_NOT_FOUND", 404, "error.notFound", {"id": connection_id})
     ok = db_engine.test_connection(conn, db.get_secret(connection_id))
     return {"ok": ok}
+
+
+@router.patch("/db/connections/{connection_id}/authorization")
+def set_authorization(connection_id: str, body: AuthorizationBody) -> dict:
+    root = workspace_manager.root
+    if root is None:
+        raise ApiError("E_NO_WORKSPACE", 409, "error.noWorkspace")
+    authorization.set_entry(root, connection_id, body.tables)
+    return {"ok": True, "tables": body.tables}
