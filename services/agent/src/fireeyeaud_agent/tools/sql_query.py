@@ -16,6 +16,29 @@ MAX_LIMIT = 10000
 
 
 def sql_query(root: Path, params: dict[str, Any]) -> dict[str, Any]:
+    source_id = params.get("sourceId")
+    if source_id:
+        from ..store import db as db_store
+        from ..store import db_engine
+
+        root = Path(root)
+        conn = db_store.find_connection_for_source(root, source_id)
+        if conn is None:
+            raise ApiError(
+                "E_DB_UNAUTHORIZED", 403, "error.dbUnauthorized", {"source": source_id}
+            )
+        sql = params.get("sql", "")
+        db_engine.check_authorization(
+            root, conn["id"], sql, db_engine.dialect_for(conn)
+        )
+        try:
+            limit = int(params.get("limit") or DEFAULT_LIMIT)
+        except (TypeError, ValueError):
+            limit = DEFAULT_LIMIT
+        return db_engine.run_query(
+            conn, sql, db_store.get_secret(conn["id"]), limit=limit
+        )
+
     text = validate_sql(params.get("sql", ""))
     try:
         limit = int(params.get("limit") or DEFAULT_LIMIT)

@@ -119,4 +119,8 @@ def find_connection_for_source(root: Path, source_id: str) -> dict[str, Any] | N
             for conn in list_connections(root):
                 if conn.get("id") == conn_id:
                     return conn
+    # 回退：sourceId 直接就是连接 id
+    for conn in list_connections(root):
+        if conn.get("id") == source_id:
+            return conn
     return None

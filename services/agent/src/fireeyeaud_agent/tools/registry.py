@@ -25,6 +25,9 @@ class DescribeSourceArgs(BaseModel):
 class SqlQueryArgs(BaseModel):
     sql: str = Field(description="只读 SQL（仅 SELECT/WITH/EXPLAIN/DESCRIBE）")
     limit: int | None = Field(default=200, description="返回行数上限")
+    sourceId: str | None = Field(
+        default=None, description="数据库数据源 id；缺省查询工作区 DuckDB"
+    )
 
 
 class ParseLedgerArgs(BaseModel):
