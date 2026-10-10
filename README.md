@@ -97,15 +97,26 @@ aggregate_subject / parse_ledger / check_tie）、对话 Agent（plan → tool_c
   `GET /export/working-paper`（历史）、`GET /artifacts/{path}`（读取产物，含目录穿越防护）。
 - **前端**：成果栏「底稿预览」tab 导出并列出历史产物，经 Electron `shell` IPC「打开文件」/「在文件夹中显示」。
 
+### Phase 5 · 数据库连接（只读直连）（已完成）
+- **连接管理**：活动栏「数据库连接」面板配置只读连接（SQLite / PostgreSQL / MySQL / SQL Server / Access）；
+  元数据存 `db.json`（global/project 作用域合并），密码单独存 `<global_dir>/config/db_secrets.json`（不入项目库）。
+- **反射与授权**：`POST /db/connections/{id}/reflect` 反射表结构 → 写 `index/schema.json` 并注册为数据源；
+  `PATCH /db/connections/{id}/authorization` 保存表 / 字段白名单（`.fireeye/authorization.json`）。
+- **Agent 查询**：`sql_query` 增 `sourceId`，命中 DB 源时经 SQLAlchemy 只读连接执行，
+  用 sqlglot 强制表级 / 显式列级授权（`E_DB_UNAUTHORIZED`）；`describe_source` 对 DB 源按授权过滤列。
+
 已知偏差（详见 [`docs/plans/2026-10-09-phase1-mvp.md`](docs/plans/2026-10-09-phase1-mvp.md)、
 [`docs/plans/2026-10-09-phase2-evidence-review.md`](docs/plans/2026-10-09-phase2-evidence-review.md)、
 [`docs/plans/2026-10-09-phase3-evidence-graph.md`](docs/plans/2026-10-09-phase3-evidence-graph.md)、
-[`docs/plans/2026-10-09-phase4-working-paper-export.md`](docs/plans/2026-10-09-phase4-working-paper-export.md)）：
+[`docs/plans/2026-10-09-phase4-working-paper-export.md`](docs/plans/2026-10-09-phase4-working-paper-export.md)、
+[`docs/plans/2026-10-09-phase5-database-connections.md`](docs/plans/2026-10-09-phase5-database-connections.md)）：
 工具先用进程内 LangChain `StructuredTool`；搜索先用主进程 Node 遍历；模型密钥暂只支持
-无 key / 环境变量；会话/消息投影为简化实现；证据仅记 tool_call/tool_result 两档；
-打开工作区同步校验证据链；图谱 `subject`/`party` 节点推迟；主题切换后需重挂 tab 才更新图谱配色；
-底稿仅内置默认模板（不读 `.fireeye/templates/`），产物目录用 `wp_<n>` 而非设计示例的 `<ts>`。
-真实模型 E2E 需人工按计划步骤验证。
+无 key / 环境变量；DB 凭据明文存本机 `db_secrets.json`（safeStorage 推迟 Phase 6）；
+会话/消息投影为简化实现；证据仅记 tool_call/tool_result 两档；打开工作区同步校验证据链；
+图谱 `subject`/`party` 节点推迟；主题切换后需重挂 tab 才更新图谱配色；
+底稿仅内置默认模板（不读 `.fireeye/templates/`），产物目录用 `wp_<n>`；
+DB 只读依赖 SQL 白名单（非数据库侧强制），字段级授权为 best-effort（`SELECT *` 不裁剪返回列）。
+真实模型 / 非 SQLite 数据库 E2E 需人工按计划步骤验证。
 
 ## 文档
 

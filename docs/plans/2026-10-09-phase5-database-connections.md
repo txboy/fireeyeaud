@@ -1223,6 +1223,35 @@ git commit -m "docs: Phase 5 验收记录与偏差说明"
 
 ---
 
+## Phase 5 实现记录（2026-10-09 完成）
+
+里程碑 R–U 均已完成并逐任务提交：
+
+- **R 连接存储 + 引擎层**：`store/db.py`（连接 scope 感知 CRUD + `db_secrets.json` + URL 构造）、
+  依赖 `sqlalchemy`/`sqlglot`/`psycopg`/`pymysql`/`pyodbc`/`sqlalchemy-access`、
+  `store/db_engine.py`（建连 / 反射 / 只读查询 / `check_authorization`）、
+  `api/db.py`（连接 CRUD + `/test`）。
+- **S 反射 + 授权**：`store/authorization.py`（`.fireeye/authorization.json`）、
+  `PATCH /db/connections/{id}/authorization`、`POST /db/connections/{id}/reflect`
+  （写 `schema.json` + 注册 `dataSource`）；`upsert_schema_entry` 去重键改为 `(sourceId, table)`。
+- **T Agent 查询集成**：`sql_query` 增 `sourceId` 路由（sqlglot 校验表 / 显式列授权，
+  连接 id 回退）；`describe_source` 对 DB 源按授权过滤表 / 列。
+- **U 前端**：类型 / API / `store/database.ts` / i18n（`database`、`enums.driver`、`error.db*`）；
+  `DatabasePanel`（新建连接 / 测试连通 / 读取表结构 / 表与列授权勾选）接入活动栏 `database` 视图。
+
+**验证：** 后端 `uv run pytest` → 116 passed（较 Phase 4 的 98 增 18）；`renderer:typecheck` /
+`renderer:build` / `desktop:test`（2 pass）均通过。非 SQLite 引擎与真实 GUI 流程需按 V1 Step 3 人工验证。
+
+**实现期间的说明：**
+
+1. `reflect` 响应额外返回 `schema`（表 + 列），供前端授权界面展示列级勾选（计划原只返回表名）。
+2. `find_connection_for_source` 支持 `sourceId` 既可为数据源 id，也可直接为连接 id（回退）。
+3. `errors.py` 仍无需改动；DB 相关错误码 `E_DB_DRIVER` / `E_DB_CONN` / `E_DB_UNAUTHORIZED` + messageKey 就近传入。
+4. 新增依赖后首次启动 sidecar 会因字节码冷编译超 30s 健康检查超时（预热后约 7s 通过）——非回归。
+5. 单一测试环境下仅 SQLite 可真实闭环；PG/MySQL/MSSQL/Access 依赖本地驱动 / 服务，未自动验证。
+
+---
+
 ## Execution Handoff
 
 Plan complete and saved to `docs/plans/2026-10-09-phase5-database-connections.md`. Two execution options:
