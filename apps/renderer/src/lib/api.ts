@@ -17,6 +17,7 @@ import type {
   McpServer,
   McpTransport,
   ModelProfile,
+  Skill,
   SseEvent,
   WorkingPaperFormat,
   WorkingPaperManifest,
@@ -535,4 +536,36 @@ export function deleteMcpServer(id: string, scope: ConfigScope): Promise<{ ok: b
   return request<{ ok: boolean }>(`/mcp/servers/${id}?scope=${scope}`, {
     method: 'DELETE',
   });
+}
+
+export function listSkills(): Promise<{ items: Skill[] }> {
+  return request<{ items: Skill[] }>('/skills');
+}
+
+export interface SkillInput {
+  name: string;
+  prompt: string;
+  toolIds?: string[];
+  params?: Record<string, unknown>;
+  enabled?: boolean;
+  scope: ConfigScope;
+}
+
+export function createSkill(input: SkillInput): Promise<Skill> {
+  return request<Skill>('/skills', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export function updateSkill(
+  id: string,
+  scope: ConfigScope,
+  patch: Partial<SkillInput>,
+): Promise<Skill> {
+  return request<Skill>(`/skills/${id}?scope=${scope}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+}
+
+export function deleteSkill(id: string, scope: ConfigScope): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/skills/${id}?scope=${scope}`, { method: 'DELETE' });
 }

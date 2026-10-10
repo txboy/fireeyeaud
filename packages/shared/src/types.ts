@@ -323,3 +323,16 @@ export interface McpServer {
   createdAt?: string;
   updatedAt?: string;
 }
+
+export interface Skill {
+  id: string;
+  name: string;
+  prompt: string;
+  toolIds?: string[];
+  params?: Record<string, unknown>;
+  enabled: boolean;
+  builtin: boolean;
+  scope: ConfigScope | 'builtin';
+  createdAt?: string;
+  updatedAt?: string;
+}

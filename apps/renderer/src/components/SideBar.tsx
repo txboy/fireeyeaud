@@ -8,6 +8,7 @@ import { KnowledgePanel } from './panels/KnowledgePanel';
 import { McpPanel } from './panels/McpPanel';
 import { ModelsPanel } from './panels/ModelsPanel';
 import { SettingsPanel } from './panels/SettingsPanel';
+import { SkillsPanel } from './panels/SkillsPanel';
 import { PlaceholderPanel } from './panels/PlaceholderPanel';
 
 interface HeadMeta {
@@ -40,6 +41,8 @@ function PanelBody({ view }: { view: ActivityView }) {
       return <KnowledgePanel />;
     case 'mcp':
       return <McpPanel />;
+    case 'skills':
+      return <SkillsPanel />;
     case 'models':
       return <ModelsPanel />;
     case 'settings':
