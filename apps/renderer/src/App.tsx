@@ -5,10 +5,13 @@ import { SideBar } from './components/SideBar';
 import { AgentColumn } from './components/AgentColumn';
 import { ResultsColumn } from './components/ResultsColumn';
 import { StatusBar } from './components/StatusBar';
+import { Welcome } from './components/Welcome';
 import { useSidecarStore } from './store/sidecar';
+import { useWorkspaceStore } from './store/workspace';
 
 export default function App() {
   const init = useSidecarStore((s) => s.init);
+  const workspace = useWorkspaceStore((s) => s.workspace);
 
   useEffect(() => {
     void init();
@@ -17,13 +20,19 @@ export default function App() {
   return (
     <div className="app">
       <TitleBar />
-      <div className="app__body">
-        <ActivityRail />
-        <SideBar />
-        <AgentColumn />
-        <ResultsColumn />
-      </div>
-      <StatusBar />
+      {workspace ? (
+        <>
+          <div className="app__body">
+            <ActivityRail />
+            <SideBar />
+            <AgentColumn />
+            <ResultsColumn />
+          </div>
+          <StatusBar />
+        </>
+      ) : (
+        <Welcome />
+      )}
     </div>
   );
 }

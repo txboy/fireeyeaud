@@ -181,6 +181,14 @@ export interface SearchOptions {
   exclude?: string;
 }
 
+/** 文件树节点条目（主进程 fs:read-dir 返回）。 */
+export interface FsEntry {
+  name: string;
+  path: string;
+  isDir: boolean;
+  size?: number;
+}
+
 export interface WorkspaceInfo {
   schemaVersion: number;
   id: string;

@@ -106,6 +106,34 @@ export function createSessionApi(input: {
   });
 }
 
+export interface SessionSummary {
+  id: string;
+  title: string | null;
+  createdAt: string;
+  lastMessageAt?: string;
+}
+
+export interface SessionMessage {
+  id: string;
+  sessionId: string;
+  seq: number;
+  role: string;
+  content: { text?: string } | string | null;
+  ts: string;
+}
+
+export function listSessionsApi(): Promise<{ items: SessionSummary[] }> {
+  return request<{ items: SessionSummary[] }>('/sessions');
+}
+
+export function getSessionMessagesApi(id: string): Promise<{ items: SessionMessage[] }> {
+  return request<{ items: SessionMessage[] }>(`/sessions/${id}/messages`);
+}
+
+export function deleteSessionApi(id: string): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/sessions/${id}`, { method: 'DELETE' });
+}
+
 export interface ChatHandlers {
   onEvent: (event: SseEvent) => void;
   signal?: AbortSignal;

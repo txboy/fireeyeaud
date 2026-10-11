@@ -46,10 +46,18 @@ body {
   align-items: center;
   gap: 10px;
   height: 40px;
-  padding: 0 14px;
+  padding: 0 0 0 14px;
   background: var(--titlebar);
   border-bottom: 1px solid var(--border);
   flex: 0 0 auto;
+  -webkit-app-region: drag;
+}
+
+/* 交互元素不参与窗口拖拽 */
+.titlebar__btn,
+.titlebar__controls,
+.titlebar__ctl {
+  -webkit-app-region: no-drag;
 }
 
 .titlebar__flame {
@@ -98,6 +106,37 @@ body {
 .titlebar__status--failed {
   color: var(--danger);
   background: var(--danger-weak);
+}
+
+/* ---- 自绘窗口控制按钮 ---- */
+.titlebar__controls {
+  display: flex;
+  align-items: stretch;
+  align-self: stretch;
+  margin-left: 2px;
+}
+
+.titlebar__ctl {
+  width: 44px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.titlebar__ctl:hover {
+  background: var(--hover);
+  color: var(--text-1);
+}
+
+.titlebar__ctl--close:hover {
+  background: var(--danger);
+  color: #ffffff;
 }
 
 /* ---- Activity rail ---- */
@@ -258,6 +297,8 @@ body {
 }
 
 .explorer {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -439,6 +480,174 @@ body {
 
 .tree__row--folder {
   color: var(--text-1);
+}
+
+.tree__row {
+  cursor: default;
+  user-select: none;
+}
+
+.tree__chevron {
+  flex: 0 0 auto;
+  width: 13px;
+  display: inline-flex;
+  justify-content: center;
+  color: var(--text-3);
+}
+
+.tree__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tree__row--muted {
+  color: var(--text-3);
+}
+
+.tree--empty {
+  color: var(--text-3);
+  font-size: 12px;
+  padding: 6px 2px;
+}
+
+/* ---- Explorer sections ---- */
+.explorer__section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.explorer__section--sessions {
+  flex: 0 0 auto;
+  max-height: 38%;
+}
+
+.explorer__section--files {
+  flex: 1 1 auto;
+}
+
+.session-list {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow: auto;
+  min-height: 0;
+}
+
+.session {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  color: var(--text-2);
+  cursor: pointer;
+  user-select: none;
+}
+
+.session:hover {
+  background: var(--hover);
+  color: var(--text-1);
+}
+
+.session--active {
+  color: var(--accent);
+  background: var(--accent-weak);
+}
+
+.session__title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session__del {
+  flex: 0 0 auto;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  border-radius: 5px;
+  padding: 2px;
+  cursor: pointer;
+}
+
+.session:hover .session__del {
+  display: inline-flex;
+}
+
+.session__del:hover {
+  color: var(--danger);
+  background: var(--hover);
+}
+
+.explorer__files-body {
+  margin-top: 8px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.datasource-chip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--text-2);
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.datasource-chip__name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.datasource-chip__meta {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  color: var(--text-3);
+}
+
+/* ---- Generic icon button ---- */
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.icon-button:hover:not(:disabled) {
+  color: var(--text-1);
+  background: var(--hover);
+}
+
+.icon-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.panel-hint {
+  font-size: 12px;
+  color: var(--text-3);
+  padding: 6px 2px;
 }
 
 /* ---- Settings ---- */
@@ -1192,4 +1401,247 @@ textarea.searchbox {
   gap: 4px;
   font-size: 11px;
   color: var(--text-2);
+}
+
+/* ---- 欢迎页 ---- */
+.welcome {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  padding: 32px 24px;
+  background: var(--app-bg);
+}
+
+.welcome__center {
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.welcome__mark {
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  background: var(--accent-weak);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.welcome__title {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin: 0 0 8px;
+  color: var(--text-1);
+}
+
+.welcome__tagline {
+  font-size: 13px;
+  color: var(--text-3);
+  margin: 0 0 26px;
+}
+
+.welcome__actions {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 30px;
+}
+
+.welcome__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 20px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.12s ease, filter 0.12s ease, border-color 0.12s ease;
+}
+
+.welcome__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.welcome__btn--primary {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.welcome__btn--primary:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.welcome__btn--ghost {
+  background: transparent;
+  color: var(--text-1);
+  border-color: var(--border-strong);
+}
+
+.welcome__btn--ghost:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.welcome__spin {
+  animation: spin 0.9s linear infinite;
+}
+
+.welcome__error {
+  width: 100%;
+  margin-bottom: 18px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--danger);
+  background: var(--danger-weak);
+}
+
+.welcome__recent {
+  width: 100%;
+  text-align: left;
+  margin-bottom: 22px;
+}
+
+.welcome__recent-title {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-bottom: 10px;
+  padding: 0 2px;
+}
+
+.welcome__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--panel-bg);
+}
+
+.welcome__item {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+}
+
+.welcome__item:last-child {
+  border-bottom: 0;
+}
+
+.welcome__item-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+}
+
+.welcome__item-main:hover {
+  background: var(--hover);
+}
+
+.welcome__item-icon {
+  color: var(--accent);
+  flex: 0 0 auto;
+}
+
+.welcome__item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.welcome__item-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.welcome__item-path {
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.welcome__item-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-right: 4px;
+  flex: 0 0 auto;
+}
+
+.welcome__badge {
+  font-size: 11px;
+  color: var(--text-2);
+  background: var(--hover);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.welcome__time {
+  font-size: 11.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.welcome__item-remove {
+  border: 0;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  padding: 6px 8px;
+  display: inline-flex;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease;
+}
+
+.welcome__item:hover .welcome__item-remove {
+  opacity: 1;
+}
+
+.welcome__item-remove:hover {
+  color: var(--danger);
+}
+
+.welcome__chevron {
+  color: var(--text-3);
+  margin-right: 12px;
+  flex: 0 0 auto;
+}
+
+.welcome__privacy {
+  font-size: 11.5px;
+  color: var(--text-3);
+  max-width: 360px;
+  line-height: 1.6;
+  margin: 0;
 }

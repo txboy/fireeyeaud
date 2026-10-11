@@ -1,6 +1,15 @@
 'use strict';
 
-const { app, BrowserWindow, dialog, ipcMain, safeStorage, session, shell } = require('electron');
+const {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  safeStorage,
+  session,
+  shell,
+} = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
@@ -61,6 +70,7 @@ function createWindow() {
     minWidth: 1024,
     minHeight: 640,
     show: false,
+    frame: false,
     backgroundColor: '#1E1F22',
     title: '火眼审计助手',
     webPreferences: {
@@ -71,8 +81,26 @@ function createWindow() {
     },
   });
 
+  mainWindow.maximize();
   mainWindow.once('ready-to-show', () => mainWindow.show());
   mainWindow.on('close', () => saveWindowState(app.getPath('userData'), mainWindow.getBounds()));
+
+  // 无边框窗口：把最大化状态变化通知渲染层，用于切换「最大化/还原」图标。
+  const sendMaximized = () =>
+    mainWindow?.webContents.send('window:maximized', mainWindow.isMaximized());
+  mainWindow.on('maximize', sendMaximized);
+  mainWindow.on('unmaximize', sendMaximized);
+
+  // 无菜单栏后，开发态保留 F12 / Ctrl+Shift+I 打开 DevTools。
+  if (DEV_SERVER_URL) {
+    mainWindow.webContents.on('before-input-event', (_event, input) => {
+      const isToggle =
+        input.type === 'keyDown' &&
+        (input.key === 'F12' ||
+          (input.control && input.shift && input.key.toLowerCase() === 'i'));
+      if (isToggle) mainWindow.webContents.toggleDevTools();
+    });
+  }
 
   mainWindow.webContents.on('did-finish-load', () =>
     logger.info(`[renderer] loaded ${mainWindow.webContents.getURL()}`),
@@ -132,6 +160,19 @@ function registerIpc() {
     platform: process.platform,
     userData: app.getPath('userData'),
   }));
+  ipcMain.handle('window:minimize', () => {
+    mainWindow?.minimize();
+  });
+  ipcMain.handle('window:toggle-maximize', () => {
+    if (!mainWindow) return false;
+    if (mainWindow.isMaximized()) mainWindow.unmaximize();
+    else mainWindow.maximize();
+    return mainWindow.isMaximized();
+  });
+  ipcMain.handle('window:close', () => {
+    mainWindow?.close();
+  });
+  ipcMain.handle('window:is-maximized', () => Boolean(mainWindow?.isMaximized()));
   ipcMain.handle('dialog:open-folder', async () => {
     const result = await dialog.showOpenDialog(mainWindow ?? undefined, {
       title: '打开工作区文件夹',
@@ -150,6 +191,40 @@ function registerIpc() {
   ipcMain.handle('search:run', (_event, payload) => {
     const { root, query, options } = payload ?? {};
     return runSearch(root, query, options ?? {});
+  });
+  ipcMain.handle('fs:read-dir', (_event, payload) => {
+    const { root, dir } = payload ?? {};
+    if (typeof root !== 'string' || typeof dir !== 'string') return { entries: [] };
+    const rootAbs = path.resolve(root);
+    const dirAbs = path.resolve(dir);
+    const rel = path.relative(rootAbs, dirAbs);
+    // 仅允许工作区根目录及其子目录。
+    if (rel.startsWith('..') || path.isAbsolute(rel)) return { entries: [] };
+    let dirents;
+    try {
+      dirents = fs.readdirSync(dirAbs, { withFileTypes: true });
+    } catch {
+      return { entries: [] };
+    }
+    const entries = dirents
+      .filter((entry) => entry.isDirectory() || entry.isFile())
+      .map((entry) => {
+        const abs = path.join(dirAbs, entry.name);
+        let size;
+        if (entry.isFile()) {
+          try {
+            size = fs.statSync(abs).size;
+          } catch {
+            /* ignore */
+          }
+        }
+        return { name: entry.name, path: abs, isDir: entry.isDirectory(), size };
+      })
+      .sort((a, b) =>
+        a.isDir === b.isDir ? a.name.localeCompare(b.name) : a.isDir ? -1 : 1,
+      )
+      .slice(0, SEARCH_MAX_TOTAL);
+    return { entries };
   });
   ipcMain.handle('shell:open-path', (_event, filePath) => {
     if (typeof filePath !== 'string' || !filePath) return { ok: false };
@@ -322,6 +397,9 @@ app.whenReady().then(async () => {
   });
   registerIpc();
   hardenWebContents();
+
+  // 移除系统菜单栏（File/Edit/View/Window…）；窗口为无边框自绘标题栏。
+  Menu.setApplicationMenu(null);
 
   // CSP：仅在生产（非 dev server）注入，避免影响 Vite HMR。
   if (!DEV_SERVER_URL) {

@@ -9,10 +9,20 @@ contextBridge.exposeInMainWorld('fireeyeaud', {
   openFolder: () => ipcRenderer.invoke('dialog:open-folder'),
   openFiles: () => ipcRenderer.invoke('dialog:open-files'),
   searchRun: (payload) => ipcRenderer.invoke('search:run', payload),
+  readDir: (payload) => ipcRenderer.invoke('fs:read-dir', payload),
   openPath: (filePath) => ipcRenderer.invoke('shell:open-path', filePath),
   showItemInFolder: (filePath) => ipcRenderer.invoke('shell:show-item', filePath),
   putSecret: (plaintext) => ipcRenderer.invoke('secret:put', plaintext),
   deleteSecret: (ref) => ipcRenderer.invoke('secret:delete', ref),
+  minimizeWindow: () => ipcRenderer.invoke('window:minimize'),
+  toggleMaximizeWindow: () => ipcRenderer.invoke('window:toggle-maximize'),
+  closeWindow: () => ipcRenderer.invoke('window:close'),
+  isWindowMaximized: () => ipcRenderer.invoke('window:is-maximized'),
+  onWindowMaximized: (callback) => {
+    const handler = (_event, maximized) => callback(maximized);
+    ipcRenderer.on('window:maximized', handler);
+    return () => ipcRenderer.removeListener('window:maximized', handler);
+  },
   onSidecarStatus: (callback) => {
     const handler = (_event, info) => callback(info);
     ipcRenderer.on('sidecar:status', handler);

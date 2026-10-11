@@ -2,13 +2,49 @@ import { create } from 'zustand';
 import type { WorkspaceInfo } from '@fireeyeaud/shared';
 import { ApiError, closeWorkspaceApi, openWorkspaceApi } from '../lib/api';
 
+/** 「最近打开的工作区」条目（仅客户端持久化，落 localStorage）。 */
+export interface RecentWorkspace {
+  path: string;
+  name: string;
+  lastOpenedAt: number;
+  findings: number;
+}
+
+const RECENT_KEY = 'fireeyeaud.recentWorkspaces';
+const RECENT_MAX = 8;
+
+function loadRecent(): RecentWorkspace[] {
+  try {
+    const raw = localStorage.getItem(RECENT_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (item): item is RecentWorkspace =>
+        Boolean(item) && typeof (item as RecentWorkspace).path === 'string',
+    );
+  } catch {
+    return [];
+  }
+}
+
+function saveRecent(items: RecentWorkspace[]): void {
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(items));
+  } catch {
+    /* 忽略写入失败（隐私模式等） */
+  }
+}
+
 interface WorkspaceState {
   workspace: WorkspaceInfo | null;
   path: string | null;
   loading: boolean;
   error: ApiError | null;
+  recent: RecentWorkspace[];
   openFromDialog: () => Promise<void>;
   openPath: (path: string) => Promise<void>;
+  removeRecent: (path: string) => void;
   close: () => Promise<void>;
 }
 
@@ -17,12 +53,24 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   path: null,
   loading: false,
   error: null,
+  recent: loadRecent(),
 
   openPath: async (path) => {
     set({ loading: true, error: null });
     try {
       const workspace = await openWorkspaceApi(path);
-      set({ workspace, path, loading: false });
+      const entry: RecentWorkspace = {
+        path,
+        name: workspace.name,
+        lastOpenedAt: Date.now(),
+        findings: workspace.counters?.finding ?? 0,
+      };
+      const recent = [entry, ...get().recent.filter((r) => r.path !== path)].slice(
+        0,
+        RECENT_MAX,
+      );
+      saveRecent(recent);
+      set({ workspace, path, loading: false, recent });
     } catch (err) {
       set({ loading: false, error: err as ApiError });
     }
@@ -34,6 +82,12 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const path = await api.openFolder();
     if (!path) return;
     await get().openPath(path);
+  },
+
+  removeRecent: (path) => {
+    const recent = get().recent.filter((r) => r.path !== path);
+    saveRecent(recent);
+    set({ recent });
   },
 
   close: async () => {

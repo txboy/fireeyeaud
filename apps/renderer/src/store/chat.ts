@@ -1,6 +1,15 @@
 import { create } from 'zustand';
 import type { SseEvent } from '@fireeyeaud/shared';
-import { ApiError, createSessionApi, streamChat } from '../lib/api';
+import {
+  ApiError,
+  createSessionApi,
+  deleteSessionApi,
+  getSessionMessagesApi,
+  listSessionsApi,
+  streamChat,
+  type SessionMessage,
+  type SessionSummary,
+} from '../lib/api';
 import { useFindingsStore } from './findings';
 
 export type ChatRole = 'user' | 'assistant';
@@ -27,14 +36,38 @@ export interface ChatMessage {
 
 interface ChatState {
   sessionId: string | null;
+  sessions: SessionSummary[];
   messages: ChatMessage[];
   streaming: boolean;
+  loadSessions: () => Promise<void>;
+  selectSession: (id: string) => Promise<void>;
+  newSession: () => void;
+  deleteSession: (id: string) => Promise<void>;
   send: (text: string, locale: string) => Promise<void>;
   clear: () => void;
 }
 
 let counter = 0;
 const nextId = () => `m_${Date.now().toString(36)}_${(counter += 1)}`;
+
+/** 后端存储的消息投影 → 前端 ChatMessage。 */
+function toChatMessage(message: SessionMessage): ChatMessage {
+  const text =
+    typeof message.content === 'string'
+      ? message.content
+      : (message.content?.text ?? '');
+  return {
+    id: message.id,
+    role: message.role === 'user' ? 'user' : 'assistant',
+    content: text,
+    thinking: '',
+    phase: null,
+    streaming: false,
+    errorKey: null,
+    tools: [],
+    findingIds: [],
+  };
+}
 
 function applyEvent(message: ChatMessage, event: SseEvent): ChatMessage {
   const data = (event.data ?? {}) as Record<string, unknown>;
@@ -90,8 +123,58 @@ function applyEvent(message: ChatMessage, event: SseEvent): ChatMessage {
 
 export const useChatStore = create<ChatState>((set, get) => ({
   sessionId: null,
+  sessions: [],
   messages: [],
   streaming: false,
+
+  loadSessions: async () => {
+    try {
+      const page = await listSessionsApi();
+      set({ sessions: page.items });
+    } catch {
+      /* sidecar 未就绪时忽略 */
+    }
+  },
+
+  selectSession: async (id) => {
+    set({ sessionId: id, messages: [] });
+    try {
+      const page = await getSessionMessagesApi(id);
+      if (get().sessionId !== id) return; // 已切换到别的会话
+      set({ messages: page.items.map(toChatMessage) });
+    } catch (err) {
+      const e = err as ApiError;
+      set({
+        messages: [
+          {
+            id: nextId(),
+            role: 'assistant',
+            content: '',
+            thinking: '',
+            phase: null,
+            streaming: false,
+            errorKey: e.messageKey ?? 'error.internal',
+            tools: [],
+            findingIds: [],
+          },
+        ],
+      });
+    }
+  },
+
+  newSession: () => set({ sessionId: null, messages: [] }),
+
+  deleteSession: async (id) => {
+    try {
+      await deleteSessionApi(id);
+    } catch {
+      /* 忽略删除失败 */
+    }
+    set((s) => ({
+      sessions: s.sessions.filter((item) => item.id !== id),
+      ...(s.sessionId === id ? { sessionId: null, messages: [] } : {}),
+    }));
+  },
 
   send: async (text, locale) => {
     const trimmed = text.trim();
@@ -103,6 +186,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const session = await createSessionApi({ title: trimmed.slice(0, 40) });
         sessionId = session.id;
         set({ sessionId });
+        void get().loadSessions();
       }
     } catch (err) {
       const e = err as ApiError;
@@ -177,6 +261,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         ),
         streaming: false,
       }));
+    } finally {
+      void get().loadSessions();
     }
   },
 
