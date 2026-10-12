@@ -139,13 +139,22 @@ aggregate_subject / parse_ledger / check_tie）、对话 Agent（plan → tool_c
   Excel `.xlsx/.xlsm` `exceljs`（逐 sheet + 行/列截断）。重依赖按需加载（动态 import）。
 - **CSP**：生产放开 `img-src blob:` / `worker-src 'self' blob:` / `font-src … blob:`，其余不变。
 
+### Phase 7b · 配置表单在右侧 tab 中打开（已完成）
+- **表单 tab**：数据库 / MCP / Skills / Models 的「新增 / 编辑」表单在**右侧区**以 tab 打开；
+  每个实体一个 tab（`form:<域>:<id|new>`），可多开、可关闭；保存 / 取消后关闭该 tab。
+- **编辑能力**：为 MCP / Skills / 数据库连接补上编辑（模型已有）；后端新增
+  `PATCH /db/connections/{id}`，`config.store.update_item` 支持 `drop_none=False` 以显式清空字段。
+- **未保存守卫**：与预览 tab 共用右侧区离开守卫，切换 / 关闭 / 回会话前弹「保存 / 不保存 / 取消」。
+- 表单 tab 不持久化；数据库编辑不改 scope（scope 走查询参数）；表 / 字段授权仍在数据库面板内联。
+
 已知偏差（详见 [`docs/plans/2026-10-09-phase1-mvp.md`](docs/plans/2026-10-09-phase1-mvp.md)、[`docs/plans/2026-10-09-phase2-evidence-review.md`](docs/plans/2026-10-09-phase2-evidence-review.md)、
 [`docs/plans/2026-10-09-phase3-evidence-graph.md`](docs/plans/2026-10-09-phase3-evidence-graph.md)、
 [`docs/plans/2026-10-09-phase4-working-paper-export.md`](docs/plans/2026-10-09-phase4-working-paper-export.md)、
 [`docs/plans/2026-10-09-phase5-database-connections.md`](docs/plans/2026-10-09-phase5-database-connections.md)、
 [`docs/plans/2026-10-10-phase5.5-knowledge-base.md`](docs/plans/2026-10-10-phase5.5-knowledge-base.md)、
 [`docs/plans/2026-10-10-phase6-websearch-mcp-packaging.md`](docs/plans/2026-10-10-phase6-websearch-mcp-packaging.md)、
-[`docs/plans/2026-10-12-phase7-file-preview.md`](docs/plans/2026-10-12-phase7-file-preview.md)）：
+[`docs/plans/2026-10-12-phase7-file-preview.md`](docs/plans/2026-10-12-phase7-file-preview.md)、
+[`docs/plans/2026-10-12-phase7b-config-form-tabs.md`](docs/plans/2026-10-12-phase7b-config-form-tabs.md)）：
 工具先用进程内 LangChain `StructuredTool`（MCP 仅配置级，不加载执行）；搜索先用主进程 Node 遍历；
 MCP / Skills 为配置 + 面板（Skills 提示词注入生效，`toolIds` 不联动执行）；`web_search` 默认关闭；
 会话/消息投影为简化实现；证据仅记 tool_call/tool_result 两档；打开工作区同步校验证据链；

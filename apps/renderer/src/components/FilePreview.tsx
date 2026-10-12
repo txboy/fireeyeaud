@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Modal, message } from 'antd';
 import { ExternalLink, File as FileIcon, FolderSearch, Loader2, Save } from 'lucide-react';
 import type { FsFileContent } from '@fireeyeaud/shared';
-import { setPreviewLeaveGuard, type PreviewTab } from '../store/ui';
+import { setLeaveGuard, type PreviewTab } from '../store/ui';
 import { useSettingsStore } from '../store/settings';
 import { ImagePreview } from './preview/ImagePreview';
 import { extOf, formatBytes } from './preview/util';
@@ -104,14 +104,14 @@ export function FilePreview({ target }: { target: PreviewTab }) {
 
   // 未保存守卫：切换文件 / 关闭 tab / 回会话前征询。
   useEffect(() => {
-    setPreviewLeaveGuard(() => {
+    setLeaveGuard(() => {
       if (!dirtyRef.current) return Promise.resolve(true);
       setConfirmOpen(true);
       return new Promise<boolean>((resolve) => {
         resolverRef.current = resolve;
       });
     });
-    return () => setPreviewLeaveGuard(null);
+    return () => setLeaveGuard(null);
   }, []);
 
   const resolveLeave = (leave: boolean) => {

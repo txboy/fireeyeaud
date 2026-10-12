@@ -418,6 +418,17 @@ export function createDbConnection(input: DbConnectionInput): Promise<DbConnecti
   });
 }
 
+export function updateDbConnection(
+  id: string,
+  scope: ConfigScope,
+  patch: Partial<DbConnectionInput>,
+): Promise<DbConnection> {
+  return request<DbConnection>(`/db/connections/${id}?scope=${scope}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+}
+
 export function deleteDbConnection(
   id: string,
   scope: ConfigScope,

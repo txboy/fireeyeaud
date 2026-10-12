@@ -14,6 +14,7 @@ interface SkillsState {
   errorKey: string | null;
   load: () => Promise<void>;
   create: (input: SkillInput) => Promise<boolean>;
+  edit: (id: string, scope: ConfigScope, patch: Partial<SkillInput>) => Promise<boolean>;
   toggle: (id: string, scope: ConfigScope, enabled: boolean) => Promise<void>;
   remove: (id: string, scope: ConfigScope) => Promise<void>;
   reset: () => void;
@@ -52,6 +53,18 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
   toggle: async (id, scope, enabled) => {
     await updateSkill(id, scope, { enabled });
     await get().load();
+  },
+
+  edit: async (id, scope, patch) => {
+    set({ errorKey: null });
+    try {
+      await updateSkill(id, scope, patch);
+      await get().load();
+      return true;
+    } catch (err) {
+      set({ errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal' });
+      return false;
+    }
   },
 
   remove: async (id, scope) => {

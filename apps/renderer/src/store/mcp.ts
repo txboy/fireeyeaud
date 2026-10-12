@@ -14,6 +14,7 @@ interface McpState {
   errorKey: string | null;
   load: () => Promise<void>;
   create: (input: McpServerInput) => Promise<boolean>;
+  edit: (id: string, scope: McpServer['scope'], patch: Partial<McpServerInput>) => Promise<boolean>;
   toggle: (id: string, scope: McpServer['scope'], enabled: boolean) => Promise<void>;
   remove: (id: string, scope: McpServer['scope']) => Promise<void>;
   reset: () => void;
@@ -52,6 +53,18 @@ export const useMcpStore = create<McpState>((set, get) => ({
   toggle: async (id, scope, enabled) => {
     await updateMcpServer(id, scope, { enabled });
     await get().load();
+  },
+
+  edit: async (id, scope, patch) => {
+    set({ errorKey: null });
+    try {
+      await updateMcpServer(id, scope, patch);
+      await get().load();
+      return true;
+    } catch (err) {
+      set({ errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal' });
+      return false;
+    }
   },
 
   remove: async (id, scope) => {

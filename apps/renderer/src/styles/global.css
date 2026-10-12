@@ -502,6 +502,59 @@ body {
   overflow: hidden;
 }
 
+/* ---- Config form tab ---- */
+.formtab {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--editor-bg);
+}
+
+.formtab__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-2);
+}
+
+.formtab__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.formtab__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+}
+
+.formtab__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 520px;
+}
+
+.formtab__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+textarea.searchbox {
+  resize: vertical;
+  min-height: 64px;
+}
+
 .stat-row {
   display: flex;
   gap: 10px;

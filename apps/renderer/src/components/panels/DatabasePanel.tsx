@@ -1,36 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react';
-import type { ConfigScope, DbDriver } from '@fireeyeaud/shared';
+import { ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react';
 import { ScopeBadge } from '../ScopeBadge';
 import { useDatabaseStore } from '../../store/database';
+import { useUiStore } from '../../store/ui';
 import { useWorkspaceStore } from '../../store/workspace';
-
-const DRIVERS: DbDriver[] = ['sqlite', 'access', 'postgresql', 'mysql', 'mssql'];
-
-interface FormState {
-  name: string;
-  driver: DbDriver;
-  scope: ConfigScope;
-  host: string;
-  port: string;
-  database: string;
-  username: string;
-  password: string;
-  path: string;
-}
-
-const EMPTY_FORM: FormState = {
-  name: '',
-  driver: 'sqlite',
-  scope: 'project',
-  host: '',
-  port: '',
-  database: '',
-  username: '',
-  password: '',
-  path: '',
-};
 
 export function DatabasePanel() {
   const { t } = useTranslation('database');
@@ -44,50 +18,20 @@ export function DatabasePanel() {
   const reflectByConn = useDatabaseStore((s) => s.reflectByConn);
   const authByConn = useDatabaseStore((s) => s.authByConn);
   const load = useDatabaseStore((s) => s.load);
-  const create = useDatabaseStore((s) => s.create);
   const remove = useDatabaseStore((s) => s.remove);
   const test = useDatabaseStore((s) => s.test);
   const reflect = useDatabaseStore((s) => s.reflect);
   const setAuthDraft = useDatabaseStore((s) => s.setAuthDraft);
   const saveAuthorization = useDatabaseStore((s) => s.saveAuthorization);
+  const openForm = useUiStore((s) => s.openForm);
   const path = useWorkspaceStore((s) => s.path);
 
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [busy, setBusy] = useState(false);
   const [testOk, setTestOk] = useState<Record<string, boolean>>({});
   const [openCols, setOpenCols] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (path) void load();
   }, [load, path]);
-
-  const isFile = form.driver === 'sqlite' || form.driver === 'access';
-
-  const submit = async () => {
-    if (!form.name.trim()) return;
-    setBusy(true);
-    let credRef: string | undefined;
-    if (form.password && window.fireeyeaud?.putSecret) {
-      credRef = (await window.fireeyeaud.putSecret(form.password)) ?? undefined;
-    }
-    const ok = await create({
-      name: form.name.trim(),
-      driver: form.driver,
-      scope: form.scope,
-      path: isFile ? form.path.trim() : undefined,
-      host: isFile ? undefined : form.host.trim() || undefined,
-      port: isFile || !form.port ? undefined : Number(form.port),
-      database: isFile ? undefined : form.database.trim() || undefined,
-      username: isFile ? undefined : form.username.trim() || undefined,
-      credRef,
-    });
-    setBusy(false);
-    if (ok) {
-      setShowForm(false);
-      setForm(EMPTY_FORM);
-    }
-  };
 
   const draft = (id: string) => authByConn[id] ?? {};
 
@@ -121,101 +65,10 @@ export function DatabasePanel() {
       <button
         type="button"
         className="button button--sm"
-        onClick={() => setShowForm((v) => !v)}
+        onClick={() => void openForm('database', 'create')}
       >
         <Plus size={12} strokeWidth={2} /> {t('addConnection')}
       </button>
-
-      {showForm && (
-        <div className="card db-form">
-          <input
-            className="searchbox"
-            placeholder={t('name')}
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-          />
-          <select
-            className="searchbox"
-            value={form.driver}
-            onChange={(e) => setForm({ ...form, driver: e.target.value as DbDriver })}
-          >
-            {DRIVERS.map((d) => (
-              <option key={d} value={d}>
-                {te(`driver.${d}`)}
-              </option>
-            ))}
-          </select>
-          {isFile ? (
-            <input
-              className="searchbox"
-              placeholder={t('path')}
-              value={form.path}
-              onChange={(e) => setForm({ ...form, path: e.target.value })}
-            />
-          ) : (
-            <>
-              <input
-                className="searchbox"
-                placeholder={t('host')}
-                value={form.host}
-                onChange={(e) => setForm({ ...form, host: e.target.value })}
-              />
-              <input
-                className="searchbox"
-                placeholder={t('port')}
-                value={form.port}
-                onChange={(e) => setForm({ ...form, port: e.target.value })}
-              />
-              <input
-                className="searchbox"
-                placeholder={t('database')}
-                value={form.database}
-                onChange={(e) => setForm({ ...form, database: e.target.value })}
-              />
-              <input
-                className="searchbox"
-                placeholder={t('username')}
-                value={form.username}
-                onChange={(e) => setForm({ ...form, username: e.target.value })}
-              />
-              <input
-                className="searchbox"
-                type="password"
-                placeholder={t('password')}
-                value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
-              />
-            </>
-          )}
-          <div className="card__row">
-            <select
-              className="searchbox"
-              value={form.scope}
-              onChange={(e) => setForm({ ...form, scope: e.target.value as ConfigScope })}
-            >
-              <option value="project">{te('configScope.project')}</option>
-              <option value="global">{te('configScope.global')}</option>
-            </select>
-            <span className="spacer" />
-            <button
-              type="button"
-              className="button button--sm"
-              disabled={busy || !form.name.trim()}
-              onClick={() => void submit()}
-            >
-              {t('save')}
-            </button>
-            <button
-              type="button"
-              className="button button--sm button--ghost"
-              onClick={() => setShowForm(false)}
-            >
-              {t('cancel')}
-            </button>
-          </div>
-          <span className="card__meta">{t('sqliteHint')}</span>
-        </div>
-      )}
 
       {errorKey && (
         <div className="panel-error">
@@ -269,6 +122,20 @@ export function DatabasePanel() {
                   onClick={() => void reflect(conn.id, conn.scope)}
                 >
                   {t('reflect')}
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  title={tc('edit')}
+                  onClick={() =>
+                    void openForm('database', 'edit', {
+                      id: conn.id,
+                      scope: conn.scope,
+                      name: conn.name,
+                    })
+                  }
+                >
+                  <Pencil size={13} strokeWidth={1.75} />
                 </button>
                 <button
                   type="button"

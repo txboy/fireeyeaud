@@ -7,6 +7,7 @@ import {
   reflectDbConnection,
   setDbAuthorization,
   testDbConnection,
+  updateDbConnection,
   type DbConnectionInput,
 } from '../lib/api';
 
@@ -18,6 +19,7 @@ interface DatabaseState {
   authByConn: Record<string, Record<string, string[]>>;
   load: () => Promise<void>;
   create: (input: DbConnectionInput) => Promise<boolean>;
+  edit: (id: string, scope: DbConnection['scope'], patch: Partial<DbConnectionInput>) => Promise<boolean>;
   remove: (id: string, scope: DbConnection['scope']) => Promise<void>;
   test: (id: string, scope: DbConnection['scope']) => Promise<boolean>;
   reflect: (id: string, scope: DbConnection['scope']) => Promise<void>;
@@ -64,6 +66,18 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
   remove: async (id, scope) => {
     await deleteDbConnection(id, scope);
     await get().load();
+  },
+
+  edit: async (id, scope, patch) => {
+    set({ errorKey: null });
+    try {
+      await updateDbConnection(id, scope, patch);
+      await get().load();
+      return true;
+    } catch (err) {
+      set({ errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal' });
+      return false;
+    }
   },
 
   test: async (id, scope) => {
