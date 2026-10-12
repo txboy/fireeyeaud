@@ -1046,28 +1046,6 @@ textarea.searchbox {
 }
 
 /* ---- Settings ---- */
-.settings-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.settings-nav__item {
-  text-align: left;
-  font-size: 12.5px;
-  color: var(--text-2);
-  background: transparent;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 10px;
-  cursor: pointer;
-}
-
-.settings-nav__item--active {
-  color: var(--accent);
-  background: var(--accent-weak);
-}
-
 .field {
   display: flex;
   flex-direction: column;
@@ -1317,38 +1295,13 @@ textarea.searchbox {
   margin-top: 1px;
 }
 
-.settingsview {
-  flex: 1;
-  min-width: 0;
-  overflow: auto;
-  padding: 14px 16px;
-  display: flex;
-}
-
-.settingsview .settings {
-  flex: 1;
-  min-width: 0;
-}
-
-.settings {
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
-}
-
-.settings-nav {
+/* 设置 tab 中的「规则库」区（与上方单列表单分隔）。 */
+.settings-rules {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  min-width: 104px;
-}
-
-.settings-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  min-width: 0;
+  gap: 12px;
+  max-width: 520px;
+  margin: 28px auto 0;
 }
 
 /* ---- Chat messages ---- */

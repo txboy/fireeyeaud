@@ -11,6 +11,7 @@ from ..config import store
 _DEFAULTS: dict[str, Any] = {
     "locale": "zh-CN",
     "theme": "light",
+    "systemPrompt": "",
     "webSearch": {"enabled": False, "provider": "tavily", "keyRef": None},
     "telemetry": False,
 }
@@ -31,6 +32,7 @@ def load() -> dict[str, Any]:
             data = {}
     merged = {**_DEFAULTS, **data}
     merged["webSearch"] = {**_DEFAULTS["webSearch"], **(data.get("webSearch") or {})}
+    merged["systemPrompt"] = str(merged.get("systemPrompt") or "")
     merged["telemetry"] = False
     return merged
 

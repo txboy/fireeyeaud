@@ -29,9 +29,12 @@ def system_prompt(
     locale: str | None,
     prompt_rules: list[dict] | None = None,
     skills: list[dict] | None = None,
+    custom: str | None = None,
 ) -> str:
     directive = _EN_DIRECTIVE if locale == "en-US" else _ZH_DIRECTIVE
     text = _BASE
+    if custom and custom.strip():
+        text += "\n".join(["", "用户自定义要求（须遵循）：", custom.strip()]) + "\n"
     if prompt_rules:
         lines = [
             "",

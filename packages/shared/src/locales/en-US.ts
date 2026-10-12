@@ -406,6 +406,11 @@ export default {
     webBaseUrl: 'Custom endpoint URL',
     webHint:
       'When enabled, the agent may call web_search; query text is sent to the chosen provider. Off by default.',
+    systemPrompt: 'System prompt',
+    systemPromptPlaceholder:
+      'e.g. Focus on whether the allowance for doubtful receivables is adequate',
+    systemPromptHint:
+      'Appended to the agent system prompt for every conversation; leave blank to use the default.',
     save: 'Save',
     saved: 'Saved',
   },

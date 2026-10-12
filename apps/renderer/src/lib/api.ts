@@ -671,6 +671,7 @@ export function getSettings(): Promise<AppSettings> {
 export interface SettingsPatch {
   locale?: string;
   theme?: string;
+  systemPrompt?: string;
   webSearch?: {
     enabled?: boolean;
     provider?: string;

@@ -7,8 +7,7 @@ export type ActivityView =
   | 'knowledge'
   | 'mcp'
   | 'skills'
-  | 'models'
-  | 'settings';
+  | 'models';
 
 export type ThemeMode = 'light' | 'dark';
 
@@ -427,6 +426,7 @@ export interface WebSearchSettings {
 export interface AppSettings {
   locale: string;
   theme: ThemeMode;
+  systemPrompt: string;
   webSearch: WebSearchSettings;
   telemetry: boolean;
 }

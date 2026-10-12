@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 
 from ..config.models import build_chat_model
 from ..config.settings import settings
+from ..store import app_settings
 from ..store.evidence import append_evidence
 from ..store.findings import create_finding
 from ..tools.registry import build_langchain_tools, build_tool_dict
@@ -171,8 +172,9 @@ async def run_agent(
         if r.get("enabled") and r.get("type") == "prompt" and r.get("definition")
     ]
     skill_prompts = prompts_for(root, (context or {}).get("skillIds"))
+    custom_prompt = (app_settings.load().get("systemPrompt") or "").strip() or None
     messages: list[BaseMessage] = [
-        SystemMessage(content=system_prompt(locale, prompt_rules, skill_prompts))
+        SystemMessage(content=system_prompt(locale, prompt_rules, skill_prompts, custom_prompt))
     ]
     if attachments:
         from ..store.attachments import extract_attachments, render_context

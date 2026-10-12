@@ -7,7 +7,6 @@ import { DatabasePanel } from './panels/DatabasePanel';
 import { KnowledgePanel } from './panels/KnowledgePanel';
 import { McpPanel } from './panels/McpPanel';
 import { ModelsPanel } from './panels/ModelsPanel';
-import { SettingsPanel } from './panels/SettingsPanel';
 import { SkillsPanel } from './panels/SkillsPanel';
 import { PlaceholderPanel } from './panels/PlaceholderPanel';
 
@@ -26,7 +25,6 @@ const HEAD: Record<ActivityView, HeadMeta> = {
   mcp: { titleNs: 'mcp', titleKey: 'title', subNs: 'mcp', subKey: 'subtitle' },
   skills: { titleNs: 'skills', titleKey: 'title', subNs: 'skills', subKey: 'subtitle' },
   models: { titleNs: 'models', titleKey: 'title', subNs: 'models', subKey: 'subtitle' },
-  settings: { titleNs: 'settings', titleKey: 'title', subNs: 'settings', subKey: 'subtitle' },
 };
 
 function PanelBody({ view }: { view: ActivityView }) {
@@ -45,8 +43,6 @@ function PanelBody({ view }: { view: ActivityView }) {
       return <SkillsPanel />;
     case 'models':
       return <ModelsPanel />;
-    case 'settings':
-      return <SettingsPanel />;
     default:
       return <PlaceholderPanel />;
   }

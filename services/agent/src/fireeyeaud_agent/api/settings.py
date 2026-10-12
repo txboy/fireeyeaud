@@ -21,6 +21,7 @@ class WebSearchBody(BaseModel):
 class SettingsPatch(BaseModel):
     locale: str | None = None
     theme: str | None = None
+    systemPrompt: str | None = None
     webSearch: WebSearchBody | None = None
 
 

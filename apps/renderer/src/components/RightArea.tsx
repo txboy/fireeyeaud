@@ -117,8 +117,14 @@ export function RightArea() {
         ) : active.kind === 'form' ? (
           <FormTabView tab={active as FormTab} />
         ) : active.kind === 'settings' ? (
-          <div className="settingsview">
-            <SettingsPanel />
+          <div className="formtab">
+            <div className="formtab__head">
+              <Settings size={14} strokeWidth={1.75} />
+              <span className="formtab__title">{ts('title')}</span>
+            </div>
+            <div className="formtab__body">
+              <SettingsPanel />
+            </div>
           </div>
         ) : (
           <FilePreview target={active as PreviewTab} />

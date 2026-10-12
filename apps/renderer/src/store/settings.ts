@@ -13,14 +13,20 @@ interface WebSearchInput {
   apiKey?: string;
 }
 
+interface GeneralInput {
+  webSearch: WebSearchInput;
+  systemPrompt: string;
+}
+
 interface SettingsState {
   theme: ThemeMode;
   locale: string;
   webSearch: WebSearchSettings;
+  systemPrompt: string;
   setTheme: (theme: ThemeMode) => void;
   setLocale: (locale: string) => void;
   loadSettings: () => Promise<void>;
-  saveWebSearch: (input: WebSearchInput) => Promise<boolean>;
+  saveGeneral: (input: GeneralInput) => Promise<boolean>;
 }
 
 const initialTheme = (localStorage.getItem('fireeyeaud.theme') as ThemeMode | null) ?? 'light';
@@ -30,6 +36,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   theme: initialTheme,
   locale: initialLocale,
   webSearch: { enabled: false, provider: 'tavily', keyRef: null, baseUrl: null },
+  systemPrompt: '',
   setTheme: (theme) => {
     localStorage.setItem('fireeyeaud.theme', theme);
     applyCssVars(theme);
@@ -47,27 +54,36 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       localStorage.setItem('fireeyeaud.locale', settings.locale);
       applyCssVars(settings.theme);
       if (i18n.language !== settings.locale) void i18n.changeLanguage(settings.locale);
-      set({ theme: settings.theme, locale: settings.locale, webSearch: settings.webSearch });
+      set({
+        theme: settings.theme,
+        locale: settings.locale,
+        webSearch: settings.webSearch,
+        systemPrompt: settings.systemPrompt ?? '',
+      });
     } catch {
       /* sidecar 未就绪时沿用本地快照 */
     }
   },
-  saveWebSearch: async (input) => {
+  saveGeneral: async (input) => {
     try {
       let keyRef: string | undefined;
-      if (input.apiKey && window.fireeyeaud?.putSecret) {
-        const ref = await window.fireeyeaud.putSecret(input.apiKey);
+      if (input.webSearch.apiKey && window.fireeyeaud?.putSecret) {
+        const ref = await window.fireeyeaud.putSecret(input.webSearch.apiKey);
         if (ref) keyRef = ref;
       }
       const settings = await patchSettings({
         webSearch: {
-          enabled: input.enabled,
-          provider: input.provider,
-          baseUrl: input.baseUrl ?? null,
+          enabled: input.webSearch.enabled,
+          provider: input.webSearch.provider,
+          baseUrl: input.webSearch.baseUrl ?? null,
           ...(keyRef ? { keyRef } : {}),
         },
+        systemPrompt: input.systemPrompt,
       });
-      set({ webSearch: settings.webSearch });
+      set({
+        webSearch: settings.webSearch,
+        systemPrompt: settings.systemPrompt ?? '',
+      });
       return true;
     } catch {
       return false;
