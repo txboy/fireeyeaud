@@ -262,18 +262,6 @@ function registerIpc() {
     }
     return deletePath({ root, filePath });
   });
-  ipcMain.handle('dialog:confirm', async (_event, payload) => {
-    const { title, message, confirmLabel, cancelLabel } = payload ?? {};
-    const result = await dialog.showMessageBox(mainWindow ?? undefined, {
-      type: 'warning',
-      buttons: [confirmLabel || 'OK', cancelLabel || 'Cancel'],
-      defaultId: 0,
-      cancelId: 1,
-      title: title || '',
-      message: message || '',
-    });
-    return result.response === 0;
-  });
   ipcMain.handle('shell:open-path', (_event, filePath) => {
     if (typeof filePath !== 'string' || !filePath) return { ok: false };
     return shell.openPath(filePath).then((err) => ({ ok: !err }));

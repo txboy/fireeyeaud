@@ -9,12 +9,6 @@ declare global {
       getAppInfo: () => Promise<AppInfo>;
       openFolder: () => Promise<string | null>;
       openFiles: (kind?: 'tables' | 'attachments') => Promise<string[]>;
-      confirm: (payload: {
-        title?: string;
-        message?: string;
-        confirmLabel?: string;
-        cancelLabel?: string;
-      }) => Promise<boolean>;
       searchRun: (payload: {
         root: string;
         query: string;

@@ -13,6 +13,7 @@ import { useWorkspaceStore } from '../../store/workspace';
 import { useDatasourcesStore } from '../../store/datasources';
 import { useChatStore } from '../../store/chat';
 import { useUiStore } from '../../store/ui';
+import { useConfirmStore } from '../../store/confirm';
 import { FileTree } from '../FileTree';
 
 export function ExplorerPanel() {
@@ -46,6 +47,7 @@ export function ExplorerPanel() {
   const showSession = useUiStore((s) => s.showSession);
   const rightTabs = useUiStore((s) => s.rightTabs);
   const closeRightTab = useUiStore((s) => s.closeRightTab);
+  const confirm = useConfirmStore((s) => s.confirm);
 
   // 删除文件/文件夹后：刷新文件树，并关闭指向被删路径（或其子路径）的预览 tab。
   const handleDeleted = useCallback(
@@ -66,11 +68,12 @@ export function ExplorerPanel() {
   );
 
   const handleDeleteDatasource = async (id: string, name: string) => {
-    const confirmed = await window.fireeyeaud?.confirm({
+    const confirmed = await confirm({
       title: t('delete'),
       message: t('deleteDataSourceConfirm', { name }),
       confirmLabel: t('delete'),
       cancelLabel: tc('cancel'),
+      danger: true,
     });
     if (!confirmed) return;
     setActionError(null);

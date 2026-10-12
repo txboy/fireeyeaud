@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import type { FsEntry } from '@fireeyeaud/shared';
 import { useUiStore } from '../store/ui';
+import { useConfirmStore } from '../store/confirm';
 
 /** 删除错误码 → i18n key（error 命名空间）。 */
 const DELETE_ERROR_KEYS: Record<string, string> = {
@@ -37,6 +38,7 @@ function TreeNode({ entry, root, depth, refreshKey, onDeleted, onError }: TreeNo
   const { t } = useTranslation('explorer');
   const { t: tc } = useTranslation('common');
   const openPreview = useUiStore((s) => s.openPreview);
+  const confirm = useConfirmStore((s) => s.confirm);
   const [open, setOpen] = useState(false);
   const [children, setChildren] = useState<FsEntry[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -72,11 +74,12 @@ function TreeNode({ entry, root, depth, refreshKey, onDeleted, onError }: TreeNo
 
   const handleDelete = async (event: React.MouseEvent) => {
     event.stopPropagation();
-    const confirmed = await window.fireeyeaud?.confirm({
+    const confirmed = await confirm({
       title: t('delete'),
       message: t('deleteConfirm', { name: entry.name }),
       confirmLabel: t('delete'),
       cancelLabel: tc('cancel'),
+      danger: true,
     });
     if (!confirmed) return;
     const res = await window.fireeyeaud?.deletePath({ root, path: entry.path });

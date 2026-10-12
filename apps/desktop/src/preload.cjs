@@ -8,7 +8,6 @@ contextBridge.exposeInMainWorld('fireeyeaud', {
   getAppInfo: () => ipcRenderer.invoke('app:info'),
   openFolder: () => ipcRenderer.invoke('dialog:open-folder'),
   openFiles: (kind) => ipcRenderer.invoke('dialog:open-files', kind),
-  confirm: (payload) => ipcRenderer.invoke('dialog:confirm', payload),
   searchRun: (payload) => ipcRenderer.invoke('search:run', payload),
   readDir: (payload) => ipcRenderer.invoke('fs:read-dir', payload),
   readFile: (payload) => ipcRenderer.invoke('fs:read-file', payload),

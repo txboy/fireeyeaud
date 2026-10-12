@@ -1087,6 +1087,11 @@ textarea.searchbox {
   border: 1px solid var(--border);
 }
 
+.button--danger {
+  background: var(--danger);
+  color: #fff;
+}
+
 .icon-btn {
   display: inline-flex;
   align-items: center;
