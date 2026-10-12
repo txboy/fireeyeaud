@@ -31,10 +31,12 @@ interface TreeNodeProps extends TreeCallbacks {
   root: string;
   depth: number;
   refreshKey: number;
+  /** 是否允许删除（`.fireeye` 目录及其内部为 false）。 */
+  deletable: boolean;
 }
 
 /** 单个文件/文件夹节点，目录按需展开（懒加载子项）。 */
-function TreeNode({ entry, root, depth, refreshKey, onDeleted, onError }: TreeNodeProps) {
+function TreeNode({ entry, root, depth, refreshKey, deletable, onDeleted, onError }: TreeNodeProps) {
   const { t } = useTranslation('explorer');
   const { t: tc } = useTranslation('common');
   const openPreview = useUiStore((s) => s.openPreview);
@@ -108,15 +110,17 @@ function TreeNode({ entry, root, depth, refreshKey, onDeleted, onError }: TreeNo
         )}
         <Icon size={14} strokeWidth={1.75} />
         <span className="tree__label">{entry.name}</span>
-        <button
-          type="button"
-          className="tree__del"
-          title={t('delete')}
-          aria-label={t('delete')}
-          onClick={(event) => void handleDelete(event)}
-        >
-          <Trash2 size={13} strokeWidth={1.75} />
-        </button>
+        {deletable && (
+          <button
+            type="button"
+            className="tree__del"
+            title={t('delete')}
+            aria-label={t('delete')}
+            onClick={(event) => void handleDelete(event)}
+          >
+            <Trash2 size={13} strokeWidth={1.75} />
+          </button>
+        )}
       </div>
       {open && (
         <>
@@ -135,6 +139,7 @@ function TreeNode({ entry, root, depth, refreshKey, onDeleted, onError }: TreeNo
               root={root}
               depth={depth + 1}
               refreshKey={refreshKey}
+              deletable={deletable}
               onDeleted={onDeleted}
               onError={onError}
             />
@@ -190,6 +195,7 @@ export function FileTree({ root, refreshKey, onDeleted, onError }: FileTreeProps
           root={root}
           depth={0}
           refreshKey={refreshKey}
+          deletable={entry.name !== '.fireeye'}
           onDeleted={onDeleted}
           onError={onError}
         />
