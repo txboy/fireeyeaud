@@ -51,15 +51,15 @@ export function AgentColumn() {
         ) : (
           messages.map((m) => (
             <div key={m.id} className={`msg msg--${m.role}`}>
-              <div className="msg__head">
-                {m.role === 'assistant' && (
+              {m.role === 'assistant' && (
+                <div className="msg__head">
                   <Sparkles size={13} strokeWidth={1.75} color="var(--accent)" />
-                )}
-                <span className="msg__role">{t(m.role)}</span>
-                {m.streaming && m.phase && (
-                  <span className="msg__phase">{t(`phase.${m.phase}`)}</span>
-                )}
-              </div>
+                  <span className="msg__role">{t(m.role)}</span>
+                  {m.streaming && m.phase && (
+                    <span className="msg__phase">{t(`phase.${m.phase}`)}</span>
+                  )}
+                </div>
+              )}
               {m.thinking && <div className="msg__thinking">{m.thinking}</div>}
               {m.tools.length > 0 && (
                 <div className="msg__tools">

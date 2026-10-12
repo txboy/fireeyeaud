@@ -1240,8 +1240,10 @@ textarea.searchbox {
   color: var(--text-2);
 }
 
-.msg--user .msg__role {
-  color: var(--text-3);
+.msg--user {
+  margin-left: auto;
+  margin-right: 0;
+  align-items: flex-end;
 }
 
 .msg__phase {
