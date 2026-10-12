@@ -40,6 +40,10 @@ def upsert_schema_entry(path: Path, entry: dict[str, Any]) -> None:
     save_schema(path, entries)
 
 
+def remove_schema_entries(path: Path, source_id: str) -> None:
+    save_schema(path, [e for e in load_schema(path) if e.get("sourceId") != source_id])
+
+
 def load_files(path: Path) -> list[dict[str, Any]]:
     return _read(path, [])
 

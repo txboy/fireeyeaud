@@ -199,6 +199,14 @@ export type FsFileErrorCode =
   | 'E_NOT_EDITABLE'
   | 'E_WRITE_FAILED';
 
+/** 文件删除错误码（主进程 fs:delete）。 */
+export type FsDeleteErrorCode =
+  | 'E_OUTSIDE_WORKSPACE'
+  | 'E_NOT_FOUND'
+  | 'E_DELETE_FAILED'
+  | 'E_DELETE_ROOT'
+  | 'E_PROTECTED';
+
 /** fs:read-file 返回：文本或 base64 内容，或错误。 */
 export type FsFileContent =
   | { ok: true; kind: 'text'; text: string; size: number; path: string }
@@ -217,6 +225,13 @@ export interface FsWriteResult {
   code?: FsFileErrorCode;
   path?: string;
   size?: number;
+}
+
+/** fs:delete 返回。 */
+export interface FsDeleteResult {
+  ok: boolean;
+  code?: FsDeleteErrorCode;
+  path?: string;
 }
 
 export interface WorkspaceInfo {

@@ -784,8 +784,33 @@ textarea.searchbox {
 }
 
 .tree__label {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.tree__del {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  border-radius: 4px;
+  opacity: 0;
+}
+
+.tree__row:hover .tree__del {
+  opacity: 1;
+}
+
+.tree__del:hover {
+  color: var(--danger);
+  background: var(--hover);
 }
 
 .tree__row--muted {
@@ -906,6 +931,28 @@ textarea.searchbox {
   flex: 0 0 auto;
   font-size: 10.5px;
   color: var(--text-3);
+}
+
+.datasource-chip__del {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  border-radius: 4px;
+  opacity: 0;
+}
+
+.datasource-chip:hover .datasource-chip__del {
+  opacity: 1;
+}
+
+.datasource-chip__del:hover {
+  color: var(--danger);
 }
 
 /* ---- Generic icon button ---- */

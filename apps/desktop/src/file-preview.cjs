@@ -167,9 +167,41 @@ function writeTextFile({
   return { ok: true, path: filePath, size };
 }
 
+/**
+ * 删除工作区内的文件 / 文件夹（递归）。
+ * 禁止删除工作区根目录本身，以及 `.fireeye` 目录及其内部任何内容。
+ */
+function deletePath({ root, filePath } = {}) {
+  if (typeof root !== 'string' || typeof filePath !== 'string' || !filePath) {
+    return { ok: false, code: 'E_DELETE_FAILED' };
+  }
+  if (!isInsideWorkspace(root, filePath)) {
+    return { ok: false, code: 'E_OUTSIDE_WORKSPACE' };
+  }
+  const rootAbs = path.resolve(root);
+  const targetAbs = path.resolve(filePath);
+  const rel = path.relative(rootAbs, targetAbs);
+  if (rel === '') {
+    return { ok: false, code: 'E_DELETE_ROOT' };
+  }
+  if (rel.split(path.sep)[0] === '.fireeye') {
+    return { ok: false, code: 'E_PROTECTED' };
+  }
+  if (!fs.existsSync(targetAbs)) {
+    return { ok: false, code: 'E_NOT_FOUND' };
+  }
+  try {
+    fs.rmSync(targetAbs, { recursive: true });
+  } catch {
+    return { ok: false, code: 'E_DELETE_FAILED' };
+  }
+  return { ok: true, path: targetAbs };
+}
+
 module.exports = {
   readFileContent,
   writeTextFile,
+  deletePath,
   isInsideWorkspace,
   classifyExt,
   TEXT_EXT,

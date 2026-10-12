@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { DataSourceInfo, SseEvent } from '@fireeyeaud/shared';
-import { importDataSource, listDatasources } from '../lib/api';
+import { deleteDataSource, importDataSource, listDatasources } from '../lib/api';
 
 export interface ImportState {
   path: string;
@@ -15,6 +15,7 @@ interface DatasourcesState {
   errorKey: string | null;
   load: () => Promise<void>;
   importFiles: () => Promise<void>;
+  remove: (id: string) => Promise<void>;
   reset: () => void;
 }
 
@@ -70,6 +71,17 @@ export const useDatasourcesStore = create<DatasourcesState>((set, get) => ({
 
     set({ importing: null });
     await get().load();
+  },
+
+  remove: async (id) => {
+    try {
+      await deleteDataSource(id);
+      set({ items: get().items.filter((item) => item.id !== id), errorKey: null });
+    } catch (err) {
+      set({
+        errorKey: (err as { messageKey?: string }).messageKey ?? 'error.deleteFailed',
+      });
+    }
   },
 
   reset: () => set({ items: [], importing: null, errorKey: null }),

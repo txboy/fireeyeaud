@@ -3,7 +3,11 @@ import json
 import pytest
 
 from fireeyeaud_agent.errors import ApiError
-from fireeyeaud_agent.store.importer import import_source, sanitize_table_name
+from fireeyeaud_agent.store.importer import (
+    delete_source,
+    import_source,
+    sanitize_table_name,
+)
 
 
 def test_sanitize_table_name():
@@ -49,3 +53,36 @@ def test_import_duplicate_raises(tmp_path):
     with pytest.raises(ApiError) as exc:
         import_source(ws_root, csv)
     assert exc.value.code == "E_IMPORT_DUP"
+
+
+def test_delete_source_removes_registration(tmp_path):
+    from fireeyeaud_agent.store.duckdb import Database
+
+    csv = tmp_path / "a.csv"
+    csv.write_text("x\n1\n2\n", encoding="utf-8")
+    ws_root = tmp_path / "ws"
+    ws_root.mkdir()
+    import_source(ws_root, csv)
+    fe = ws_root / ".fireeye"
+
+    result = delete_source(ws_root, "ds_1")
+    assert result == {"ok": True, "sourceId": "ds_1"}
+    project = json.loads((fe / "project.json").read_text("utf-8"))
+    assert project["dataSources"] == []
+    assert json.loads((fe / "index" / "schema.json").read_text("utf-8")) == []
+    assert json.loads((fe / "index" / "files.json").read_text("utf-8")) == []
+
+    db = Database(fe / "workspace.duckdb")
+    try:
+        assert db.table_exists("src_ds1_a") is False
+    finally:
+        db.close()
+
+
+def test_delete_source_missing_raises(tmp_path):
+    ws_root = tmp_path / "ws"
+    ws_root.mkdir()
+    (ws_root / ".fireeye").mkdir()
+    with pytest.raises(ApiError) as exc:
+        delete_source(ws_root, "ds_9")
+    assert exc.value.code == "E_DS_NOT_FOUND"

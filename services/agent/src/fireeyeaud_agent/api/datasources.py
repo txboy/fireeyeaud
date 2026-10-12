@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
 from ..errors import ApiError
-from ..store.importer import import_source
+from ..store.importer import delete_source, import_source
 from ..store.project import load_project
 from ..store.workspace import workspace_manager
 from ..util import now_iso
@@ -38,6 +38,12 @@ def list_datasources() -> dict:
         return {"items": [], "nextCursor": None}
     project = load_project(root / ".fireeye") or {}
     return {"items": project.get("dataSources", []), "nextCursor": None}
+
+
+@router.delete("/datasources/{source_id}")
+def delete_datasource(source_id: str) -> dict:
+    root = _require_root()
+    return delete_source(root, source_id)
 
 
 @router.post("/datasources/import")

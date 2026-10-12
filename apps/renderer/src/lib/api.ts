@@ -240,6 +240,11 @@ export function listDatasources(): Promise<DatasourcesPage> {
   return request<DatasourcesPage>('/datasources');
 }
 
+/** 删除已导入的数据源（DuckDB 表 + 登记记录，不动磁盘原文件）。 */
+export function deleteDataSource(id: string): Promise<{ ok: boolean; sourceId: string }> {
+  return request(`/datasources/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
 /** 导入单个数据文件并回调 SSE 进度事件。 */
 export async function importDataSource(
   path: string,

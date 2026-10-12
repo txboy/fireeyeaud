@@ -6,7 +6,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { readFileContent, writeTextFile } = require('../src/file-preview.cjs');
+const { readFileContent, writeTextFile, deletePath } = require('../src/file-preview.cjs');
 
 function tmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'fireeyeaud-preview-'));
@@ -155,4 +155,67 @@ test('rejects writing oversized text', () => {
   const res = writeTextFile({ root, filePath: file, text: 'x'.repeat(100), maxBytes: 10 });
   assert.equal(res.ok, false);
   assert.equal(res.code, 'E_TOO_LARGE');
+});
+
+// --- delete ---------------------------------------------------------------
+
+test('deletes a file', () => {
+  const root = tmpDir();
+  const file = write(root, 'a.txt', 'x');
+  const res = deletePath({ root, filePath: file });
+  assert.equal(res.ok, true);
+  assert.equal(fs.existsSync(file), false);
+});
+
+test('deletes an empty directory', () => {
+  const root = tmpDir();
+  const dir = path.join(root, 'empty');
+  fs.mkdirSync(dir);
+  const res = deletePath({ root, filePath: dir });
+  assert.equal(res.ok, true);
+  assert.equal(fs.existsSync(dir), false);
+});
+
+test('deletes a non-empty directory recursively', () => {
+  const root = tmpDir();
+  write(root, 'dir/nested/b.txt', 'x');
+  const res = deletePath({ root, filePath: path.join(root, 'dir') });
+  assert.equal(res.ok, true);
+  assert.equal(fs.existsSync(path.join(root, 'dir')), false);
+});
+
+test('rejects deleting outside the workspace', () => {
+  const root = tmpDir();
+  const other = tmpDir();
+  const file = write(other, 'a.txt', 'x');
+  const res = deletePath({ root, filePath: file });
+  assert.equal(res.ok, false);
+  assert.equal(res.code, 'E_OUTSIDE_WORKSPACE');
+  assert.equal(fs.existsSync(file), true);
+});
+
+test('rejects deleting the workspace root', () => {
+  const root = tmpDir();
+  const res = deletePath({ root, filePath: root });
+  assert.equal(res.ok, false);
+  assert.equal(res.code, 'E_DELETE_ROOT');
+  assert.equal(fs.existsSync(root), true);
+});
+
+test('rejects deleting .fireeye and its contents', () => {
+  const root = tmpDir();
+  const dir = path.join(root, '.fireeye');
+  fs.mkdirSync(dir);
+  const inner = write(root, '.fireeye/index.json', 'x');
+  assert.equal(deletePath({ root, filePath: dir }).code, 'E_PROTECTED');
+  assert.equal(deletePath({ root, filePath: inner }).code, 'E_PROTECTED');
+  assert.equal(fs.existsSync(dir), true);
+  assert.equal(fs.existsSync(inner), true);
+});
+
+test('rejects deleting a missing path', () => {
+  const root = tmpDir();
+  const res = deletePath({ root, filePath: path.join(root, 'ghost.txt') });
+  assert.equal(res.ok, false);
+  assert.equal(res.code, 'E_NOT_FOUND');
 });

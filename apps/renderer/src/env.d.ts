@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-import type { AppInfo, FsEntry, FsFileContent, FsWriteResult, SearchOptions, SearchResult, SidecarInfo } from '@fireeyeaud/shared';
+import type { AppInfo, FsDeleteResult, FsEntry, FsFileContent, FsWriteResult, SearchOptions, SearchResult, SidecarInfo } from '@fireeyeaud/shared';
 
 declare global {
   interface Window {
@@ -9,6 +9,12 @@ declare global {
       getAppInfo: () => Promise<AppInfo>;
       openFolder: () => Promise<string | null>;
       openFiles: (kind?: 'tables' | 'attachments') => Promise<string[]>;
+      confirm: (payload: {
+        title?: string;
+        message?: string;
+        confirmLabel?: string;
+        cancelLabel?: string;
+      }) => Promise<boolean>;
       searchRun: (payload: {
         root: string;
         query: string;
@@ -17,6 +23,7 @@ declare global {
       readDir: (payload: { root: string; dir: string }) => Promise<{ entries: FsEntry[] }>;
       readFile: (payload: { root: string; path: string }) => Promise<FsFileContent>;
       writeTextFile: (payload: { root: string; path: string; text: string }) => Promise<FsWriteResult>;
+      deletePath: (payload: { root: string; path: string }) => Promise<FsDeleteResult>;
       openPath: (filePath: string) => Promise<{ ok: boolean }>;
       showItemInFolder: (filePath: string) => Promise<{ ok: boolean }>;
       putSecret: (plaintext: string) => Promise<string | null>;

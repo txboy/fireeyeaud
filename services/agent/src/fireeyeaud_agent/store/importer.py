@@ -14,8 +14,8 @@ from ..errors import ApiError
 from ..util import now_iso
 from .duckdb import Database
 from .importers import read_table
-from .index import load_files, save_files, upsert_schema_entry
-from .project import ensure_project, next_counter, save_project
+from .index import load_files, remove_schema_entries, save_files, upsert_schema_entry
+from .project import ensure_project, load_project, next_counter, save_project
 from .schema import infer_column
 
 _SUBDIRS = ("config", "templates", "index", "artifacts")
@@ -131,3 +131,37 @@ def import_source(root: Path, path: Path, *, progress: Progress | None = None) -
     _emit(progress, "index", 1, 1)
 
     return {"sourceId": ds_id, "tables": [table], "rowCount": len(rows)}
+
+
+def delete_source(root: Path, source_id: str) -> dict:
+    """删除已导入的数据源：DuckDB 表 + schema/files/project 登记（不动磁盘原文件）。
+
+    `type == 'db'` 的数据源仅移除反射登记，不删除数据库连接本身。
+    """
+    root = Path(root)
+    fe = root / ".fireeye"
+    project = load_project(fe) or {}
+    sources = project.get("dataSources", [])
+    entry = next((s for s in sources if s.get("id") == source_id), None)
+    if entry is None:
+        raise ApiError("E_DS_NOT_FOUND", 404, "error.dsNotFound", {"id": source_id})
+
+    tables = [str(t) for t in entry.get("tables", [])]
+    if tables:
+        db = Database(fe / "workspace.duckdb")
+        try:
+            for table in tables:
+                db.drop_table(table)
+        finally:
+            db.close()
+
+    remove_schema_entries(fe / "index" / "schema.json", source_id)
+    files_path = fe / "index" / "files.json"
+    save_files(
+        files_path,
+        [f for f in load_files(files_path) if f.get("sourceId") != source_id],
+    )
+
+    project["dataSources"] = [s for s in sources if s.get("id") != source_id]
+    save_project(fe, project)
+    return {"ok": True, "sourceId": source_id}

@@ -17,7 +17,7 @@ const crypto = require('node:crypto');
 const { SidecarManager, pythonExeFor, bundledAgentExe } = require('./sidecar.cjs');
 const { createSecretsStore } = require('./secrets.cjs');
 const { loadWindowState, saveWindowState } = require('./window-state.cjs');
-const { readFileContent, writeTextFile } = require('./file-preview.cjs');
+const { readFileContent, writeTextFile, deletePath } = require('./file-preview.cjs');
 
 app.setName('fireeyeaud');
 
@@ -254,6 +254,25 @@ function registerIpc() {
       return { ok: false, code: 'E_WRITE_FAILED' };
     }
     return writeTextFile({ root, filePath, text });
+  });
+  ipcMain.handle('fs:delete', (_event, payload) => {
+    const { root, path: filePath } = payload ?? {};
+    if (typeof root !== 'string' || typeof filePath !== 'string') {
+      return { ok: false, code: 'E_DELETE_FAILED' };
+    }
+    return deletePath({ root, filePath });
+  });
+  ipcMain.handle('dialog:confirm', async (_event, payload) => {
+    const { title, message, confirmLabel, cancelLabel } = payload ?? {};
+    const result = await dialog.showMessageBox(mainWindow ?? undefined, {
+      type: 'warning',
+      buttons: [confirmLabel || 'OK', cancelLabel || 'Cancel'],
+      defaultId: 0,
+      cancelId: 1,
+      title: title || '',
+      message: message || '',
+    });
+    return result.response === 0;
   });
   ipcMain.handle('shell:open-path', (_event, filePath) => {
     if (typeof filePath !== 'string' || !filePath) return { ok: false };

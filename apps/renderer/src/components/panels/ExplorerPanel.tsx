@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Database,
@@ -31,6 +31,7 @@ export function ExplorerPanel() {
   const importError = useDatasourcesStore((s) => s.errorKey);
   const load = useDatasourcesStore((s) => s.load);
   const importFiles = useDatasourcesStore((s) => s.importFiles);
+  const removeDatasource = useDatasourcesStore((s) => s.remove);
 
   const sessions = useChatStore((s) => s.sessions);
   const activeSessionId = useChatStore((s) => s.sessionId);
@@ -40,8 +41,41 @@ export function ExplorerPanel() {
   const deleteSession = useChatStore((s) => s.deleteSession);
 
   const [refreshKey, setRefreshKey] = useState(0);
+  const [actionError, setActionError] = useState<string | null>(null);
   const resetRightTabs = useUiStore((s) => s.resetRightTabs);
   const showSession = useUiStore((s) => s.showSession);
+  const rightTabs = useUiStore((s) => s.rightTabs);
+  const closeRightTab = useUiStore((s) => s.closeRightTab);
+
+  // 删除文件/文件夹后：刷新文件树，并关闭指向被删路径（或其子路径）的预览 tab。
+  const handleDeleted = useCallback(
+    (deletedPath: string) => {
+      setActionError(null);
+      setRefreshKey((key) => key + 1);
+      const prefixes = [deletedPath + '\\', deletedPath + '/'];
+      rightTabs
+        .filter(
+          (tab) =>
+            tab.kind === 'preview' &&
+            (tab.path === deletedPath ||
+              prefixes.some((prefix) => tab.path.startsWith(prefix))),
+        )
+        .forEach((tab) => void closeRightTab(tab.id));
+    },
+    [rightTabs, closeRightTab],
+  );
+
+  const handleDeleteDatasource = async (id: string, name: string) => {
+    const confirmed = await window.fireeyeaud?.confirm({
+      title: t('delete'),
+      message: t('deleteDataSourceConfirm', { name }),
+      confirmLabel: t('delete'),
+      cancelLabel: tc('cancel'),
+    });
+    if (!confirmed) return;
+    setActionError(null);
+    await removeDatasource(id);
+  };
 
   // 切换工作区时刷新数据源 / 会话，并重置当前对话与右侧 tab。
   useEffect(() => {
@@ -188,6 +222,10 @@ export function ExplorerPanel() {
             <span className="panel-error">{te(importError.replace(/^error\./, ''))}</span>
           )}
 
+          {actionError && (
+            <span className="panel-error">{te(actionError.replace(/^error\./, ''))}</span>
+          )}
+
           {items.length > 0 && (
             <div className="datasource-list">
               {items.map((ds) => (
@@ -199,12 +237,31 @@ export function ExplorerPanel() {
                   <span className="datasource-chip__meta">
                     {ti('tables', { count: ds.tables.length })}
                   </span>
+                  <button
+                    type="button"
+                    className="datasource-chip__del"
+                    title={t('delete')}
+                    aria-label={t('delete')}
+                    onClick={() =>
+                      void handleDeleteDatasource(
+                        ds.id,
+                        ds.path ? ds.path.split(/[\\/]/).pop() ?? ds.id : ds.id,
+                      )
+                    }
+                  >
+                    <Trash2 size={12} strokeWidth={1.75} />
+                  </button>
                 </div>
               ))}
             </div>
           )}
 
-          <FileTree root={path} refreshKey={refreshKey} />
+          <FileTree
+            root={path}
+            refreshKey={refreshKey}
+            onDeleted={handleDeleted}
+            onError={setActionError}
+          />
         </div>
       </section>
     </div>
