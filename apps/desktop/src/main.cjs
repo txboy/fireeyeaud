@@ -181,10 +181,24 @@ function registerIpc() {
     });
     return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0];
   });
-  ipcMain.handle('dialog:open-files', async () => {
+  ipcMain.handle('dialog:open-files', async (_event, kind) => {
+    const filters =
+      kind === 'attachments'
+        ? [
+            {
+              name: '支持的附件',
+              extensions: [
+                'txt', 'md', 'markdown', 'json', 'csv', 'tsv', 'log', 'xml',
+                'yaml', 'yml', 'ini', 'conf', 'sql', 'py', 'js', 'ts',
+                'xlsx', 'xlsm', 'docx', 'pdf',
+              ],
+            },
+            { name: '所有文件', extensions: ['*'] },
+          ]
+        : [{ name: '表格', extensions: ['xlsx', 'xlsm', 'csv', 'tsv'] }];
     const result = await dialog.showOpenDialog(mainWindow ?? undefined, {
-      title: '选择数据文件',
-      filters: [{ name: '表格', extensions: ['xlsx', 'xlsm', 'csv'] }],
+      title: kind === 'attachments' ? '选择附件文件' : '选择数据文件',
+      filters,
       properties: ['openFile', 'multiSelections'],
     });
     return result.canceled ? [] : result.filePaths;

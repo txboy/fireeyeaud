@@ -17,7 +17,7 @@ export function AgentColumn() {
   const removeAttachment = useChatStore((s) => s.removeAttachment);
 
   const pickFiles = async () => {
-    const files = (await window.fireeyeaud?.openFiles()) ?? [];
+    const files = (await window.fireeyeaud?.openFiles('attachments')) ?? [];
     if (files.length === 0) return;
     addAttachments(
       files.map((path) => ({
