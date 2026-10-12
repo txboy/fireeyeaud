@@ -195,7 +195,10 @@ function registerIpc() {
             },
             { name: '所有文件', extensions: ['*'] },
           ]
-        : [{ name: '表格', extensions: ['xlsx', 'xlsm', 'csv', 'tsv'] }];
+        : [
+            { name: '数据文件', extensions: ['xlsx', 'xlsm', 'csv', 'txt'] },
+            { name: '所有文件', extensions: ['*'] },
+          ];
     const result = await dialog.showOpenDialog(mainWindow ?? undefined, {
       title: kind === 'attachments' ? '选择附件文件' : '选择数据文件',
       filters,
