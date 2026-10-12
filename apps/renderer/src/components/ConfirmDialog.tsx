@@ -14,6 +14,7 @@ export function ConfirmDialog() {
     <Modal
       open={open}
       title={options?.title}
+      centered
       closable={false}
       maskClosable={false}
       onCancel={() => respond(false)}
