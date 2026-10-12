@@ -3,10 +3,11 @@ import type { ActivityView, ConfigScope } from '@fireeyeaud/shared';
 
 export type ResultsTab = 'findings' | 'graph' | 'working-paper' | 'evidence';
 
-/** 右侧区常驻「会话」tab（对话栏 + 成果栏一体）。 */
+/** 右侧区「会话」tab（对话栏 + 成果栏一体），每个会话一个。 */
 export interface SessionTab {
-  id: 'session';
+  id: string;
   kind: 'session';
+  sessionId: string;
 }
 
 /** 右侧区「预览」tab（每个文件一个，可多开、可关闭）。 */
@@ -34,8 +35,6 @@ export interface FormTab {
 }
 
 export type RightTab = SessionTab | PreviewTab | FormTab;
-
-const SESSION_TAB: SessionTab = { id: 'session', kind: 'session' };
 
 /**
  * 离开当前右侧 tab 前的守卫（用于未保存确认）。
@@ -66,9 +65,9 @@ interface UiState {
     mode: 'create' | 'edit',
     entity?: { id: string; scope: ConfigScope; name: string },
   ) => Promise<void>;
+  openSession: (sessionId: string) => Promise<void>;
   closeRightTab: (id: string) => Promise<void>;
   activateRightTab: (id: string) => Promise<void>;
-  showSession: () => Promise<void>;
   resetRightTabs: () => void;
 }
 
@@ -84,8 +83,8 @@ export const useUiStore = create<UiState>((set, get) => {
     sidebarOpen: true,
     resultsTab: 'findings',
     selectedFindingId: null,
-    rightTabs: [SESSION_TAB],
-    activeRightTabId: 'session',
+    rightTabs: [],
+    activeRightTabId: '',
 
     setActiveView: (view) =>
       set((state) => ({
@@ -129,8 +128,19 @@ export const useUiStore = create<UiState>((set, get) => {
       });
     },
 
+    openSession: async (sessionId) => {
+      const id = `session:${sessionId}`;
+      if (!(await allowLeave(id))) return;
+      set((state) => {
+        const exists = state.rightTabs.some((tab) => tab.id === id);
+        const rightTabs = exists
+          ? state.rightTabs
+          : [...state.rightTabs, { id, kind: 'session' as const, sessionId }];
+        return { rightTabs, activeRightTabId: id };
+      });
+    },
+
     closeRightTab: async (id) => {
-      if (id === 'session') return;
       const { rightTabs, activeRightTabId } = get();
       const index = rightTabs.findIndex((tab) => tab.id === id);
       if (index === -1) return;
@@ -138,7 +148,7 @@ export const useUiStore = create<UiState>((set, get) => {
       const next = rightTabs.filter((tab) => tab.id !== id);
       let active = activeRightTabId;
       if (activeRightTabId === id) {
-        active = (next[index - 1] ?? next[index] ?? next[0] ?? SESSION_TAB).id;
+        active = (next[index - 1] ?? next[index] ?? next[0])?.id ?? '';
       }
       set({ rightTabs: next, activeRightTabId: active });
     },
@@ -148,12 +158,6 @@ export const useUiStore = create<UiState>((set, get) => {
       set({ activeRightTabId: id });
     },
 
-    showSession: async () => {
-      if (!(await allowLeave('session'))) return;
-      set({ activeRightTabId: 'session' });
-    },
-
-    resetRightTabs: () =>
-      set({ rightTabs: [SESSION_TAB], activeRightTabId: 'session' }),
+    resetRightTabs: () => set({ rightTabs: [], activeRightTabId: '' }),
   };
 });

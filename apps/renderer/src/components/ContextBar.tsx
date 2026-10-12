@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { LucideIcon } from 'lucide-react';
 import { BookOpen, Cpu, Database, Plug, Sparkles } from 'lucide-react';
-import type { ChatContext } from '../lib/api';
+import { EMPTY_CONTEXT, type ChatContext } from '../lib/api';
 import { useChatStore } from '../store/chat';
 import { useModelsStore } from '../store/models';
 import { useMcpStore } from '../store/mcp';
@@ -20,13 +20,14 @@ function toggle(list: string[], id: string): string[] {
 }
 
 /** 输入框上方的会话上下文栏：单选模型 + 各域非默认资源多选。 */
-export function ContextBar() {
+export function ContextBar({ sessionId }: { sessionId: string }) {
   const { t } = useTranslation('agent');
-  const context = useChatStore((s) => s.context);
+  const chat = useChatStore((s) => s.chats[sessionId]);
   const setContext = useChatStore((s) => s.setContext);
-  const modelId = useChatStore((s) => s.modelId);
   const setModel = useChatStore((s) => s.setModel);
-  const streaming = useChatStore((s) => s.streaming);
+  const context = chat?.context ?? EMPTY_CONTEXT;
+  const modelId = chat?.modelId ?? null;
+  const streaming = chat?.streaming ?? false;
 
   const models = useModelsStore((s) => s.items);
   const loadModels = useModelsStore((s) => s.load);
@@ -51,8 +52,8 @@ export function ContextBar() {
   useEffect(() => {
     if (modelId || models.length === 0) return;
     const preferred = models.find((m) => m.isDefault) ?? models[0];
-    setModel(preferred.id);
-  }, [modelId, models, setModel]);
+    setModel(sessionId, preferred.id);
+  }, [sessionId, modelId, models, setModel]);
 
   const selectedModel = models.find((m) => m.id === modelId) ?? models[0];
 
@@ -84,7 +85,7 @@ export function ContextBar() {
   ];
 
   const onToggle = (key: keyof ChatContext, id: string) =>
-    setContext({ [key]: toggle(context[key], id) } as Partial<ChatContext>);
+    setContext(sessionId, { [key]: toggle(context[key], id) } as Partial<ChatContext>);
 
   const hasOptions = models.length > 0 || groups.some((g) => g.items.length > 0);
 
@@ -98,7 +99,7 @@ export function ContextBar() {
             aria-label={t('model')}
             value={selectedModel?.id ?? ''}
             disabled={streaming}
-            onChange={(e) => setModel(e.target.value || null)}
+            onChange={(e) => setModel(sessionId, e.target.value || null)}
           >
             {models.map((m) => (
               <option key={m.id} value={m.id}>

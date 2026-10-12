@@ -12,8 +12,9 @@ import {
 import { useWorkspaceStore } from '../../store/workspace';
 import { useDatasourcesStore } from '../../store/datasources';
 import { useChatStore } from '../../store/chat';
-import { useUiStore } from '../../store/ui';
+import { useUiStore, type SessionTab } from '../../store/ui';
 import { useConfirmStore } from '../../store/confirm';
+import { confirmStopSession } from '../../lib/stop-guard';
 import { FileTree } from '../FileTree';
 
 export function ExplorerPanel() {
@@ -35,21 +36,25 @@ export function ExplorerPanel() {
   const removeDatasource = useDatasourcesStore((s) => s.remove);
 
   const sessions = useChatStore((s) => s.sessions);
-  const activeSessionId = useChatStore((s) => s.sessionId);
   const loadSessions = useChatStore((s) => s.loadSessions);
-  const selectSession = useChatStore((s) => s.selectSession);
-  const newSession = useChatStore((s) => s.newSession);
   const createSession = useChatStore((s) => s.createSession);
   const deleteSession = useChatStore((s) => s.deleteSession);
+  const clearAllChats = useChatStore((s) => s.clearAllChats);
 
   const [refreshKey, setRefreshKey] = useState(0);
   const [actionError, setActionError] = useState<string | null>(null);
   const [selectedDir, setSelectedDir] = useState<string>('');
   const resetRightTabs = useUiStore((s) => s.resetRightTabs);
-  const showSession = useUiStore((s) => s.showSession);
+  const openSession = useUiStore((s) => s.openSession);
   const rightTabs = useUiStore((s) => s.rightTabs);
+  const activeRightTabId = useUiStore((s) => s.activeRightTabId);
   const closeRightTab = useUiStore((s) => s.closeRightTab);
   const confirm = useConfirmStore((s) => s.confirm);
+
+  const activeSessionTab = rightTabs.find(
+    (tab): tab is SessionTab => tab.kind === 'session' && tab.id === activeRightTabId,
+  );
+  const activeSessionId = activeSessionTab?.sessionId ?? null;
 
   // 删除文件/文件夹后：刷新文件树，并关闭指向被删路径（或其子路径）的预览 tab。
   const handleDeleted = useCallback(
@@ -107,15 +112,49 @@ export function ExplorerPanel() {
     await removeDatasource(id);
   };
 
-  // 切换工作区时刷新数据源 / 会话，并重置当前对话与右侧 tab。
+  // 新建会话：创建后立即打开其右侧 tab。
+  const handleNewSession = async () => {
+    const id = await createSession();
+    if (id) await openSession(id);
+  };
+
+  // 删除会话：若正在生成先警告并中止；关其 tab；若无会话 tab 则打开剩余最近一条。
+  const handleDeleteSession = async (id: string) => {
+    if (!(await confirmStopSession(id))) return;
+    await deleteSession(id);
+    const tabId = `session:${id}`;
+    if (useUiStore.getState().rightTabs.some((tab) => tab.id === tabId)) {
+      await closeRightTab(tabId);
+    }
+    const remaining = useUiStore
+      .getState()
+      .rightTabs.filter((tab) => tab.kind === 'session');
+    if (remaining.length === 0) {
+      const list = useChatStore.getState().sessions;
+      const last = list[list.length - 1];
+      if (last) await openSession(last.id);
+    }
+  };
+
+  // 切换工作区时刷新数据源 / 会话，重置右侧 tab 与聊天分片，并自动打开最近一条会话。
   useEffect(() => {
     if (!path) return;
     setSelectedDir(path);
     void load();
-    newSession();
-    void loadSessions();
     resetRightTabs();
-  }, [path, load, newSession, loadSessions, resetRightTabs]);
+    clearAllChats();
+    let cancelled = false;
+    void (async () => {
+      await loadSessions();
+      if (cancelled) return;
+      const list = useChatStore.getState().sessions;
+      const last = list[list.length - 1];
+      if (last) await openSession(last.id);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [path, load, loadSessions, resetRightTabs, clearAllChats, openSession]);
 
   if (!workspace || !path) {
     return (
@@ -150,10 +189,7 @@ export function ExplorerPanel() {
             className="icon-button"
             title={t('newSession')}
             aria-label={t('newSession')}
-            onClick={() => {
-              void createSession();
-              showSession();
-            }}
+            onClick={() => void handleNewSession()}
           >
             <Plus size={15} strokeWidth={2} />
           </button>
@@ -166,10 +202,7 @@ export function ExplorerPanel() {
               <div
                 key={session.id}
                 className={`session${session.id === activeSessionId ? ' session--active' : ''}`}
-                onClick={() => {
-                  void selectSession(session.id);
-                  showSession();
-                }}
+                onClick={() => void openSession(session.id)}
                 title={session.title ?? t('untitledSession')}
               >
                 <MessageSquare size={13} strokeWidth={1.75} />
@@ -183,7 +216,7 @@ export function ExplorerPanel() {
                   aria-label={t('deleteSession')}
                   onClick={(event) => {
                     event.stopPropagation();
-                    void deleteSession(session.id);
+                    void handleDeleteSession(session.id);
                   }}
                 >
                   <Trash2 size={13} strokeWidth={1.75} />

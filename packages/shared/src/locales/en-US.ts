@@ -303,6 +303,9 @@ export default {
     you: 'You',
     assistant: 'Audit Agent',
     streaming: 'Replying…',
+    stopStreamingTitle: 'Generating a response',
+    stopStreamingConfirm:
+      'This session is still generating. Continuing will stop it (partial content is kept). Continue?',
     toolCall: 'Calling tool…',
     toolResult: 'Tool result',
     findingCreated: 'Finding {{id}} created',
@@ -424,6 +427,7 @@ export default {
   preview: {
     sessionTab: 'Session',
     closeTab: 'Close tab',
+    emptyArea: 'Create or select a session on the left',
     showInFolder: 'Reveal in folder',
     openExternally: 'Open with system app',
     placeholder: 'File preview',

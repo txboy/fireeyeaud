@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { WorkspaceInfo } from '@fireeyeaud/shared';
 import { ApiError, closeWorkspaceApi, openWorkspaceApi } from '../lib/api';
+import { confirmStopAll } from '../lib/stop-guard';
 
 /** 「最近打开的工作区」条目（仅客户端持久化，落 localStorage）。 */
 export interface RecentWorkspace {
@@ -56,6 +57,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   recent: loadRecent(),
 
   openPath: async (path) => {
+    // 切换工作区若有会话正在生成，先警告并中止。
+    if (!(await confirmStopAll())) return;
     set({ loading: true, error: null });
     try {
       const workspace = await openWorkspaceApi(path);
@@ -91,6 +94,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   },
 
   close: async () => {
+    if (!(await confirmStopAll())) return;
     try {
       await closeWorkspaceApi();
     } catch {

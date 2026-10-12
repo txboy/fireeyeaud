@@ -38,32 +38,86 @@ export interface ChatMessage {
   findingIds: string[];
 }
 
-interface ChatState {
-  sessionId: string | null;
-  sessions: SessionSummary[];
+/**
+ * 单个会话的完整聊天状态。按会话 id 分片存放，切换右侧 tab 不丢失内容，
+ * 多个会话可同时进行（后台生成）。
+ */
+export interface SessionChat {
   messages: ChatMessage[];
   streaming: boolean;
-  /** 当前会话使用的模型档案 id（为空表示由后端取默认模型）。 */
   modelId: string | null;
-  /** 本次会话勾选的非默认资源（后端再并上默认集）。 */
   context: ChatContext;
-  /** 本次会话的临时附件（不写工作区）。 */
   attachments: AttachmentRef[];
+  /** 输入框草稿（随会话保留）。 */
+  draft: string;
+  /** 是否已从后端加载过消息，避免重复拉取并覆盖进行中的流。 */
+  loaded: boolean;
+}
+
+interface ChatState {
+  sessions: SessionSummary[];
+  /** 各会话的聊天分片，key 为会话 id。 */
+  chats: Record<string, SessionChat>;
   loadSessions: () => Promise<void>;
-  selectSession: (id: string) => Promise<void>;
-  newSession: () => void;
-  createSession: () => Promise<void>;
-  deleteSession: (id: string) => Promise<void>;
-  setModel: (id: string | null) => void;
-  setContext: (patch: Partial<ChatContext>) => void;
-  addAttachments: (items: AttachmentRef[]) => void;
-  removeAttachment: (path: string) => void;
-  send: (text: string, locale: string) => Promise<void>;
-  clear: () => void;
+  loadMessages: (sessionId: string) => Promise<void>;
+  /** 新建一条空会话，返回其 id（失败返回 null）。 */
+  createSession: () => Promise<string | null>;
+  deleteSession: (sessionId: string) => Promise<void>;
+  send: (sessionId: string, text: string, locale: string) => Promise<void>;
+  /** 中止单个会话的后台生成（保留已生成部分）。 */
+  abortSession: (sessionId: string) => void;
+  /** 中止所有会话的后台生成。 */
+  abortAll: () => void;
+  hasStreaming: () => boolean;
+  setModel: (sessionId: string, modelId: string | null) => void;
+  setContext: (sessionId: string, patch: Partial<ChatContext>) => void;
+  addAttachments: (sessionId: string, items: AttachmentRef[]) => void;
+  removeAttachment: (sessionId: string, path: string) => void;
+  setDraft: (sessionId: string, text: string) => void;
+  /** 清空所有聊天分片（切换工作区时）。 */
+  clearAllChats: () => void;
 }
 
 let counter = 0;
 const nextId = () => `m_${Date.now().toString(36)}_${(counter += 1)}`;
+
+/** 每个进行中的会话对应一个 AbortController（模块级，不进 store state）。 */
+const controllers = new Map<string, AbortController>();
+
+function newChat(): SessionChat {
+  return {
+    messages: [],
+    streaming: false,
+    modelId: null,
+    context: { ...EMPTY_CONTEXT },
+    attachments: [],
+    draft: '',
+    loaded: false,
+  };
+}
+
+/** 不可变地更新某个会话分片（不存在则新建）。 */
+function withChat(
+  chats: Record<string, SessionChat>,
+  sessionId: string,
+  fn: (chat: SessionChat) => SessionChat,
+): Record<string, SessionChat> {
+  return { ...chats, [sessionId]: fn(chats[sessionId] ?? newChat()) };
+}
+
+function assistantError(messageKey: string): ChatMessage {
+  return {
+    id: nextId(),
+    role: 'assistant',
+    content: '',
+    thinking: '',
+    phase: null,
+    streaming: false,
+    errorKey: messageKey,
+    tools: [],
+    findingIds: [],
+  };
+}
 
 /** 后端存储的消息投影 → 前端 ChatMessage。 */
 function toChatMessage(message: SessionMessage): ChatMessage {
@@ -137,13 +191,8 @@ function applyEvent(message: ChatMessage, event: SseEvent): ChatMessage {
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
-  sessionId: null,
   sessions: [],
-  messages: [],
-  streaming: false,
-  modelId: null,
-  context: EMPTY_CONTEXT,
-  attachments: [],
+  chats: {},
 
   loadSessions: async () => {
     try {
@@ -154,153 +203,72 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  selectSession: async (id) => {
-    set({
-      sessionId: id,
-      messages: [],
-      streaming: false,
-      context: EMPTY_CONTEXT,
-      attachments: [],
-    });
+  loadMessages: async (sessionId) => {
+    if (get().chats[sessionId]?.loaded) return;
     try {
-      const page = await getSessionMessagesApi(id);
-      if (get().sessionId !== id) return; // 已切换到别的会话
-      set({ messages: page.items.map(toChatMessage) });
-    } catch (err) {
-      const e = err as ApiError;
-      set({
-        messages: [
-          {
-            id: nextId(),
-            role: 'assistant',
-            content: '',
-            thinking: '',
-            phase: null,
-            streaming: false,
-            errorKey: e.messageKey ?? 'error.internal',
-            tools: [],
-            findingIds: [],
-          },
-        ],
-      });
-    }
-  },
-
-  newSession: () =>
-    set({
-      sessionId: null,
-      messages: [],
-      streaming: false,
-      context: EMPTY_CONTEXT,
-      attachments: [],
-    }),
-
-  // 立即在后台创建一条空会话并选中（标题留空，首条消息发送时再补标题）。
-  createSession: async () => {
-    try {
-      const session = await createSessionApi({ title: null });
-      set({
-        sessionId: session.id,
-        messages: [],
-        streaming: false,
-        context: EMPTY_CONTEXT,
-        attachments: [],
-      });
-      await get().loadSessions();
-    } catch (err) {
-      const e = err as ApiError;
-      set({
-        sessionId: null,
-        messages: [
-          {
-            id: nextId(),
-            role: 'assistant',
-            content: '',
-            thinking: '',
-            phase: null,
-            streaming: false,
-            errorKey: e.messageKey ?? 'error.sidecarNotReady',
-            tools: [],
-            findingIds: [],
-          },
-        ],
-      });
-    }
-  },
-
-  setModel: (id) => set({ modelId: id }),
-
-  setContext: (patch) => set((s) => ({ context: { ...s.context, ...patch } })),
-
-  addAttachments: (items) =>
-    set((s) => {
-      const known = new Set(s.attachments.map((a) => a.path));
-      const added = items.filter((a) => !known.has(a.path));
-      return added.length ? { attachments: [...s.attachments, ...added] } : {};
-    }),
-
-  removeAttachment: (path) =>
-    set((s) => ({ attachments: s.attachments.filter((a) => a.path !== path) })),
-
-  deleteSession: async (id) => {
-    try {
-      await deleteSessionApi(id);
-    } catch {
-      /* 忽略删除失败 */
-    }
-    set((s) => ({
-      sessions: s.sessions.filter((item) => item.id !== id),
-      ...(s.sessionId === id
-        ? { sessionId: null, messages: [], context: EMPTY_CONTEXT, attachments: [] }
-        : {}),
-    }));
-  },
-
-  send: async (text, locale) => {
-    const trimmed = text.trim();
-    if (!trimmed || get().streaming) return;
-
-    let sessionId = get().sessionId;
-    try {
-      if (!sessionId) {
-        const session = await createSessionApi({ title: trimmed.slice(0, 40) });
-        sessionId = session.id;
-        set({ sessionId });
-        void get().loadSessions();
-      } else {
-        // 「点击即建」的空会话：首条消息发送时补上标题。
-        const current = get().sessions.find((s) => s.id === sessionId);
-        if (current && !current.title) {
-          const title = trimmed.slice(0, 40);
-          set((s) => ({
-            sessions: s.sessions.map((it) =>
-              it.id === sessionId ? { ...it, title } : it,
-            ),
-          }));
-          void renameSessionApi(sessionId, title).catch(() => {
-            /* 标题更新失败不阻塞对话 */
-          });
-        }
-      }
+      const page = await getSessionMessagesApi(sessionId);
+      set((s) => ({
+        chats: withChat(s.chats, sessionId, (chat) => ({
+          ...chat,
+          // 若加载期间已开始流式生成，则不覆盖进行中的内容。
+          messages: chat.streaming ? chat.messages : page.items.map(toChatMessage),
+          loaded: true,
+        })),
+      }));
     } catch (err) {
       const e = err as ApiError;
       set((s) => ({
-        messages: [
-          ...s.messages,
-          {
-            id: nextId(),
-            role: 'assistant',
-            content: '',
-            thinking: '',
-            phase: null,
-            streaming: false,
-            errorKey: e.messageKey ?? 'error.sidecarNotReady',
-            tools: [],
-            findingIds: [],
-          },
-        ],
+        chats: withChat(s.chats, sessionId, (chat) => ({
+          ...chat,
+          messages: [assistantError(e.messageKey ?? 'error.internal')],
+          loaded: true,
+        })),
       }));
-      return;
+    }
+  },
+
+  createSession: async () => {
+    try {
+      const session = await createSessionApi({ title: null });
+      set((s) => ({ chats: { ...s.chats, [session.id]: newChat() } }));
+      await get().loadSessions();
+      return session.id;
+    } catch {
+      return null;
+    }
+  },
+
+  deleteSession: async (sessionId) => {
+    get().abortSession(sessionId);
+    try {
+      await deleteSessionApi(sessionId);
+    } catch {
+      /* 忽略删除失败 */
+    }
+    set((s) => {
+      const chats = { ...s.chats };
+      delete chats[sessionId];
+      return { sessions: s.sessions.filter((item) => item.id !== sessionId), chats };
+    });
+  },
+
+  send: async (sessionId, text, locale) => {
+    const trimmed = text.trim();
+    const current = get().chats[sessionId];
+    if (!trimmed || current?.streaming) return;
+
+    // 若该会话还没有标题，用首条消息补上。
+    const meta = get().sessions.find((s) => s.id === sessionId);
+    if (meta && !meta.title) {
+      const title = trimmed.slice(0, 40);
+      set((s) => ({
+        sessions: s.sessions.map((it) =>
+          it.id === sessionId ? { ...it, title } : it,
+        ),
+      }));
+      void renameSessionApi(sessionId, title).catch(() => {
+        /* 标题更新失败不阻塞对话 */
+      });
     }
 
     const userMessage: ChatMessage = {
@@ -326,18 +294,32 @@ export const useChatStore = create<ChatState>((set, get) => ({
       findingIds: [],
     };
     set((s) => ({
-      messages: [...s.messages, userMessage, assistantMessage],
-      streaming: true,
+      chats: withChat(s.chats, sessionId, (chat) => ({
+        ...chat,
+        messages: [...chat.messages, userMessage, assistantMessage],
+        streaming: true,
+        draft: '',
+      })),
     }));
 
+    const controller = new AbortController();
+    controllers.set(sessionId, controller);
+    const chat = get().chats[sessionId];
+
     const update = (event: SseEvent) => {
-      set((s) => ({
-        messages: s.messages.map((m) =>
-          m.id === assistantMessage.id ? applyEvent(m, event) : m,
-        ),
-        streaming:
-          event.type === 'done' || event.type === 'error' ? false : s.streaming,
-      }));
+      set((s) => {
+        if (!s.chats[sessionId]) return s;
+        return {
+          chats: withChat(s.chats, sessionId, (c) => ({
+            ...c,
+            messages: c.messages.map((m) =>
+              m.id === assistantMessage.id ? applyEvent(m, event) : m,
+            ),
+            streaming:
+              event.type === 'done' || event.type === 'error' ? false : c.streaming,
+          })),
+        };
+      });
       if (event.type === 'finding') {
         void useFindingsStore.getState().load();
       }
@@ -347,33 +329,108 @@ export const useChatStore = create<ChatState>((set, get) => ({
       await streamChat(
         sessionId,
         trimmed,
-        { onEvent: update },
+        { onEvent: update, signal: controller.signal },
         locale,
-        get().modelId ?? undefined,
-        get().context,
-        get().attachments,
+        chat.modelId ?? undefined,
+        chat.context,
+        chat.attachments,
       );
     } catch (err) {
-      const e = err as ApiError;
-      set((s) => ({
-        messages: s.messages.map((m) =>
-          m.id === assistantMessage.id
-            ? { ...m, streaming: false, errorKey: e.messageKey ?? 'error.internal' }
-            : m,
-        ),
-        streaming: false,
-      }));
+      const aborted = controller.signal.aborted;
+      set((s) => {
+        if (!s.chats[sessionId]) return s;
+        return {
+          chats: withChat(s.chats, sessionId, (c) => ({
+            ...c,
+            messages: c.messages.map((m) =>
+              m.id === assistantMessage.id
+                ? {
+                    ...m,
+                    streaming: false,
+                    // 用户中止不算错误，保留已生成部分。
+                    errorKey: aborted
+                      ? null
+                      : ((err as ApiError).messageKey ?? 'error.internal'),
+                  }
+                : m,
+            ),
+            streaming: false,
+          })),
+        };
+      });
     } finally {
+      if (controllers.get(sessionId) === controller) {
+        controllers.delete(sessionId);
+        // 兜底：若流结束却未收到 done 事件，确保不在「生成中」状态卡住。
+        set((s) => {
+          const cur = s.chats[sessionId];
+          if (!cur || !cur.streaming) return s;
+          return {
+            chats: withChat(s.chats, sessionId, (c) => ({
+              ...c,
+              streaming: false,
+              messages: c.messages.map((m) =>
+                m.id === assistantMessage.id ? { ...m, streaming: false } : m,
+              ),
+            })),
+          };
+        });
+      }
       void get().loadSessions();
     }
   },
 
-  clear: () =>
-    set({
-      sessionId: null,
-      messages: [],
-      streaming: false,
-      context: EMPTY_CONTEXT,
-      attachments: [],
-    }),
+  abortSession: (sessionId) => {
+    controllers.get(sessionId)?.abort();
+  },
+
+  abortAll: () => {
+    for (const controller of controllers.values()) controller.abort();
+    controllers.clear();
+  },
+
+  hasStreaming: () => Object.values(get().chats).some((c) => c.streaming),
+
+  setModel: (sessionId, modelId) =>
+    set((s) => ({
+      chats: withChat(s.chats, sessionId, (chat) => ({ ...chat, modelId })),
+    })),
+
+  setContext: (sessionId, patch) =>
+    set((s) => ({
+      chats: withChat(s.chats, sessionId, (chat) => ({
+        ...chat,
+        context: { ...chat.context, ...patch },
+      })),
+    })),
+
+  addAttachments: (sessionId, items) =>
+    set((s) => ({
+      chats: withChat(s.chats, sessionId, (chat) => {
+        const known = new Set(chat.attachments.map((a) => a.path));
+        const added = items.filter((a) => !known.has(a.path));
+        return added.length
+          ? { ...chat, attachments: [...chat.attachments, ...added] }
+          : chat;
+      }),
+    })),
+
+  removeAttachment: (sessionId, path) =>
+    set((s) => ({
+      chats: withChat(s.chats, sessionId, (chat) => ({
+        ...chat,
+        attachments: chat.attachments.filter((a) => a.path !== path),
+      })),
+    })),
+
+  setDraft: (sessionId, text) =>
+    set((s) => ({
+      chats: withChat(s.chats, sessionId, (chat) => ({ ...chat, draft: text })),
+    })),
+
+  clearAllChats: () => {
+    for (const controller of controllers.values()) controller.abort();
+    controllers.clear();
+    set({ chats: {} });
+  },
 }));

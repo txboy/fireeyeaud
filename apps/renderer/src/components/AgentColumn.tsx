@@ -1,25 +1,34 @@
-import { useState } from 'react';
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, FileText, Paperclip, Send, Sparkles, Wrench, X } from 'lucide-react';
 import { useChatStore } from '../store/chat';
 import { ContextBar } from './ContextBar';
 
-export function AgentColumn() {
+export function AgentColumn({ sessionId }: { sessionId: string }) {
   const { t, i18n } = useTranslation('agent');
   const { t: te } = useTranslation('error');
-  const [text, setText] = useState('');
 
-  const messages = useChatStore((s) => s.messages);
-  const streaming = useChatStore((s) => s.streaming);
+  const chat = useChatStore((s) => s.chats[sessionId]);
+  const loadMessages = useChatStore((s) => s.loadMessages);
   const send = useChatStore((s) => s.send);
-  const attachments = useChatStore((s) => s.attachments);
+  const setDraft = useChatStore((s) => s.setDraft);
   const addAttachments = useChatStore((s) => s.addAttachments);
   const removeAttachment = useChatStore((s) => s.removeAttachment);
+
+  const messages = chat?.messages ?? [];
+  const streaming = chat?.streaming ?? false;
+  const attachments = chat?.attachments ?? [];
+  const text = chat?.draft ?? '';
+
+  useEffect(() => {
+    void loadMessages(sessionId);
+  }, [sessionId, loadMessages]);
 
   const pickFiles = async () => {
     const files = (await window.fireeyeaud?.openFiles('attachments')) ?? [];
     if (files.length === 0) return;
     addAttachments(
+      sessionId,
       files.map((path) => ({
         path,
         name: path.split(/[\\/]/).pop() || path,
@@ -29,8 +38,7 @@ export function AgentColumn() {
 
   const submit = () => {
     if (!text.trim() || streaming) return;
-    void send(text, i18n.language);
-    setText('');
+    void send(sessionId, text, i18n.language);
   };
 
   const errorText = (key: string) => te(key.replace(/^error\./, ''));
@@ -103,7 +111,7 @@ export function AgentColumn() {
         )}
       </div>
 
-      <ContextBar />
+      <ContextBar sessionId={sessionId} />
 
       {attachments.length > 0 && (
         <div className="agent__attachments">
@@ -115,7 +123,7 @@ export function AgentColumn() {
                 type="button"
                 className="attach-chip__remove"
                 title={t('removeAttachment')}
-                onClick={() => removeAttachment(a.path)}
+                onClick={() => removeAttachment(sessionId, a.path)}
               >
                 <X size={11} strokeWidth={2} />
               </button>
@@ -136,7 +144,7 @@ export function AgentColumn() {
         <input
           className="searchbox"
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => setDraft(sessionId, e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.nativeEvent.isComposing) submit();
           }}

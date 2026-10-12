@@ -302,6 +302,8 @@ export default {
     you: '你',
     assistant: '审计智能体',
     streaming: '正在回复…',
+    stopStreamingTitle: '正在生成回答',
+    stopStreamingConfirm: '该会话正在生成回答，继续操作将停止生成（已生成的部分会保留）。是否继续？',
     toolCall: '调用工具…',
     toolResult: '工具结果',
     findingCreated: '发现疑点 {{id}}',
@@ -421,6 +423,7 @@ export default {
   preview: {
     sessionTab: '会话',
     closeTab: '关闭标签',
+    emptyArea: '新建或选择左侧的一个会话',
     showInFolder: '在文件夹中显示',
     openExternally: '用系统程序打开',
     placeholder: '文件预览',
