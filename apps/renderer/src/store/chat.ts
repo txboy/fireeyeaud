@@ -39,10 +39,13 @@ interface ChatState {
   sessions: SessionSummary[];
   messages: ChatMessage[];
   streaming: boolean;
+  /** 当前会话使用的模型档案 id（为空表示由后端取默认模型）。 */
+  modelId: string | null;
   loadSessions: () => Promise<void>;
   selectSession: (id: string) => Promise<void>;
   newSession: () => void;
   deleteSession: (id: string) => Promise<void>;
+  setModel: (id: string | null) => void;
   send: (text: string, locale: string) => Promise<void>;
   clear: () => void;
 }
@@ -126,6 +129,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   sessions: [],
   messages: [],
   streaming: false,
+  modelId: null,
 
   loadSessions: async () => {
     try {
@@ -163,6 +167,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   newSession: () => set({ sessionId: null, messages: [] }),
+
+  setModel: (id) => set({ modelId: id }),
 
   deleteSession: async (id) => {
     try {
@@ -250,7 +256,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
     };
 
     try {
-      await streamChat(sessionId, trimmed, { onEvent: update }, locale);
+      await streamChat(
+        sessionId,
+        trimmed,
+        { onEvent: update },
+        locale,
+        get().modelId ?? undefined,
+      );
     } catch (err) {
       const e = err as ApiError;
       set((s) => ({

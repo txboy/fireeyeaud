@@ -120,11 +120,12 @@ async def run_agent(
     locale: str | None = None,
     *,
     model: Any = None,
+    model_id: str | None = None,
     history: list[BaseMessage] | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
     root = Path(root)
     event = _event_factory(session_id)
-    active_model = model or build_chat_model(root)
+    active_model = model or build_chat_model(root, model_id)
     tools = [*build_langchain_tools(root), _report_finding_tool()]
     bound = _maybe_bind(active_model, tools)
     tool_dict = build_tool_dict(root)
@@ -263,7 +264,10 @@ def _load_history(fe: Path, session_id: str) -> list[BaseMessage]:
 
 
 async def stream_chat(
-    session_id: str, message: str, locale: str | None = None
+    session_id: str,
+    message: str,
+    locale: str | None = None,
+    model_id: str | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
     from ..store.sessions import add_message
     from ..store.workspace import workspace_manager
@@ -293,7 +297,9 @@ async def stream_chat(
     add_message(fe, root, session_id, "user", {"text": message})
 
     answer_parts: list[str] = []
-    async for ev in run_agent(root, session_id, message, locale, history=history):
+    async for ev in run_agent(
+        root, session_id, message, locale, model_id=model_id, history=history
+    ):
         if ev.get("type") == "token":
             answer_parts.append(str(ev.get("data", {}).get("delta", "")))
         yield _wrap(ev)

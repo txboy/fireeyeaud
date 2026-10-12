@@ -27,10 +27,31 @@ def _effective_profile(root: Path | None) -> dict[str, Any] | None:
     return next((m for m in items if m.get("isDefault")), items[0])
 
 
-def build_chat_model(root: Path | None = None) -> ChatOpenAI:
+def _profile_by_id(root: Path | None, model_id: str) -> dict[str, Any] | None:
+    from . import store as cfg_store
+
+    try:
+        items = cfg_store.load_effective("models", root)
+    except Exception:  # noqa: BLE001
+        return None
+    return next((m for m in items if m.get("id") == model_id), None)
+
+
+def select_profile(
+    root: Path | None, model_id: str | None = None
+) -> dict[str, Any] | None:
+    """按 id 选择模型档案；未指定则取默认（isDefault / 首个）。"""
+    if model_id:
+        return _profile_by_id(root, model_id)
+    return _effective_profile(root)
+
+
+def build_chat_model(
+    root: Path | None = None, model_id: str | None = None
+) -> ChatOpenAI:
     from ..store import secrets
 
-    profile = _effective_profile(root)
+    profile = select_profile(root, model_id)
     if profile:
         base_url = str(profile.get("baseUrl") or "").strip()
         model = str(profile.get("model") or "qwen2.5")

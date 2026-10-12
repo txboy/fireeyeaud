@@ -276,6 +276,7 @@ export default {
   },
   agent: {
     name: '审计智能体',
+    model: '模型',
     inputPlaceholder: '描述你的审计需求，或直接提问…',
     send: '发送',
     attach: '附加文件',

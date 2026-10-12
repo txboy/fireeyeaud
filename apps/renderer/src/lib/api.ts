@@ -196,11 +196,12 @@ export async function streamChat(
   message: string,
   { onEvent, signal }: ChatHandlers,
   locale?: string,
+  modelId?: string,
 ): Promise<void> {
   const res = await safeFetch(`${baseUrl()}/sessions/${sessionId}/chat`, {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ message, locale }),
+    body: JSON.stringify({ message, locale, modelId }),
     signal,
   });
   await consumeSse(res, onEvent);

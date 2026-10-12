@@ -276,6 +276,7 @@ export default {
   },
   agent: {
     name: 'Audit Agent',
+    model: 'Model',
     inputPlaceholder: 'Describe your audit task, or just ask…',
     send: 'Send',
     attach: 'Attach file',

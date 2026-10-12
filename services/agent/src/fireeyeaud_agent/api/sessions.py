@@ -23,6 +23,7 @@ class CreateSessionBody(BaseModel):
 class ChatBody(BaseModel):
     message: str = Field(min_length=1)
     locale: str | None = None
+    modelId: str | None = None
     dataSourceIds: list[str] | None = None
     attachments: list[dict] | None = None
 
@@ -62,6 +63,6 @@ def delete_session(session_id: str) -> dict[str, object]:
 @router.post("/sessions/{session_id}/chat")
 async def chat(session_id: str, body: ChatBody) -> EventSourceResponse:
     return EventSourceResponse(
-        stream_chat(session_id, body.message, body.locale),
+        stream_chat(session_id, body.message, body.locale, body.modelId),
         media_type="text/event-stream",
     )
