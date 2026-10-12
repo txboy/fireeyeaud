@@ -23,6 +23,7 @@ class ConnectionBody(BaseModel):
     username: str | None = None
     credRef: str | None = None
     path: str | None = None
+    isDefault: bool = False
 
 
 class AuthorizationBody(BaseModel):
@@ -38,6 +39,7 @@ class ConnectionPatch(BaseModel):
     username: str | None = None
     credRef: str | None = None
     path: str | None = None
+    isDefault: bool | None = None
 
 
 @router.get("/db/connections")

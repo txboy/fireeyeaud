@@ -147,6 +147,14 @@ aggregate_subject / parse_ledger / check_tie）、对话 Agent（plan → tool_c
 - **未保存守卫**：与预览 tab 共用右侧区离开守卫，切换 / 关闭 / 回会话前弹「保存 / 不保存 / 取消」。
 - 表单 tab 不持久化；数据库编辑不改 scope（scope 走查询参数）；表 / 字段授权仍在数据库面板内联。
 
+### Phase 8 · 对话上下文栏（模型 + 资源多选）（已完成）
+- **上下文栏**：模型选择从对话栏头部移到**输入框上方**；同一栏内可多选 MCP / 技能 / 数据库 / 知识库。
+- **默认机制**：四个实体新增 `isDefault`；`enabled ∧ isDefault` 的实体自动提供给模型、不出现在上下文栏，
+  其余 `enabled` 的实体需**勾选后**模型才可使用。
+- **后端联动**：`ChatBody` 增 `skillIds/kbProviderIds/dbConnectionIds/mcpServerIds`；技能提示词注入、
+  `kb_search` Provider、`sql_query` 连接均按「默认 ∪ 勾选」过滤。MCP 仅透传（工具仍未接入）。
+- 选择为会话级、内存持有：新建 / 切换会话清空。MCP 未接线；知识库按 Provider 级（其下已启用条目）。
+
 已知偏差（详见 [`docs/plans/2026-10-09-phase1-mvp.md`](docs/plans/2026-10-09-phase1-mvp.md)、[`docs/plans/2026-10-09-phase2-evidence-review.md`](docs/plans/2026-10-09-phase2-evidence-review.md)、
 [`docs/plans/2026-10-09-phase3-evidence-graph.md`](docs/plans/2026-10-09-phase3-evidence-graph.md)、
 [`docs/plans/2026-10-09-phase4-working-paper-export.md`](docs/plans/2026-10-09-phase4-working-paper-export.md)、
@@ -154,7 +162,8 @@ aggregate_subject / parse_ledger / check_tie）、对话 Agent（plan → tool_c
 [`docs/plans/2026-10-10-phase5.5-knowledge-base.md`](docs/plans/2026-10-10-phase5.5-knowledge-base.md)、
 [`docs/plans/2026-10-10-phase6-websearch-mcp-packaging.md`](docs/plans/2026-10-10-phase6-websearch-mcp-packaging.md)、
 [`docs/plans/2026-10-12-phase7-file-preview.md`](docs/plans/2026-10-12-phase7-file-preview.md)、
-[`docs/plans/2026-10-12-phase7b-config-form-tabs.md`](docs/plans/2026-10-12-phase7b-config-form-tabs.md)）：
+[`docs/plans/2026-10-12-phase7b-config-form-tabs.md`](docs/plans/2026-10-12-phase7b-config-form-tabs.md)、
+[`docs/plans/2026-10-12-agent-context-bar-design.md`](docs/plans/2026-10-12-agent-context-bar-design.md)）：
 工具先用进程内 LangChain `StructuredTool`（MCP 仅配置级，不加载执行）；搜索先用主进程 Node 遍历；
 MCP / Skills 为配置 + 面板（Skills 提示词注入生效，`toolIds` 不联动执行）；`web_search` 默认关闭；
 会话/消息投影为简化实现；证据仅记 tool_call/tool_result 两档；打开工作区同步校验证据链；

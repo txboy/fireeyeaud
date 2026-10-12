@@ -18,6 +18,7 @@ interface FormState {
   fsScope: 'workspace' | 'none';
   net: boolean;
   toolsAllow: string;
+  isDefault: boolean;
 }
 
 const EMPTY: FormState = {
@@ -30,6 +31,7 @@ const EMPTY: FormState = {
   fsScope: 'workspace',
   net: false,
   toolsAllow: '',
+  isDefault: false,
 };
 
 function init(entity?: McpServer): FormState {
@@ -44,6 +46,7 @@ function init(entity?: McpServer): FormState {
     fsScope: entity.permissions?.fsScope ?? 'workspace',
     net: Boolean(entity.permissions?.net),
     toolsAllow: (entity.permissions?.toolsAllow ?? []).join(' '),
+    isDefault: Boolean(entity.isDefault),
   };
 }
 
@@ -86,6 +89,7 @@ export function McpForm({
       command: isStdio ? form.command.trim() || null : null,
       args: isStdio ? parseTokens(form.args) : null,
       url: isStdio ? null : form.url.trim() || null,
+      isDefault: form.isDefault,
       permissions: {
         fsScope: form.fsScope,
         net: form.net,
@@ -203,6 +207,15 @@ export function McpForm({
           </label>
         </div>
       </div>
+
+      <label className="field field--inline">
+        <input
+          type="checkbox"
+          checked={form.isDefault}
+          onChange={(e) => setForm({ ...form, isDefault: e.target.checked })}
+        />
+        <span>{t('isDefault')}</span>
+      </label>
 
       <span className="card__meta">{t('stdioHint')}</span>
       <FormError errorKey={errorKey} />

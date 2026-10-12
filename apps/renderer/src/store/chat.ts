@@ -4,9 +4,11 @@ import {
   ApiError,
   createSessionApi,
   deleteSessionApi,
+  EMPTY_CONTEXT,
   getSessionMessagesApi,
   listSessionsApi,
   streamChat,
+  type ChatContext,
   type SessionMessage,
   type SessionSummary,
 } from '../lib/api';
@@ -41,11 +43,14 @@ interface ChatState {
   streaming: boolean;
   /** 当前会话使用的模型档案 id（为空表示由后端取默认模型）。 */
   modelId: string | null;
+  /** 本次会话勾选的非默认资源（后端再并上默认集）。 */
+  context: ChatContext;
   loadSessions: () => Promise<void>;
   selectSession: (id: string) => Promise<void>;
   newSession: () => void;
   deleteSession: (id: string) => Promise<void>;
   setModel: (id: string | null) => void;
+  setContext: (patch: Partial<ChatContext>) => void;
   send: (text: string, locale: string) => Promise<void>;
   clear: () => void;
 }
@@ -130,6 +135,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
   streaming: false,
   modelId: null,
+  context: EMPTY_CONTEXT,
 
   loadSessions: async () => {
     try {
@@ -141,7 +147,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   selectSession: async (id) => {
-    set({ sessionId: id, messages: [] });
+    set({ sessionId: id, messages: [], context: EMPTY_CONTEXT });
     try {
       const page = await getSessionMessagesApi(id);
       if (get().sessionId !== id) return; // 已切换到别的会话
@@ -166,9 +172,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  newSession: () => set({ sessionId: null, messages: [] }),
+  newSession: () => set({ sessionId: null, messages: [], context: EMPTY_CONTEXT }),
 
   setModel: (id) => set({ modelId: id }),
+
+  setContext: (patch) => set((s) => ({ context: { ...s.context, ...patch } })),
 
   deleteSession: async (id) => {
     try {
@@ -178,7 +186,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
     set((s) => ({
       sessions: s.sessions.filter((item) => item.id !== id),
-      ...(s.sessionId === id ? { sessionId: null, messages: [] } : {}),
+      ...(s.sessionId === id
+        ? { sessionId: null, messages: [], context: EMPTY_CONTEXT }
+        : {}),
     }));
   },
 
@@ -262,6 +272,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         { onEvent: update },
         locale,
         get().modelId ?? undefined,
+        get().context,
       );
     } catch (err) {
       const e = err as ApiError;
@@ -278,5 +289,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  clear: () => set({ sessionId: null, messages: [], streaming: false }),
+  clear: () =>
+    set({ sessionId: null, messages: [], streaming: false, context: EMPTY_CONTEXT }),
 }));

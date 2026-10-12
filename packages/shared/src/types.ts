@@ -293,6 +293,8 @@ export interface DbConnection {
   username?: string | null;
   path?: string | null;
   credRef?: string;
+  /** 默认自动提供给模型（无需在对话上下文栏勾选）。 */
+  isDefault?: boolean;
 }
 
 export interface DbColumn {
@@ -321,6 +323,8 @@ export interface KbProvider {
   scope: ConfigScope;
   apiKeyRef?: string;
   defaults?: KbProviderDefaults;
+  /** 默认自动提供给模型（无需在对话上下文栏勾选）。 */
+  isDefault?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -358,6 +362,8 @@ export interface McpServer {
   enabled: boolean;
   scope: ConfigScope;
   permissions?: McpPermissions;
+  /** 默认自动提供给模型（无需在对话上下文栏勾选）。 */
+  isDefault?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -371,6 +377,8 @@ export interface Skill {
   enabled: boolean;
   builtin: boolean;
   scope: ConfigScope | 'builtin';
+  /** 默认自动提供给模型（无需在对话上下文栏勾选）。 */
+  isDefault?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }

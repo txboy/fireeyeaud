@@ -27,6 +27,12 @@ def sql_query(root: Path, params: dict[str, Any]) -> dict[str, Any]:
             raise ApiError(
                 "E_DB_UNAUTHORIZED", 403, "error.dbUnauthorized", {"source": source_id}
             )
+        # 会话上下文：仅允许默认 ∪ 勾选的连接（None 表示不限制）。
+        allowed = params.get("allowedConnectionIds")
+        if allowed is not None and str(conn["id"]) not in {str(i) for i in allowed}:
+            raise ApiError(
+                "E_DB_UNAUTHORIZED", 403, "error.dbUnauthorized", {"source": source_id}
+            )
         sql = params.get("sql", "")
         db_engine.check_authorization(
             root, conn["id"], sql, db_engine.dialect_for(conn)

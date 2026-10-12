@@ -16,6 +16,7 @@ interface FormState {
   scope: ConfigScope;
   topK: string;
   scoreThreshold: string;
+  isDefault: boolean;
 }
 
 const EMPTY: FormState = {
@@ -26,6 +27,7 @@ const EMPTY: FormState = {
   scope: 'project',
   topK: '',
   scoreThreshold: '',
+  isDefault: false,
 };
 
 function init(entity?: KbProvider): FormState {
@@ -40,6 +42,7 @@ function init(entity?: KbProvider): FormState {
     topK: entity.defaults?.topK != null ? String(entity.defaults.topK) : '',
     scoreThreshold:
       entity.defaults?.scoreThreshold != null ? String(entity.defaults.scoreThreshold) : '',
+    isDefault: Boolean(entity.isDefault),
   };
 }
 
@@ -79,6 +82,7 @@ export function KnowledgeForm({
         name: form.name.trim(),
         baseUrl: form.baseUrl.trim(),
         apiKeyRef,
+        isDefault: form.isDefault,
         defaults: Object.keys(defaults).length ? defaults : undefined,
       };
       return entity
@@ -166,6 +170,14 @@ export function KnowledgeForm({
           <option value="project">{te('configScope.project')}</option>
           <option value="global">{te('configScope.global')}</option>
         </select>
+      </label>
+      <label className="field field--inline">
+        <input
+          type="checkbox"
+          checked={form.isDefault}
+          onChange={(e) => setForm({ ...form, isDefault: e.target.checked })}
+        />
+        <span>{t('isDefault')}</span>
       </label>
 
       <span className="card__meta">{t('egress')}</span>

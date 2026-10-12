@@ -11,9 +11,16 @@ interface FormState {
   prompt: string;
   toolIds: string;
   scope: ConfigScope;
+  isDefault: boolean;
 }
 
-const EMPTY: FormState = { name: '', prompt: '', toolIds: '', scope: 'project' };
+const EMPTY: FormState = {
+  name: '',
+  prompt: '',
+  toolIds: '',
+  scope: 'project',
+  isDefault: false,
+};
 
 function init(entity?: Skill): FormState {
   if (!entity) return EMPTY;
@@ -22,6 +29,7 @@ function init(entity?: Skill): FormState {
     prompt: entity.prompt,
     toolIds: (entity.toolIds ?? []).join(' '),
     scope: entity.scope === 'builtin' ? 'project' : entity.scope,
+    isDefault: Boolean(entity.isDefault),
   };
 }
 
@@ -61,6 +69,7 @@ export function SkillForm({
       prompt: form.prompt.trim(),
       toolIds: parseTokens(form.toolIds),
       scope: form.scope,
+      isDefault: form.isDefault,
     };
     const ok = entity
       ? await edit(entity.id, form.scope, payload)
@@ -114,6 +123,14 @@ export function SkillForm({
           <option value="project">{te('configScope.project')}</option>
           <option value="global">{te('configScope.global')}</option>
         </select>
+      </label>
+      <label className="field field--inline">
+        <input
+          type="checkbox"
+          checked={form.isDefault}
+          onChange={(e) => setForm({ ...form, isDefault: e.target.checked })}
+        />
+        <span>{t('isDefault')}</span>
       </label>
 
       <FormError errorKey={errorKey} />

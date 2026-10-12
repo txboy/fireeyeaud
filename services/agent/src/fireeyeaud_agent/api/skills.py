@@ -20,6 +20,7 @@ class SkillBody(BaseModel):
     params: dict | None = None
     enabled: bool = False
     scope: str = "global"
+    isDefault: bool = False
 
 
 class SkillPatch(BaseModel):
@@ -28,6 +29,7 @@ class SkillPatch(BaseModel):
     toolIds: list[str] | None = None
     params: dict | None = None
     enabled: bool | None = None
+    isDefault: bool | None = None
 
 
 @router.get("/skills")

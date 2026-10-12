@@ -106,8 +106,29 @@ _SPECS: list[tuple[str, str, ToolFn, type[BaseModel]]] = [
 ]
 
 
-def build_tool_dict(root: Path | None = None) -> dict[str, ToolFn]:
-    return {name: fn for name, _desc, fn, _schema in _specs()}
+def _context_wrapper(fn: ToolFn, context: dict[str, Any] | None) -> ToolFn:
+    """把会话上下文（允许的连接 / 知识库 Provider）注入工具参数。
+
+    `context is None` 表示不启用上下文（旧行为，不做限制）。
+    """
+    if not context:
+        return fn
+
+    def wrapped(root: Path, params: dict[str, Any]) -> dict[str, Any]:
+        merged = dict(params)
+        if fn is sql_query and "allowedConnectionIds" in context:
+            merged["allowedConnectionIds"] = context["allowedConnectionIds"]
+        elif fn is kb_search and "allowedProviderIds" in context:
+            merged["allowedProviderIds"] = context["allowedProviderIds"]
+        return fn(root, merged)
+
+    return wrapped
+
+
+def build_tool_dict(
+    root: Path | None = None, context: dict[str, Any] | None = None
+) -> dict[str, ToolFn]:
+    return {name: _context_wrapper(fn, context) for name, _desc, fn, _schema in _specs()}
 
 
 def _web_enabled() -> bool:
@@ -130,11 +151,14 @@ def _specs() -> list[tuple[str, str, ToolFn, type[BaseModel]]]:
     return specs
 
 
-def build_langchain_tools(root: Path) -> list[StructuredTool]:
+def build_langchain_tools(
+    root: Path, context: dict[str, Any] | None = None
+) -> list[StructuredTool]:
     tools: list[StructuredTool] = []
     for name, desc, fn, schema in _specs():
+        wrapped = _context_wrapper(fn, context)
 
-        def _run(_fn: ToolFn = fn, _root: Path = root, **kwargs: Any) -> dict[str, Any]:
+        def _run(_fn: ToolFn = wrapped, _root: Path = root, **kwargs: Any) -> dict[str, Any]:
             return _fn(_root, kwargs)
 
         tools.append(

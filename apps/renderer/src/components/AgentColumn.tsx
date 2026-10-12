@@ -1,35 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Paperclip, Send, Sparkles, Wrench } from 'lucide-react';
 import { useChatStore } from '../store/chat';
-import { useModelsStore } from '../store/models';
+import { ContextBar } from './ContextBar';
 
 export function AgentColumn() {
   const { t, i18n } = useTranslation('agent');
-  const { t: tc } = useTranslation('common');
   const { t: te } = useTranslation('error');
   const [text, setText] = useState('');
 
   const messages = useChatStore((s) => s.messages);
   const streaming = useChatStore((s) => s.streaming);
   const send = useChatStore((s) => s.send);
-  const modelId = useChatStore((s) => s.modelId);
-  const setModel = useChatStore((s) => s.setModel);
-  const models = useModelsStore((s) => s.items);
-  const loadModels = useModelsStore((s) => s.load);
-
-  useEffect(() => {
-    void loadModels();
-  }, [loadModels]);
-
-  // 首次加载后默认选中 isDefault（否则首个）模型。
-  useEffect(() => {
-    if (modelId || models.length === 0) return;
-    const preferred = models.find((m) => m.isDefault) ?? models[0];
-    setModel(preferred.id);
-  }, [modelId, models, setModel]);
-
-  const selectedModel = models.find((m) => m.id === modelId) ?? models[0];
 
   const submit = () => {
     if (!text.trim() || streaming) return;
@@ -44,25 +26,6 @@ export function AgentColumn() {
       <div className="agent__head">
         <Sparkles size={16} strokeWidth={1.75} color="var(--accent)" />
         <span className="sidebar__title">{t('name')}</span>
-        <span className="spacer" />
-        {models.length === 0 ? (
-          <span className="agent__chip">{tc('notConfigured')}</span>
-        ) : (
-          <select
-            className="searchbox agent__model"
-            title={t('model')}
-            aria-label={t('model')}
-            value={selectedModel?.id ?? ''}
-            disabled={streaming}
-            onChange={(e) => setModel(e.target.value || null)}
-          >
-            {models.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-        )}
       </div>
 
       <div className="agent__conv">
@@ -125,6 +88,8 @@ export function AgentColumn() {
           ))
         )}
       </div>
+
+      <ContextBar />
 
       <div className="agent__input">
         <button type="button" className="activitybar__item" title={t('attach')}>

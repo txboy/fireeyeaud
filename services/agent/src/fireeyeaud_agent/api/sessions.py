@@ -24,6 +24,10 @@ class ChatBody(BaseModel):
     message: str = Field(min_length=1)
     locale: str | None = None
     modelId: str | None = None
+    skillIds: list[str] = []
+    kbProviderIds: list[str] = []
+    dbConnectionIds: list[str] = []
+    mcpServerIds: list[str] = []
     dataSourceIds: list[str] | None = None
     attachments: list[dict] | None = None
 
@@ -63,6 +67,17 @@ def delete_session(session_id: str) -> dict[str, object]:
 @router.post("/sessions/{session_id}/chat")
 async def chat(session_id: str, body: ChatBody) -> EventSourceResponse:
     return EventSourceResponse(
-        stream_chat(session_id, body.message, body.locale, body.modelId),
+        stream_chat(
+            session_id,
+            body.message,
+            body.locale,
+            body.modelId,
+            {
+                "skillIds": body.skillIds,
+                "kbProviderIds": body.kbProviderIds,
+                "dbConnectionIds": body.dbConnectionIds,
+                "mcpServerIds": body.mcpServerIds,
+            },
+        ),
         media_type="text/event-stream",
     )

@@ -190,6 +190,21 @@ async function consumeSse(
   if (buffer.trim()) dispatch(buffer);
 }
 
+/** 对话上下文：本次会话勾选的非默认资源（后端再并上默认集）。 */
+export interface ChatContext {
+  skillIds: string[];
+  kbProviderIds: string[];
+  dbConnectionIds: string[];
+  mcpServerIds: string[];
+}
+
+export const EMPTY_CONTEXT: ChatContext = {
+  skillIds: [],
+  kbProviderIds: [],
+  dbConnectionIds: [],
+  mcpServerIds: [],
+};
+
 /** 发送一条消息并逐条回调 SSE 事件（POST + ReadableStream 解析）。 */
 export async function streamChat(
   sessionId: string,
@@ -197,11 +212,12 @@ export async function streamChat(
   { onEvent, signal }: ChatHandlers,
   locale?: string,
   modelId?: string,
+  context?: ChatContext,
 ): Promise<void> {
   const res = await safeFetch(`${baseUrl()}/sessions/${sessionId}/chat`, {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ message, locale, modelId }),
+    body: JSON.stringify({ message, locale, modelId, context }),
     signal,
   });
   await consumeSse(res, onEvent);
@@ -410,6 +426,7 @@ export interface DbConnectionInput {
   username?: string | null;
   credRef?: string | null;
   path?: string | null;
+  isDefault?: boolean;
 }
 
 export function createDbConnection(input: DbConnectionInput): Promise<DbConnection> {
@@ -490,6 +507,7 @@ export interface KbProviderInput {
   scope: ConfigScope;
   apiKeyRef?: string | null;
   defaults?: KbProviderDefaults;
+  isDefault?: boolean;
 }
 
 export function createKbProvider(input: KbProviderInput): Promise<KbProvider> {
@@ -566,6 +584,7 @@ export interface McpServerInput {
     net?: boolean;
     toolsAllow?: string[];
   };
+  isDefault?: boolean;
 }
 
 export function createMcpServer(input: McpServerInput): Promise<McpServer> {
@@ -603,6 +622,7 @@ export interface SkillInput {
   params?: Record<string, unknown>;
   enabled?: boolean;
   scope: ConfigScope;
+  isDefault?: boolean;
 }
 
 export function createSkill(input: SkillInput): Promise<Skill> {

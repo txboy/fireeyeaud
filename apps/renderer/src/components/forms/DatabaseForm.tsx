@@ -18,6 +18,7 @@ interface FormState {
   username: string;
   password: string;
   path: string;
+  isDefault: boolean;
 }
 
 const EMPTY: FormState = {
@@ -30,6 +31,7 @@ const EMPTY: FormState = {
   username: '',
   password: '',
   path: '',
+  isDefault: false,
 };
 
 function init(entity?: DbConnection): FormState {
@@ -44,6 +46,7 @@ function init(entity?: DbConnection): FormState {
     username: entity.username ?? '',
     password: '',
     path: entity.path ?? '',
+    isDefault: Boolean(entity.isDefault),
   };
 }
 
@@ -86,6 +89,7 @@ export function DatabaseForm({
       database: isFile ? null : form.database.trim() || null,
       username: isFile ? null : form.username.trim() || null,
       ...(credRef ? { credRef } : {}),
+      isDefault: form.isDefault,
     };
     const ok = entity ? await edit(entity.id, entity.scope, payload) : await create(payload);
     setBusy(false);
@@ -189,6 +193,14 @@ export function DatabaseForm({
           <option value="project">{te('configScope.project')}</option>
           <option value="global">{te('configScope.global')}</option>
         </select>
+      </label>
+      <label className="field field--inline">
+        <input
+          type="checkbox"
+          checked={form.isDefault}
+          onChange={(e) => setForm({ ...form, isDefault: e.target.checked })}
+        />
+        <span>{t('isDefault')}</span>
       </label>
 
       <span className="card__meta">{t('sqliteHint')}</span>

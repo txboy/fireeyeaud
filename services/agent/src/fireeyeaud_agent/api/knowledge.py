@@ -22,6 +22,7 @@ class ProviderBody(BaseModel):
     scope: str = "global"
     apiKeyRef: str | None = None
     defaults: dict | None = None
+    isDefault: bool = False
 
 
 class ProviderPatch(BaseModel):
@@ -29,6 +30,7 @@ class ProviderPatch(BaseModel):
     baseUrl: str | None = None
     apiKeyRef: str | None = None
     defaults: dict | None = None
+    isDefault: bool | None = None
 
 
 class EnabledBody(BaseModel):

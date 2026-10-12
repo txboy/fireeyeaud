@@ -23,6 +23,7 @@ class ServerBody(BaseModel):
     enabled: bool = True
     scope: str = "global"
     permissions: dict | None = None
+    isDefault: bool = False
 
 
 class ServerPatch(BaseModel):
@@ -33,6 +34,7 @@ class ServerPatch(BaseModel):
     permissions: dict | None = None
     args: list[str] | None = None
     url: str | None = None
+    isDefault: bool | None = None
 
 
 @router.get("/mcp/servers")

@@ -82,3 +82,17 @@ def delete_skill(skill_id: str, scope: str, root: Path | None = None) -> None:
 
 def enabled_prompts(root: Path | None = None) -> list[dict[str, Any]]:
     return [s for s in list_skills(root) if s.get("enabled") and s.get("prompt")]
+
+
+def prompts_for(
+    root: Path | None = None, skill_ids: list[str] | None = None
+) -> list[dict[str, Any]]:
+    """会话生效技能提示词 = 默认（enabled ∧ isDefault）∪ 勾选（enabled ∧ id∈skill_ids）。"""
+    wanted = {str(i) for i in (skill_ids or [])}
+    out: list[dict[str, Any]] = []
+    for s in list_skills(root):
+        if not (s.get("enabled") and s.get("prompt")):
+            continue
+        if s.get("isDefault") or str(s.get("id")) in wanted:
+            out.append(s)
+    return out

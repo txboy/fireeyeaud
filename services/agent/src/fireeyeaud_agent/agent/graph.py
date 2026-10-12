@@ -113,6 +113,35 @@ def _tool_message_content(result: Any) -> str:
     return json.dumps(result, ensure_ascii=False, default=str)
 
 
+def _allowed_ids(items: list[dict[str, Any]], selected: Any) -> set[str]:
+    """默认（isDefault）∪ 勾选 → 允许集合。"""
+    ids = {str(i.get("id")) for i in items if i.get("isDefault")}
+    ids |= {str(s) for s in (selected or [])}
+    return ids
+
+
+def _registry_context(
+    root: Path, context: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    """按「默认 ∪ 勾选」计算数据库连接 / 知识库 Provider 的允许集合。
+
+    `context is None` 表示未启用上下文（旧行为，不做限制）。
+    """
+    if context is None:
+        return None
+    from ..store import db as db_store
+    from ..store import knowledge as kb_store
+
+    return {
+        "allowedConnectionIds": _allowed_ids(
+            db_store.list_connections(root), context.get("dbConnectionIds")
+        ),
+        "allowedProviderIds": _allowed_ids(
+            kb_store.list_providers(root), context.get("kbProviderIds")
+        ),
+    }
+
+
 async def run_agent(
     root: Path,
     session_id: str,
@@ -122,26 +151,27 @@ async def run_agent(
     model: Any = None,
     model_id: str | None = None,
     history: list[BaseMessage] | None = None,
+    context: dict[str, Any] | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
     root = Path(root)
     event = _event_factory(session_id)
     active_model = model or build_chat_model(root, model_id)
-    tools = [*build_langchain_tools(root), _report_finding_tool()]
+    registry_ctx = _registry_context(root, context)
+    tools = [*build_langchain_tools(root, registry_ctx), _report_finding_tool()]
     bound = _maybe_bind(active_model, tools)
-    tool_dict = build_tool_dict(root)
+    tool_dict = build_tool_dict(root, registry_ctx)
 
     from ..store.rules import list_rules
-    from ..store.skills import enabled_prompts
+    from ..store.skills import prompts_for
 
     prompt_rules = [
         r
         for r in list_rules(root)
         if r.get("enabled") and r.get("type") == "prompt" and r.get("definition")
     ]
+    skill_prompts = prompts_for(root, (context or {}).get("skillIds"))
     messages: list[BaseMessage] = [
-        SystemMessage(
-            content=system_prompt(locale, prompt_rules, enabled_prompts(root))
-        )
+        SystemMessage(content=system_prompt(locale, prompt_rules, skill_prompts))
     ]
     if history:
         messages.extend(history)
@@ -268,6 +298,7 @@ async def stream_chat(
     message: str,
     locale: str | None = None,
     model_id: str | None = None,
+    context: dict[str, Any] | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
     from ..store.sessions import add_message
     from ..store.workspace import workspace_manager
@@ -298,7 +329,13 @@ async def stream_chat(
 
     answer_parts: list[str] = []
     async for ev in run_agent(
-        root, session_id, message, locale, model_id=model_id, history=history
+        root,
+        session_id,
+        message,
+        locale,
+        model_id=model_id,
+        history=history,
+        context=context,
     ):
         if ev.get("type") == "token":
             answer_parts.append(str(ev.get("data", {}).get("delta", "")))
