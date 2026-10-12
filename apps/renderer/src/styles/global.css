@@ -1092,6 +1092,13 @@ textarea.searchbox {
   color: #fff;
 }
 
+/* antd 弹窗底部按钮间距（各弹窗使用自定义 .button 按钮）。 */
+.ant-modal .ant-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .icon-btn {
   display: inline-flex;
   align-items: center;
