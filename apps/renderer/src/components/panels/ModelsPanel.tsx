@@ -35,17 +35,14 @@ export function ModelsPanel() {
 
   return (
     <>
-      <div className="section-head">
-        <span>{t('subtitle')}</span>
-        <button
-          type="button"
-          className="button button--sm"
-          onClick={() => void openForm('models', 'create')}
-        >
-          <Plus size={13} strokeWidth={1.9} />
-          {t('addModel')}
-        </button>
-      </div>
+      <button
+        type="button"
+        className="button button--sm"
+        onClick={() => void openForm('models', 'create')}
+      >
+        <Plus size={12} strokeWidth={2} />
+        {t('addModel')}
+      </button>
 
       {errorKey && (
         <span className="panel-error">{te(errorKey.replace(/^error\./, ''))}</span>
