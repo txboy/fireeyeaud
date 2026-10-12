@@ -70,8 +70,21 @@ async function toApiError(res: Response): Promise<ApiError> {
   return new ApiError('E_INTERNAL', res.status, 'error.internal');
 }
 
+/**
+ * fetch 包装：把网络层异常（连接被拒 / 超时等）统一为 ApiError，
+ * 避免上层拿到缺少 messageKey 的原始错误。
+ */
+async function safeFetch(url: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') throw err;
+    throw new ApiError('E_NETWORK', 0, 'error.internal');
+  }
+}
+
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(baseUrl() + path, {
+  const res = await safeFetch(baseUrl() + path, {
     ...init,
     headers: { ...authHeaders(), ...(init?.headers ?? {}) },
   });
@@ -184,7 +197,7 @@ export async function streamChat(
   { onEvent, signal }: ChatHandlers,
   locale?: string,
 ): Promise<void> {
-  const res = await fetch(`${baseUrl()}/sessions/${sessionId}/chat`, {
+  const res = await safeFetch(`${baseUrl()}/sessions/${sessionId}/chat`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({ message, locale }),
@@ -207,7 +220,7 @@ export async function importDataSource(
   path: string,
   { onEvent, signal }: ChatHandlers,
 ): Promise<void> {
-  const res = await fetch(`${baseUrl()}/datasources/import`, {
+  const res = await safeFetch(`${baseUrl()}/datasources/import`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({ path }),

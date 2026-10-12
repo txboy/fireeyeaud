@@ -59,7 +59,7 @@ export function Welcome() {
 
         {error && (
           <div className="welcome__error">
-            <span>{te(error.messageKey.replace(/^error\./, ''))}</span>
+            <span>{te((error.messageKey ?? 'error.internal').replace(/^error\./, ''))}</span>
           </div>
         )}
 

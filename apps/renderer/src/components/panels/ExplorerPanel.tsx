@@ -61,7 +61,11 @@ export function ExplorerPanel() {
         >
           {loading ? tc('loading') : tc('openFolder')}
         </button>
-        {error && <span className="panel-error">{te(error.messageKey.replace(/^error\./, ''))}</span>}
+        {error && (
+          <span className="panel-error">
+            {te((error.messageKey ?? 'error.internal').replace(/^error\./, ''))}
+          </span>
+        )}
       </div>
     );
   }
