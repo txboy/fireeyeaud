@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, Paperclip, Send, Sparkles, Wrench } from 'lucide-react';
+import { AlertTriangle, FileText, Paperclip, Send, Sparkles, Wrench, X } from 'lucide-react';
 import { useChatStore } from '../store/chat';
 import { ContextBar } from './ContextBar';
 
@@ -12,6 +12,20 @@ export function AgentColumn() {
   const messages = useChatStore((s) => s.messages);
   const streaming = useChatStore((s) => s.streaming);
   const send = useChatStore((s) => s.send);
+  const attachments = useChatStore((s) => s.attachments);
+  const addAttachments = useChatStore((s) => s.addAttachments);
+  const removeAttachment = useChatStore((s) => s.removeAttachment);
+
+  const pickFiles = async () => {
+    const files = (await window.fireeyeaud?.openFiles()) ?? [];
+    if (files.length === 0) return;
+    addAttachments(
+      files.map((path) => ({
+        path,
+        name: path.split(/[\\/]/).pop() || path,
+      })),
+    );
+  };
 
   const submit = () => {
     if (!text.trim() || streaming) return;
@@ -91,12 +105,33 @@ export function AgentColumn() {
 
       <ContextBar />
 
+      {attachments.length > 0 && (
+        <div className="agent__attachments">
+          {attachments.map((a) => (
+            <span key={a.path} className="attach-chip" title={a.path}>
+              <FileText size={12} strokeWidth={1.75} />
+              <span className="attach-chip__name">{a.name}</span>
+              <button
+                type="button"
+                className="attach-chip__remove"
+                title={t('removeAttachment')}
+                onClick={() => removeAttachment(a.path)}
+              >
+                <X size={11} strokeWidth={2} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
       <div className="agent__input">
-        <button type="button" className="activitybar__item" title={t('attach')}>
+        <button
+          type="button"
+          className="activitybar__item"
+          title={t('attach')}
+          onClick={() => void pickFiles()}
+        >
           <Paperclip size={16} strokeWidth={1.75} />
-        </button>
-        <button type="button" className="activitybar__item" title={t('selectTool')}>
-          <Wrench size={16} strokeWidth={1.75} />
         </button>
         <input
           className="searchbox"

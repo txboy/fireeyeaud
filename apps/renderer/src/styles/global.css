@@ -411,6 +411,49 @@ body {
   color: var(--text-2);
 }
 
+/* ---- Agent attachments ---- */
+.agent__attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 16px 0;
+}
+
+.attach-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 220px;
+  font-size: 12px;
+  color: var(--text-1);
+  background: var(--editor-bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 4px 2px 9px;
+}
+
+.attach-chip__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attach-chip__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px;
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  border-radius: 50%;
+}
+
+.attach-chip__remove:hover {
+  color: var(--text-1);
+}
+
 .agent__input {
   border-top: 1px solid var(--border);
   padding: 12px 16px;

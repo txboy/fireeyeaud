@@ -78,6 +78,7 @@ async def chat(session_id: str, body: ChatBody) -> EventSourceResponse:
                 "dbConnectionIds": body.dbConnectionIds,
                 "mcpServerIds": body.mcpServerIds,
             },
+            body.attachments,
         ),
         media_type="text/event-stream",
     )

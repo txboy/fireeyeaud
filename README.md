@@ -154,6 +154,9 @@ aggregate_subject / parse_ledger / check_tie）、对话 Agent（plan → tool_c
 - **后端联动**：`ChatBody` 增 `skillIds/kbProviderIds/dbConnectionIds/mcpServerIds`；技能提示词注入、
   `kb_search` Provider、`sql_query` 连接均按「默认 ∪ 勾选」过滤。MCP 仅透传（工具仍未接入）。
 - 选择为会话级、内存持有：新建 / 切换会话清空。MCP 未接线；知识库按 Provider 级（其下已启用条目）。
+- **临时附件**：输入框「附加文件」选取本地文件（txt/md/json/csv/tsv/xlsx/xlsm/docx/pdf），
+  以**纯文本**抽取后随每轮对话注入（作为参考资料、非指令；单文件 ≤2 万字符、合计 ≤6 万字符），
+  **不写入工作区**（不注册数据源、不写 files/schema/project）；附件为会话级、内存持有，可逐个移除。
 
 已知偏差（详见 [`docs/plans/2026-10-09-phase1-mvp.md`](docs/plans/2026-10-09-phase1-mvp.md)、[`docs/plans/2026-10-09-phase2-evidence-review.md`](docs/plans/2026-10-09-phase2-evidence-review.md)、
 [`docs/plans/2026-10-09-phase3-evidence-graph.md`](docs/plans/2026-10-09-phase3-evidence-graph.md)、

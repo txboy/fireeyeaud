@@ -17,6 +17,7 @@ dependencies = [
   "duckdb",
   "pandas",
   "openpyxl",
+  "pypdf>=5.0.0",
   "openai",
   "python-docx>=1.2.0",
   "reportlab>=5.0.1",

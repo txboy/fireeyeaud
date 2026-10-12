@@ -152,6 +152,7 @@ async def run_agent(
     model_id: str | None = None,
     history: list[BaseMessage] | None = None,
     context: dict[str, Any] | None = None,
+    attachments: list[dict] | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
     root = Path(root)
     event = _event_factory(session_id)
@@ -173,6 +174,12 @@ async def run_agent(
     messages: list[BaseMessage] = [
         SystemMessage(content=system_prompt(locale, prompt_rules, skill_prompts))
     ]
+    if attachments:
+        from ..store.attachments import extract_attachments, render_context
+
+        block = render_context(extract_attachments(attachments))
+        if block:
+            messages.append(SystemMessage(content=block))
     if history:
         messages.extend(history)
     messages.append(HumanMessage(content=message))
@@ -299,6 +306,7 @@ async def stream_chat(
     locale: str | None = None,
     model_id: str | None = None,
     context: dict[str, Any] | None = None,
+    attachments: list[dict] | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
     from ..store.sessions import add_message
     from ..store.workspace import workspace_manager
@@ -336,6 +344,7 @@ async def stream_chat(
         model_id=model_id,
         history=history,
         context=context,
+        attachments=attachments,
     ):
         if ev.get("type") == "token":
             answer_parts.append(str(ev.get("data", {}).get("delta", "")))

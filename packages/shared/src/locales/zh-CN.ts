@@ -285,7 +285,7 @@ export default {
     inputPlaceholder: '描述你的审计需求，或直接提问…',
     send: '发送',
     attach: '附加文件',
-    selectTool: '选择工具',
+    removeAttachment: '移除附件',
     webOn: '联网：开',
     webOff: '联网：关',
     thinking: '推理中…',

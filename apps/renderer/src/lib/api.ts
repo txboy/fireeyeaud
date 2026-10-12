@@ -198,6 +198,13 @@ export interface ChatContext {
   mcpServerIds: string[];
 }
 
+/** 临时附件（不写工作区，仅随消息提供给模型参考）。 */
+export interface AttachmentRef {
+  path: string;
+  name: string;
+  size?: number;
+}
+
 export const EMPTY_CONTEXT: ChatContext = {
   skillIds: [],
   kbProviderIds: [],
@@ -213,11 +220,12 @@ export async function streamChat(
   locale?: string,
   modelId?: string,
   context?: ChatContext,
+  attachments?: AttachmentRef[],
 ): Promise<void> {
   const res = await safeFetch(`${baseUrl()}/sessions/${sessionId}/chat`, {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ message, locale, modelId, context }),
+    body: JSON.stringify({ message, locale, modelId, context, attachments }),
     signal,
   });
   await consumeSse(res, onEvent);

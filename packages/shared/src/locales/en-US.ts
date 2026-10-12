@@ -285,7 +285,7 @@ export default {
     inputPlaceholder: 'Describe your audit task, or just ask…',
     send: 'Send',
     attach: 'Attach file',
-    selectTool: 'Select tool',
+    removeAttachment: 'Remove attachment',
     webOn: 'Web: on',
     webOff: 'Web: off',
     thinking: 'Thinking…',

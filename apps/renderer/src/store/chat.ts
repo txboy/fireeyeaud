@@ -8,6 +8,7 @@ import {
   getSessionMessagesApi,
   listSessionsApi,
   streamChat,
+  type AttachmentRef,
   type ChatContext,
   type SessionMessage,
   type SessionSummary,
@@ -45,12 +46,16 @@ interface ChatState {
   modelId: string | null;
   /** 本次会话勾选的非默认资源（后端再并上默认集）。 */
   context: ChatContext;
+  /** 本次会话的临时附件（不写工作区）。 */
+  attachments: AttachmentRef[];
   loadSessions: () => Promise<void>;
   selectSession: (id: string) => Promise<void>;
   newSession: () => void;
   deleteSession: (id: string) => Promise<void>;
   setModel: (id: string | null) => void;
   setContext: (patch: Partial<ChatContext>) => void;
+  addAttachments: (items: AttachmentRef[]) => void;
+  removeAttachment: (path: string) => void;
   send: (text: string, locale: string) => Promise<void>;
   clear: () => void;
 }
@@ -136,6 +141,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   streaming: false,
   modelId: null,
   context: EMPTY_CONTEXT,
+  attachments: [],
 
   loadSessions: async () => {
     try {
@@ -147,7 +153,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   selectSession: async (id) => {
-    set({ sessionId: id, messages: [], context: EMPTY_CONTEXT });
+    set({ sessionId: id, messages: [], context: EMPTY_CONTEXT, attachments: [] });
     try {
       const page = await getSessionMessagesApi(id);
       if (get().sessionId !== id) return; // 已切换到别的会话
@@ -172,11 +178,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  newSession: () => set({ sessionId: null, messages: [], context: EMPTY_CONTEXT }),
+  newSession: () =>
+    set({ sessionId: null, messages: [], context: EMPTY_CONTEXT, attachments: [] }),
 
   setModel: (id) => set({ modelId: id }),
 
   setContext: (patch) => set((s) => ({ context: { ...s.context, ...patch } })),
+
+  addAttachments: (items) =>
+    set((s) => {
+      const known = new Set(s.attachments.map((a) => a.path));
+      const added = items.filter((a) => !known.has(a.path));
+      return added.length ? { attachments: [...s.attachments, ...added] } : {};
+    }),
+
+  removeAttachment: (path) =>
+    set((s) => ({ attachments: s.attachments.filter((a) => a.path !== path) })),
 
   deleteSession: async (id) => {
     try {
@@ -187,7 +204,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((s) => ({
       sessions: s.sessions.filter((item) => item.id !== id),
       ...(s.sessionId === id
-        ? { sessionId: null, messages: [], context: EMPTY_CONTEXT }
+        ? { sessionId: null, messages: [], context: EMPTY_CONTEXT, attachments: [] }
         : {}),
     }));
   },
@@ -273,6 +290,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         locale,
         get().modelId ?? undefined,
         get().context,
+        get().attachments,
       );
     } catch (err) {
       const e = err as ApiError;
@@ -290,5 +308,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   clear: () =>
-    set({ sessionId: null, messages: [], streaming: false, context: EMPTY_CONTEXT }),
+    set({
+      sessionId: null,
+      messages: [],
+      streaming: false,
+      context: EMPTY_CONTEXT,
+      attachments: [],
+    }),
 }));
