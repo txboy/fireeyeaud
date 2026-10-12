@@ -20,11 +20,11 @@ interface KnowledgeState {
   enabled: KbEnabledEntry[];
   load: () => Promise<void>;
   create: (input: KbProviderInput) => Promise<boolean>;
-  update: (
+  edit: (
     id: string,
     scope: KbProvider['scope'],
     patch: Partial<KbProviderInput>,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   remove: (id: string, scope: KbProvider['scope']) => Promise<void>;
   test: (id: string, scope: KbProvider['scope']) => Promise<boolean>;
   loadKnowledge: (id: string, scope: KbProvider['scope']) => Promise<void>;
@@ -65,9 +65,16 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
     }
   },
 
-  update: async (id, scope, patch) => {
-    await updateKbProvider(id, scope, patch);
-    await get().load();
+  edit: async (id, scope, patch) => {
+    set({ errorKey: null });
+    try {
+      await updateKbProvider(id, scope, patch);
+      await get().load();
+      return true;
+    } catch (err) {
+      set({ errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal' });
+      return false;
+    }
   },
 
   remove: async (id, scope) => {

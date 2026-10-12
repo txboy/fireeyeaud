@@ -19,7 +19,7 @@ export interface PreviewTab {
 }
 
 /** 配置表单所属域。 */
-export type FormDomain = 'database' | 'mcp' | 'skills' | 'models';
+export type FormDomain = 'database' | 'knowledge' | 'mcp' | 'skills' | 'models';
 
 /** 右侧区「配置表单」tab（每个实体一个，可多开、可关闭）。 */
 export interface FormTab {

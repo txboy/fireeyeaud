@@ -1,32 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BookOpen, Info, Plus, Trash2 } from 'lucide-react';
-import type { ConfigScope, KbEnabledEntry, KbProviderType } from '@fireeyeaud/shared';
+import { BookOpen, Info, Pencil, Plus, Trash2 } from 'lucide-react';
+import type { ConfigScope, KbEnabledEntry } from '@fireeyeaud/shared';
 import { ScopeBadge } from '../ScopeBadge';
 import { useKnowledgeStore } from '../../store/knowledge';
+import { useUiStore } from '../../store/ui';
 import { useWorkspaceStore } from '../../store/workspace';
-
-const TYPES: KbProviderType[] = ['dify', 'ragflow'];
-
-interface FormState {
-  type: KbProviderType;
-  name: string;
-  baseUrl: string;
-  apiKey: string;
-  scope: ConfigScope;
-  topK: string;
-  scoreThreshold: string;
-}
-
-const EMPTY_FORM: FormState = {
-  type: 'dify',
-  name: '',
-  baseUrl: '',
-  apiKey: '',
-  scope: 'project',
-  topK: '',
-  scoreThreshold: '',
-};
 
 export function KnowledgePanel() {
   const { t } = useTranslation('knowledge');
@@ -40,16 +19,13 @@ export function KnowledgePanel() {
   const knowledgeByProvider = useKnowledgeStore((s) => s.knowledgeByProvider);
   const enabled = useKnowledgeStore((s) => s.enabled);
   const load = useKnowledgeStore((s) => s.load);
-  const create = useKnowledgeStore((s) => s.create);
   const remove = useKnowledgeStore((s) => s.remove);
   const test = useKnowledgeStore((s) => s.test);
   const loadKnowledge = useKnowledgeStore((s) => s.loadKnowledge);
   const setEnabled = useKnowledgeStore((s) => s.setEnabled);
+  const openForm = useUiStore((s) => s.openForm);
   const path = useWorkspaceStore((s) => s.path);
 
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [busy, setBusy] = useState(false);
   const [testOk, setTestOk] = useState<Record<string, boolean>>({});
   const [draft, setDraft] = useState<Record<string, boolean>>({});
 
@@ -73,31 +49,6 @@ export function KnowledgePanel() {
       ...d,
       [`${providerId}:${knowledgeId}`]: !isOn(providerId, knowledgeId),
     }));
-
-  const submit = async () => {
-    if (!form.name.trim() || !form.baseUrl.trim()) return;
-    setBusy(true);
-    let apiKeyRef: string | undefined;
-    if (form.apiKey && window.fireeyeaud?.putSecret) {
-      apiKeyRef = (await window.fireeyeaud.putSecret(form.apiKey)) ?? undefined;
-    }
-    const defaults: Record<string, unknown> = {};
-    if (form.topK.trim()) defaults.topK = Number(form.topK);
-    if (form.scoreThreshold.trim()) defaults.scoreThreshold = Number(form.scoreThreshold);
-    const ok = await create({
-      type: form.type,
-      name: form.name.trim(),
-      baseUrl: form.baseUrl.trim(),
-      scope: form.scope,
-      apiKeyRef,
-      defaults: Object.keys(defaults).length ? defaults : undefined,
-    });
-    setBusy(false);
-    if (ok) {
-      setShowForm(false);
-      setForm(EMPTY_FORM);
-    }
-  };
 
   const saveEnabled = async (providerId: string, scope: ConfigScope) => {
     const base = new Map<string, KbEnabledEntry>(
@@ -132,85 +83,10 @@ export function KnowledgePanel() {
       <button
         type="button"
         className="button button--sm"
-        onClick={() => setShowForm((v) => !v)}
+        onClick={() => void openForm('knowledge', 'create')}
       >
         <Plus size={12} strokeWidth={2} /> {t('newConnection')}
       </button>
-
-      {showForm && (
-        <div className="card db-form">
-          <input
-            className="searchbox"
-            placeholder={t('name')}
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-          />
-          <select
-            className="searchbox"
-            value={form.type}
-            onChange={(e) => setForm({ ...form, type: e.target.value as KbProviderType })}
-          >
-            {TYPES.map((ty) => (
-              <option key={ty} value={ty}>
-                {te(`kbProvider.${ty}`)}
-              </option>
-            ))}
-          </select>
-          <input
-            className="searchbox"
-            placeholder={t('baseUrl')}
-            value={form.baseUrl}
-            onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
-          />
-          <input
-            className="searchbox"
-            type="password"
-            placeholder={t('apiKey')}
-            value={form.apiKey}
-            onChange={(e) => setForm({ ...form, apiKey: e.target.value })}
-          />
-          <div className="card__row">
-            <input
-              className="searchbox"
-              placeholder={t('topK')}
-              value={form.topK}
-              onChange={(e) => setForm({ ...form, topK: e.target.value })}
-            />
-            <input
-              className="searchbox"
-              placeholder={t('scoreThreshold')}
-              value={form.scoreThreshold}
-              onChange={(e) => setForm({ ...form, scoreThreshold: e.target.value })}
-            />
-          </div>
-          <div className="card__row">
-            <select
-              className="searchbox"
-              value={form.scope}
-              onChange={(e) => setForm({ ...form, scope: e.target.value as ConfigScope })}
-            >
-              <option value="project">{te('configScope.project')}</option>
-              <option value="global">{te('configScope.global')}</option>
-            </select>
-            <span className="spacer" />
-            <button
-              type="button"
-              className="button button--sm"
-              disabled={busy || !form.name.trim() || !form.baseUrl.trim()}
-              onClick={() => void submit()}
-            >
-              {t('save')}
-            </button>
-            <button
-              type="button"
-              className="button button--sm button--ghost"
-              onClick={() => setShowForm(false)}
-            >
-              {t('cancel')}
-            </button>
-          </div>
-        </div>
-      )}
 
       {errorKey && (
         <div className="panel-error">{terr(errorKey.replace(/^error\./, ''))}</div>
@@ -262,6 +138,20 @@ export function KnowledgePanel() {
                   onClick={() => void loadKnowledge(provider.id, provider.scope)}
                 >
                   <BookOpen size={12} strokeWidth={2} /> {t('browse')}
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  title={tc('edit')}
+                  onClick={() =>
+                    void openForm('knowledge', 'edit', {
+                      id: provider.id,
+                      scope: provider.scope,
+                      name: provider.name,
+                    })
+                  }
+                >
+                  <Pencil size={13} strokeWidth={1.75} />
                 </button>
                 <button
                   type="button"

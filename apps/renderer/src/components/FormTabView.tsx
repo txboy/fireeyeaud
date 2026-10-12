@@ -5,10 +5,12 @@ import { useModelsStore } from '../store/models';
 import { useMcpStore } from '../store/mcp';
 import { useSkillsStore } from '../store/skills';
 import { useDatabaseStore } from '../store/database';
+import { useKnowledgeStore } from '../store/knowledge';
 import { ModelForm } from './forms/ModelForm';
 import { McpForm } from './forms/McpForm';
 import { SkillForm } from './forms/SkillForm';
 import { DatabaseForm } from './forms/DatabaseForm';
+import { KnowledgeForm } from './forms/KnowledgeForm';
 import { FORM_DOMAIN_ICON, useFormTitle } from './forms/meta';
 
 /** 「配置表单」tab 内容：按域路由到对应表单，编辑时从 store 取实体。 */
@@ -20,6 +22,7 @@ export function FormTabView({ tab }: { tab: FormTab }) {
   const mcp = useMcpStore((s) => s.items);
   const skills = useSkillsStore((s) => s.items);
   const databases = useDatabaseStore((s) => s.items);
+  const kbProviders = useKnowledgeStore((s) => s.items);
 
   const onClose = useCallback(() => {
     void closeTab(tab.id);
@@ -45,6 +48,12 @@ export function FormTabView({ tab }: { tab: FormTab }) {
     body =
       editing && !entity ? null : (
         <SkillForm entity={entity} onSaved={onClose} onCancel={onClose} />
+      );
+  } else if (tab.domain === 'knowledge') {
+    const entity = editing ? kbProviders.find((i) => i.id === tab.entityId) : undefined;
+    body =
+      editing && !entity ? null : (
+        <KnowledgeForm entity={entity} onSaved={onClose} onCancel={onClose} />
       );
   } else {
     const entity = editing ? databases.find((i) => i.id === tab.entityId) : undefined;

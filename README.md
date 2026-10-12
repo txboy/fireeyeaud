@@ -140,7 +140,7 @@ aggregate_subject / parse_ledger / check_tie）、对话 Agent（plan → tool_c
 - **CSP**：生产放开 `img-src blob:` / `worker-src 'self' blob:` / `font-src … blob:`，其余不变。
 
 ### Phase 7b · 配置表单在右侧 tab 中打开（已完成）
-- **表单 tab**：数据库 / MCP / Skills / Models 的「新增 / 编辑」表单在**右侧区**以 tab 打开；
+- **表单 tab**：数据库 / 知识库 / MCP / Skills / Models 的「新增 / 编辑」表单在**右侧区**以 tab 打开；
   每个实体一个 tab（`form:<域>:<id|new>`），可多开、可关闭；保存 / 取消后关闭该 tab。
 - **编辑能力**：为 MCP / Skills / 数据库连接补上编辑（模型已有）；后端新增
   `PATCH /db/connections/{id}`，`config.store.update_item` 支持 `drop_none=False` 以显式清空字段。
