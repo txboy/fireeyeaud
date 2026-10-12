@@ -197,6 +197,7 @@ export function DatabaseForm({
         onSave={() => void save().then((ok) => ok && close(onSaved))}
         onCancel={() => close(onCancel)}
         busy={busy}
+        create={!entity}
         disabled={!form.name.trim() || (isFile ? !form.path.trim() : false)}
       />
       {modal}

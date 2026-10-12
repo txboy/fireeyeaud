@@ -210,6 +210,7 @@ export function McpForm({
         onSave={() => void save().then((ok) => ok && close(onSaved))}
         onCancel={() => close(onCancel)}
         busy={busy}
+        create={!entity}
         disabled={!form.name.trim()}
       />
       {modal}

@@ -541,13 +541,19 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  width: 100%;
   max-width: 520px;
+  margin: 0 auto;
 }
 
 .formtab__actions {
   display: flex;
   gap: 8px;
   margin-top: 4px;
+}
+
+.formtab__actions .button {
+  flex: 1 1 0;
 }
 
 textarea.searchbox {

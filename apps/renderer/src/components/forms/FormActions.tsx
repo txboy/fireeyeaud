@@ -5,10 +5,12 @@ interface FormActionsProps {
   onCancel: () => void;
   busy?: boolean;
   disabled?: boolean;
+  /** 新增模式主按钮显示「新增」，编辑模式显示「保存」。 */
+  create?: boolean;
 }
 
 /** 表单底部「保存 / 取消」操作条。 */
-export function FormActions({ onSave, onCancel, busy, disabled }: FormActionsProps) {
+export function FormActions({ onSave, onCancel, busy, disabled, create }: FormActionsProps) {
   const { t } = useTranslation('common');
   return (
     <div className="formtab__actions">
@@ -18,7 +20,7 @@ export function FormActions({ onSave, onCancel, busy, disabled }: FormActionsPro
         disabled={busy || disabled}
         onClick={onSave}
       >
-        {t('save')}
+        {create ? t('add') : t('save')}
       </button>
       <button
         type="button"
