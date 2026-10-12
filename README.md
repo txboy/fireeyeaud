@@ -126,13 +126,26 @@ aggregate_subject / parse_ledger / check_tie）、对话 Agent（plan → tool_c
 - **打包**：`services/agent/fireeyeaud-agent.spec`（PyInstaller 单文件 sidecar）、`apps/desktop/package.json`
   electron-builder 配置、`.github/workflows/release.yml`（windows-latest，不签名）。
 
-已知偏差（详见 [`docs/plans/2026-10-09-phase1-mvp.md`](docs/plans/2026-10-09-phase1-mvp.md)、
-[`docs/plans/2026-10-09-phase2-evidence-review.md`](docs/plans/2026-10-09-phase2-evidence-review.md)、
+### Phase 7 · 文件预览与右侧内容区（已完成）
+- **布局**：对话栏 + 成果栏合并为**右侧区**（顶部为一等 tab 容器）；「会话」tab 常驻，
+  内含 对话 + 成果 一体（成果内部保留 疑点/图谱/底稿/证据 子 tab）；「预览」tab 每个文件一个，
+  可多开、可关闭。
+- **打开方式**：资源管理器点击文件、搜索命中点击文件 → 打开/激活预览 tab；点击历史会话 / 新建会话
+  → 激活「会话」tab。
+- **读写 IPC**：主进程 `fs:read-file` / `fs:write-text-file`（工作区包含校验 + 大小上限 + 文本写白名单），
+  经 preload 暴露；文件读写不经 sidecar。
+- **预览**：文本 CodeMirror 6（可编辑，Ctrl+S / 保存按钮，脏标记，切换前确认）；
+  图片 `<img>`（适应 / 原始）；PDF `pdfjs-dist` → canvas；Word `.docx` `docx-preview`；
+  Excel `.xlsx/.xlsm` `exceljs`（逐 sheet + 行/列截断）。重依赖按需加载（动态 import）。
+- **CSP**：生产放开 `img-src blob:` / `worker-src 'self' blob:` / `font-src … blob:`，其余不变。
+
+已知偏差（详见 [`docs/plans/2026-10-09-phase1-mvp.md`](docs/plans/2026-10-09-phase1-mvp.md)、[`docs/plans/2026-10-09-phase2-evidence-review.md`](docs/plans/2026-10-09-phase2-evidence-review.md)、
 [`docs/plans/2026-10-09-phase3-evidence-graph.md`](docs/plans/2026-10-09-phase3-evidence-graph.md)、
 [`docs/plans/2026-10-09-phase4-working-paper-export.md`](docs/plans/2026-10-09-phase4-working-paper-export.md)、
 [`docs/plans/2026-10-09-phase5-database-connections.md`](docs/plans/2026-10-09-phase5-database-connections.md)、
 [`docs/plans/2026-10-10-phase5.5-knowledge-base.md`](docs/plans/2026-10-10-phase5.5-knowledge-base.md)、
-[`docs/plans/2026-10-10-phase6-websearch-mcp-packaging.md`](docs/plans/2026-10-10-phase6-websearch-mcp-packaging.md)）：
+[`docs/plans/2026-10-10-phase6-websearch-mcp-packaging.md`](docs/plans/2026-10-10-phase6-websearch-mcp-packaging.md)、
+[`docs/plans/2026-10-12-phase7-file-preview.md`](docs/plans/2026-10-12-phase7-file-preview.md)）：
 工具先用进程内 LangChain `StructuredTool`（MCP 仅配置级，不加载执行）；搜索先用主进程 Node 遍历；
 MCP / Skills 为配置 + 面板（Skills 提示词注入生效，`toolIds` 不联动执行）；`web_search` 默认关闭；
 会话/消息投影为简化实现；证据仅记 tool_call/tool_result 两档；打开工作区同步校验证据链；
@@ -142,6 +155,8 @@ DB 只读依赖 SQL 白名单（非数据库侧强制），字段级授权为 be
 知识库为外部服务（命中片段写入证据链，非本机 base URL 会外发查询文本）；
 打包仅产出配置 + CI（本地仅验证 PyInstaller 可构建 sidecar、electron-builder 配置有效），
 安装包未签名（Windows 安装提示）。
+预览仅支持现代格式（旧版 `.doc`/`.xls` 需用系统程序打开）；Word/Excel/PDF 仅预览不可编辑；
+`.csv` 按纯文本处理（可编辑）；预览 tab 不持久化；各格式在真实 Electron 下的渲染需人工 QA。
 真实模型 / 非 SQLite 数据库 / Dify·RAGFlow 知识库 / Tavily 联网检索 E2E 需人工按计划步骤验证。
 
 ## 文档

@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld('fireeyeaud', {
   openFiles: () => ipcRenderer.invoke('dialog:open-files'),
   searchRun: (payload) => ipcRenderer.invoke('search:run', payload),
   readDir: (payload) => ipcRenderer.invoke('fs:read-dir', payload),
+  readFile: (payload) => ipcRenderer.invoke('fs:read-file', payload),
+  writeTextFile: (payload) => ipcRenderer.invoke('fs:write-text-file', payload),
   openPath: (filePath) => ipcRenderer.invoke('shell:open-path', filePath),
   showItemInFolder: (filePath) => ipcRenderer.invoke('shell:show-item', filePath),
   putSecret: (plaintext) => ipcRenderer.invoke('secret:put', plaintext),

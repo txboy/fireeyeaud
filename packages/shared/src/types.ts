@@ -189,6 +189,36 @@ export interface FsEntry {
   size?: number;
 }
 
+/** 文件读取 / 写入错误码（主进程 fs:read-file / fs:write-text-file）。 */
+export type FsFileErrorCode =
+  | 'E_OUTSIDE_WORKSPACE'
+  | 'E_NOT_FOUND'
+  | 'E_UNSUPPORTED'
+  | 'E_TOO_LARGE'
+  | 'E_READ_FAILED'
+  | 'E_NOT_EDITABLE'
+  | 'E_WRITE_FAILED';
+
+/** fs:read-file 返回：文本或 base64 内容，或错误。 */
+export type FsFileContent =
+  | { ok: true; kind: 'text'; text: string; size: number; path: string }
+  | { ok: true; kind: 'base64'; data: string; mime: string; size: number; path: string }
+  | {
+      ok: false;
+      code: FsFileErrorCode;
+      size?: number;
+      ext?: string;
+      kind?: 'text' | 'base64';
+    };
+
+/** fs:write-text-file 返回。 */
+export interface FsWriteResult {
+  ok: boolean;
+  code?: FsFileErrorCode;
+  path?: string;
+  size?: number;
+}
+
 export interface WorkspaceInfo {
   schemaVersion: number;
   id: string;

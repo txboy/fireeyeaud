@@ -17,6 +17,7 @@ const crypto = require('node:crypto');
 const { SidecarManager, pythonExeFor, bundledAgentExe } = require('./sidecar.cjs');
 const { createSecretsStore } = require('./secrets.cjs');
 const { loadWindowState, saveWindowState } = require('./window-state.cjs');
+const { readFileContent, writeTextFile } = require('./file-preview.cjs');
 
 app.setName('fireeyeaud');
 
@@ -226,6 +227,20 @@ function registerIpc() {
       .slice(0, SEARCH_MAX_TOTAL);
     return { entries };
   });
+  ipcMain.handle('fs:read-file', (_event, payload) => {
+    const { root, path: filePath } = payload ?? {};
+    if (typeof root !== 'string' || typeof filePath !== 'string') {
+      return { ok: false, code: 'E_NOT_FOUND' };
+    }
+    return readFileContent({ root, filePath });
+  });
+  ipcMain.handle('fs:write-text-file', (_event, payload) => {
+    const { root, path: filePath, text } = payload ?? {};
+    if (typeof root !== 'string' || typeof filePath !== 'string') {
+      return { ok: false, code: 'E_WRITE_FAILED' };
+    }
+    return writeTextFile({ root, filePath, text });
+  });
   ipcMain.handle('shell:open-path', (_event, filePath) => {
     if (typeof filePath !== 'string' || !filePath) return { ok: false };
     return shell.openPath(filePath).then((err) => ({ ok: !err }));
@@ -408,7 +423,7 @@ app.whenReady().then(async () => {
         responseHeaders: {
           ...details.responseHeaders,
           'Content-Security-Policy': [
-            "default-src 'self'; connect-src 'self' http://127.0.0.1:*; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+            "default-src 'self'; connect-src 'self' http://127.0.0.1:*; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; worker-src 'self' blob:; font-src 'self' data: blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
           ],
         },
       });

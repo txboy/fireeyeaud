@@ -22,6 +22,19 @@ export type RightTab = SessionTab | PreviewTab;
 
 const SESSION_TAB: SessionTab = { id: 'session', kind: 'session' };
 
+/**
+ * 离开当前预览 tab 前的守卫（用于未保存确认）。
+ * 由当前挂载的 FilePreview 注册；返回 true 表示允许离开。
+ */
+type LeaveGuard = () => Promise<boolean>;
+
+let leaveGuard: LeaveGuard | null = null;
+
+/** 注册/清除预览离开守卫（仅当前激活的 FilePreview 调用）。 */
+export function setPreviewLeaveGuard(guard: LeaveGuard | null): void {
+  leaveGuard = guard;
+}
+
 interface UiState {
   activeView: ActivityView;
   sidebarOpen: boolean;
@@ -32,55 +45,73 @@ interface UiState {
   setActiveView: (view: ActivityView) => void;
   setResultsTab: (tab: ResultsTab) => void;
   setSelectedFindingId: (id: string | null) => void;
-  openPreview: (root: string, absPath: string, name: string) => void;
-  closeRightTab: (id: string) => void;
-  activateRightTab: (id: string) => void;
-  showSession: () => void;
+  openPreview: (root: string, absPath: string, name: string) => Promise<void>;
+  closeRightTab: (id: string) => Promise<void>;
+  activateRightTab: (id: string) => Promise<void>;
+  showSession: () => Promise<void>;
   resetRightTabs: () => void;
 }
 
-export const useUiStore = create<UiState>((set, get) => ({
-  activeView: 'explorer',
-  sidebarOpen: true,
-  resultsTab: 'findings',
-  selectedFindingId: null,
-  rightTabs: [SESSION_TAB],
-  activeRightTabId: 'session',
+export const useUiStore = create<UiState>((set, get) => {
+  /** 切换到 targetId 前征询当前预览的离开守卫。 */
+  const allowLeave = async (targetId: string): Promise<boolean> => {
+    if (targetId === get().activeRightTabId || !leaveGuard) return true;
+    return leaveGuard();
+  };
 
-  setActiveView: (view) =>
-    set((state) => ({
-      activeView: view,
-      sidebarOpen: state.activeView === view ? !state.sidebarOpen : true,
-    })),
-  setResultsTab: (tab) => set({ resultsTab: tab }),
-  setSelectedFindingId: (id) => set({ selectedFindingId: id }),
+  return {
+    activeView: 'explorer',
+    sidebarOpen: true,
+    resultsTab: 'findings',
+    selectedFindingId: null,
+    rightTabs: [SESSION_TAB],
+    activeRightTabId: 'session',
 
-  openPreview: (root, absPath, name) => {
-    const id = `preview:${absPath}`;
-    set((state) => {
-      const exists = state.rightTabs.some((tab) => tab.id === id);
-      const rightTabs = exists
-        ? state.rightTabs
-        : [...state.rightTabs, { id, kind: 'preview' as const, root, path: absPath, name }];
-      return { rightTabs, activeRightTabId: id };
-    });
-  },
+    setActiveView: (view) =>
+      set((state) => ({
+        activeView: view,
+        sidebarOpen: state.activeView === view ? !state.sidebarOpen : true,
+      })),
+    setResultsTab: (tab) => set({ resultsTab: tab }),
+    setSelectedFindingId: (id) => set({ selectedFindingId: id }),
 
-  closeRightTab: (id) => {
-    const { rightTabs, activeRightTabId } = get();
-    if (id === 'session') return;
-    const index = rightTabs.findIndex((tab) => tab.id === id);
-    if (index === -1) return;
-    const next = rightTabs.filter((tab) => tab.id !== id);
-    let active = activeRightTabId;
-    if (activeRightTabId === id) {
-      active = (next[index - 1] ?? next[index] ?? next[0] ?? SESSION_TAB).id;
-    }
-    set({ rightTabs: next, activeRightTabId: active });
-  },
+    openPreview: async (root, absPath, name) => {
+      const id = `preview:${absPath}`;
+      if (!(await allowLeave(id))) return;
+      set((state) => {
+        const exists = state.rightTabs.some((tab) => tab.id === id);
+        const rightTabs = exists
+          ? state.rightTabs
+          : [...state.rightTabs, { id, kind: 'preview' as const, root, path: absPath, name }];
+        return { rightTabs, activeRightTabId: id };
+      });
+    },
 
-  activateRightTab: (id) => set({ activeRightTabId: id }),
-  showSession: () => set({ activeRightTabId: 'session' }),
-  resetRightTabs: () =>
-    set({ rightTabs: [SESSION_TAB], activeRightTabId: 'session' }),
-}));
+    closeRightTab: async (id) => {
+      if (id === 'session') return;
+      const { rightTabs, activeRightTabId } = get();
+      const index = rightTabs.findIndex((tab) => tab.id === id);
+      if (index === -1) return;
+      if (id === activeRightTabId && !(await allowLeave('__close__'))) return;
+      const next = rightTabs.filter((tab) => tab.id !== id);
+      let active = activeRightTabId;
+      if (activeRightTabId === id) {
+        active = (next[index - 1] ?? next[index] ?? next[0] ?? SESSION_TAB).id;
+      }
+      set({ rightTabs: next, activeRightTabId: active });
+    },
+
+    activateRightTab: async (id) => {
+      if (!(await allowLeave(id))) return;
+      set({ activeRightTabId: id });
+    },
+
+    showSession: async () => {
+      if (!(await allowLeave('session'))) return;
+      set({ activeRightTabId: 'session' });
+    },
+
+    resetRightTabs: () =>
+      set({ rightTabs: [SESSION_TAB], activeRightTabId: 'session' }),
+  };
+});

@@ -1,7 +1,7 @@
 # Phase 7 · 文件预览与右侧内容区
 
 - 日期：2026-10-12
-- 状态：进行中
+- 状态：已完成
 - 关联：`docs/design/设计说明.md`、`docs/plans/2026-10-10-phase6-websearch-mcp-packaging.md`
 
 ## 1. 目标
@@ -58,11 +58,11 @@ preload 暴露 `readFile` / `writeTextFile`；`env.d.ts` 与 shared 类型同步
 
 | 格式 | 方案 | 依赖 |
 |---|---|---|
-| 文本 | CodeMirror 6：行号 + 语法高亮 + 可编辑 | `codemirror` + `@codemirror/lang-*` |
+| 文本 | CodeMirror 6：行号 + 语法高亮 + 可编辑（含 `.csv` 纯文本） | `codemirror` + `@codemirror/lang-*` |
 | 图片 | `<img src={dataUrl}>`，适应 / 原始缩放 | 无 |
 | PDF | `pdfjs-dist` → `<canvas>`，多页 + 缩放 | `pdfjs-dist` |
 | Word `.docx` | `docx-preview` → 容器 DOM | `docx-preview` |
-| Excel `.xlsx/.xlsm/.csv` | `exceljs` → 逐 sheet 表格 + sheet 切换 | `exceljs` |
+| Excel `.xlsx/.xlsm` | `exceljs` → 逐 sheet 表格 + sheet 切换 | `exceljs` |
 
 - Excel 单元格上限截断（默认 500 行 / 50 列）+ 截断提示。
 - 解析失败 → 友好错误态 + 「用系统程序打开」兜底按钮。
