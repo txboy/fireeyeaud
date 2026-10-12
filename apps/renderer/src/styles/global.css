@@ -823,6 +823,64 @@ textarea.searchbox {
   padding: 6px 2px;
 }
 
+.tree {
+  min-height: 40px;
+}
+
+.tree__row--selected {
+  background: var(--accent-weak);
+  color: var(--accent);
+}
+
+.tree__row--drop {
+  background: var(--hover);
+  outline: 1px dashed var(--accent);
+  outline-offset: -1px;
+}
+
+/* ---- Context menu ---- */
+.ctxmenu {
+  position: fixed;
+  z-index: 2000;
+  min-width: 148px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--editor-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.ctxmenu__item {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-1);
+  text-align: left;
+  font-size: 12.5px;
+  padding: 6px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.ctxmenu__item:hover {
+  background: var(--hover);
+}
+
+.ctxmenu__item--danger {
+  color: var(--danger);
+}
+
+/* ---- Prompt dialog ---- */
+.prompt__label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
 /* ---- Explorer sections ---- */
 .explorer__section {
   display: flex;

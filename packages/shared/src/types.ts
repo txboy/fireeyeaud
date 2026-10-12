@@ -207,6 +207,17 @@ export type FsDeleteErrorCode =
   | 'E_DELETE_ROOT'
   | 'E_PROTECTED';
 
+/** 文件操作（复制 / 移动 / 新建 / 重命名）错误码。 */
+export type FsOpErrorCode =
+  | 'E_OUTSIDE_WORKSPACE'
+  | 'E_NOT_FOUND'
+  | 'E_PROTECTED'
+  | 'E_INVALID_NAME'
+  | 'E_EXISTS'
+  | 'E_INTO_SELF'
+  | 'E_ROOT'
+  | 'E_OP_FAILED';
+
 /** fs:read-file 返回：文本或 base64 内容，或错误。 */
 export type FsFileContent =
   | { ok: true; kind: 'text'; text: string; size: number; path: string }
@@ -232,6 +243,14 @@ export interface FsDeleteResult {
   ok: boolean;
   code?: FsDeleteErrorCode;
   path?: string;
+}
+
+/** fs:copy-files / fs:move / fs:create-dir / fs:create-file / fs:rename 返回。 */
+export interface FsOpResult {
+  ok: boolean;
+  code?: FsOpErrorCode;
+  path?: string;
+  paths?: string[];
 }
 
 export interface WorkspaceInfo {

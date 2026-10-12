@@ -18,6 +18,7 @@ const { SidecarManager, pythonExeFor, bundledAgentExe } = require('./sidecar.cjs
 const { createSecretsStore } = require('./secrets.cjs');
 const { loadWindowState, saveWindowState } = require('./window-state.cjs');
 const { readFileContent, writeTextFile, deletePath } = require('./file-preview.cjs');
+const { copyInto, move, createDir, createFile, rename } = require('./file-ops.cjs');
 
 app.setName('fireeyeaud');
 
@@ -196,11 +197,11 @@ function registerIpc() {
             { name: '所有文件', extensions: ['*'] },
           ]
         : [
-            { name: '数据文件', extensions: ['xlsx', 'xlsm', 'csv', 'txt'] },
             { name: '所有文件', extensions: ['*'] },
+            { name: '数据文件', extensions: ['xlsx', 'xlsm', 'csv', 'txt'] },
           ];
     const result = await dialog.showOpenDialog(mainWindow ?? undefined, {
-      title: kind === 'attachments' ? '选择附件文件' : '选择数据文件',
+      title: kind === 'attachments' ? '选择附件文件' : kind === 'all' ? '选择文件' : '选择数据文件',
       filters,
       properties: ['openFile', 'multiSelections'],
     });
@@ -264,6 +265,33 @@ function registerIpc() {
       return { ok: false, code: 'E_DELETE_FAILED' };
     }
     return deletePath({ root, filePath });
+  });
+  ipcMain.handle('fs:copy-files', (_event, payload) => {
+    const { root, targetDir, sourcePaths } = payload ?? {};
+    if (typeof root !== 'string' || typeof targetDir !== 'string') {
+      return { ok: false, code: 'E_OP_FAILED' };
+    }
+    return copyInto({ root, targetDir, sourcePaths });
+  });
+  ipcMain.handle('fs:move', (_event, payload) => {
+    const { root, sourcePath, targetDir } = payload ?? {};
+    if (typeof root !== 'string') return { ok: false, code: 'E_OP_FAILED' };
+    return move({ root, sourcePath, targetDir });
+  });
+  ipcMain.handle('fs:create-dir', (_event, payload) => {
+    const { root, parentDir, name } = payload ?? {};
+    if (typeof root !== 'string') return { ok: false, code: 'E_OP_FAILED' };
+    return createDir({ root, parentDir, name });
+  });
+  ipcMain.handle('fs:create-file', (_event, payload) => {
+    const { root, parentDir, name } = payload ?? {};
+    if (typeof root !== 'string') return { ok: false, code: 'E_OP_FAILED' };
+    return createFile({ root, parentDir, name });
+  });
+  ipcMain.handle('fs:rename', (_event, payload) => {
+    const { root, path: filePath, newName } = payload ?? {};
+    if (typeof root !== 'string') return { ok: false, code: 'E_OP_FAILED' };
+    return rename({ root, filePath, newName });
   });
   ipcMain.handle('shell:open-path', (_event, filePath) => {
     if (typeof filePath !== 'string' || !filePath) return { ok: false };

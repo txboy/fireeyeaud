@@ -31,7 +31,7 @@ export function ExplorerPanel() {
   const importing = useDatasourcesStore((s) => s.importing);
   const importError = useDatasourcesStore((s) => s.errorKey);
   const load = useDatasourcesStore((s) => s.load);
-  const importFiles = useDatasourcesStore((s) => s.importFiles);
+  const importPath = useDatasourcesStore((s) => s.importPath);
   const removeDatasource = useDatasourcesStore((s) => s.remove);
 
   const sessions = useChatStore((s) => s.sessions);
@@ -43,6 +43,7 @@ export function ExplorerPanel() {
 
   const [refreshKey, setRefreshKey] = useState(0);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [selectedDir, setSelectedDir] = useState<string>('');
   const resetRightTabs = useUiStore((s) => s.resetRightTabs);
   const showSession = useUiStore((s) => s.showSession);
   const rightTabs = useUiStore((s) => s.rightTabs);
@@ -67,6 +68,31 @@ export function ExplorerPanel() {
     [rightTabs, closeRightTab],
   );
 
+  const handleRefresh = () => {
+    setActionError(null);
+    setRefreshKey((key) => key + 1);
+  };
+
+  // 上传文件：仅把文件复制进工作区（不导入数据源）。
+  const handleUpload = async () => {
+    if (!path) return;
+    const files = (await window.fireeyeaud?.openFiles('all')) ?? [];
+    if (files.length === 0) return;
+    setActionError(null);
+    const res = await window.fireeyeaud?.copyFiles({
+      root: path,
+      targetDir: selectedDir || path,
+      sourcePaths: files,
+    });
+    if (res?.ok) setRefreshKey((key) => key + 1);
+    else setActionError('error.opFailed');
+  };
+
+  const handleImportData = (target: string) => {
+    setActionError(null);
+    void importPath(target);
+  };
+
   const handleDeleteDatasource = async (id: string, name: string) => {
     const confirmed = await confirm({
       title: t('delete'),
@@ -83,6 +109,7 @@ export function ExplorerPanel() {
   // 切换工作区时刷新数据源 / 会话，并重置当前对话与右侧 tab。
   useEffect(() => {
     if (!path) return;
+    setSelectedDir(path);
     void load();
     newSession();
     void loadSessions();
@@ -171,10 +198,9 @@ export function ExplorerPanel() {
           <button
             type="button"
             className="icon-button"
-            title={ti('button')}
-            aria-label={ti('button')}
-            onClick={() => void importFiles()}
-            disabled={Boolean(importing)}
+            title={t('upload')}
+            aria-label={t('upload')}
+            onClick={() => void handleUpload()}
           >
             <Upload size={14} strokeWidth={1.9} />
           </button>
@@ -183,7 +209,7 @@ export function ExplorerPanel() {
             className="icon-button"
             title={t('refresh')}
             aria-label={t('refresh')}
-            onClick={() => setRefreshKey((key) => key + 1)}
+            onClick={handleRefresh}
           >
             <RefreshCw size={14} strokeWidth={1.9} />
           </button>
@@ -262,8 +288,13 @@ export function ExplorerPanel() {
           <FileTree
             root={path}
             refreshKey={refreshKey}
+            selectedDir={selectedDir}
+            onSelectDir={setSelectedDir}
+            onRefresh={handleRefresh}
             onDeleted={handleDeleted}
             onError={setActionError}
+            onImportData={handleImportData}
+            onUpload={() => void handleUpload()}
           />
         </div>
       </section>

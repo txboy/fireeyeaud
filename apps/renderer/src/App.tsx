@@ -6,6 +6,7 @@ import { RightArea } from './components/RightArea';
 import { StatusBar } from './components/StatusBar';
 import { Welcome } from './components/Welcome';
 import { ConfirmDialog } from './components/ConfirmDialog';
+import { PromptDialog } from './components/PromptDialog';
 import { useSidecarStore } from './store/sidecar';
 import { useWorkspaceStore } from './store/workspace';
 
@@ -33,6 +34,7 @@ export default function App() {
         <Welcome />
       )}
       <ConfirmDialog />
+      <PromptDialog />
     </div>
   );
 }

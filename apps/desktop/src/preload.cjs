@@ -1,6 +1,6 @@
 'use strict';
 
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 // 仅暴露白名单 API 给渲染进程。
 contextBridge.exposeInMainWorld('fireeyeaud', {
@@ -13,6 +13,12 @@ contextBridge.exposeInMainWorld('fireeyeaud', {
   readFile: (payload) => ipcRenderer.invoke('fs:read-file', payload),
   writeTextFile: (payload) => ipcRenderer.invoke('fs:write-text-file', payload),
   deletePath: (payload) => ipcRenderer.invoke('fs:delete', payload),
+  copyFiles: (payload) => ipcRenderer.invoke('fs:copy-files', payload),
+  movePath: (payload) => ipcRenderer.invoke('fs:move', payload),
+  createDir: (payload) => ipcRenderer.invoke('fs:create-dir', payload),
+  createFile: (payload) => ipcRenderer.invoke('fs:create-file', payload),
+  renamePath: (payload) => ipcRenderer.invoke('fs:rename', payload),
+  getPathForFile: (file) => webUtils.getPathForFile(file),
   openPath: (filePath) => ipcRenderer.invoke('shell:open-path', filePath),
   showItemInFolder: (filePath) => ipcRenderer.invoke('shell:show-item', filePath),
   putSecret: (plaintext) => ipcRenderer.invoke('secret:put', plaintext),
