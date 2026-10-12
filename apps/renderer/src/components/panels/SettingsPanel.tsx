@@ -54,79 +54,71 @@ export function SettingsPanel() {
   };
 
   return (
-    <>
-      <div className="formtab__form">
-        <div className="field">
-          <span className="field__label">{t('theme')}</span>
-          <Radio.Group value={theme} onChange={(e) => setTheme(e.target.value)}>
-            <Radio.Button value="light">{t('themeLight')}</Radio.Button>
-            <Radio.Button value="dark">{t('themeDark')}</Radio.Button>
-          </Radio.Group>
-        </div>
-        <div className="field">
-          <span className="field__label">{t('language')}</span>
-          <Select
-            value={locale}
-            style={{ width: 180 }}
-            onChange={setLocale}
-            options={supportedLocales.map((l) => ({ value: l, label: l }))}
-          />
-        </div>
-        <label className="field field--inline">
-          <Switch checked={enabled} onChange={setEnabled} />
-          <span>{t('webEnabled')}</span>
-        </label>
-        <div className="field">
-          <span className="field__label">{t('webProvider')}</span>
-          <Select
-            value={provider}
-            style={{ width: 180 }}
-            onChange={setProvider}
-            options={[
-              { value: 'tavily', label: 'Tavily' },
-              { value: 'custom', label: 'Custom' },
-            ]}
-          />
-        </div>
+    <div className="formtab__form">
+      <div className="field">
+        <span className="field__label">{t('theme')}</span>
+        <Radio.Group value={theme} onChange={(e) => setTheme(e.target.value)}>
+          <Radio.Button value="light">{t('themeLight')}</Radio.Button>
+          <Radio.Button value="dark">{t('themeDark')}</Radio.Button>
+        </Radio.Group>
+      </div>
+      <div className="field">
+        <span className="field__label">{t('language')}</span>
+        <Select
+          value={locale}
+          style={{ width: 180 }}
+          onChange={setLocale}
+          options={supportedLocales.map((l) => ({ value: l, label: l }))}
+        />
+      </div>
+      <label className="field field--inline">
+        <Switch checked={enabled} onChange={setEnabled} />
+        <span>{t('webEnabled')}</span>
+      </label>
+      <div className="field">
+        <span className="field__label">{t('webProvider')}</span>
+        <Select
+          value={provider}
+          style={{ width: 180 }}
+          onChange={setProvider}
+          options={[
+            { value: 'tavily', label: 'Tavily' },
+            { value: 'custom', label: 'Custom' },
+          ]}
+        />
+      </div>
+      <label className="field">
+        <span className="field__label">{t('webKey')}</span>
+        <input
+          className="searchbox"
+          type="password"
+          value={apiKey}
+          placeholder={webSearch.keyRef ? t('webKeySet') : ''}
+          onChange={(e) => setApiKey(e.target.value)}
+        />
+      </label>
+      {provider === 'custom' && (
         <label className="field">
-          <span className="field__label">{t('webKey')}</span>
+          <span className="field__label">{t('webBaseUrl')}</span>
           <input
             className="searchbox"
-            type="password"
-            value={apiKey}
-            placeholder={webSearch.keyRef ? t('webKeySet') : ''}
-            onChange={(e) => setApiKey(e.target.value)}
+            value={baseUrl}
+            onChange={(e) => setBaseUrl(e.target.value)}
           />
         </label>
-        {provider === 'custom' && (
-          <label className="field">
-            <span className="field__label">{t('webBaseUrl')}</span>
-            <input
-              className="searchbox"
-              value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
-            />
-          </label>
-        )}
-        <span className="card__meta">{t('webHint')}</span>
-        <label className="field">
-          <span className="field__label">{t('systemPrompt')}</span>
-          <textarea
-            className="searchbox"
-            rows={6}
-            value={systemPrompt}
-            placeholder={t('systemPromptPlaceholder')}
-            onChange={(e) => setSystemPrompt(e.target.value)}
-          />
-        </label>
-        <span className="card__meta">{t('systemPromptHint')}</span>
-        <FormActions
-          onSave={() => void submit()}
-          onCancel={() => void closeTab('settings')}
-          busy={busy}
+      )}
+      <span className="card__meta">{t('webHint')}</span>
+      <label className="field">
+        <span className="field__label">{t('systemPrompt')}</span>
+        <textarea
+          className="searchbox"
+          rows={6}
+          value={systemPrompt}
+          placeholder={t('systemPromptPlaceholder')}
+          onChange={(e) => setSystemPrompt(e.target.value)}
         />
-        {saved && <span className="card__meta">{t('saved')}</span>}
-      </div>
+      </label>
+      <span className="card__meta">{t('systemPromptHint')}</span>
 
       <div className="settings-rules">
         <div className="section-head">
@@ -134,6 +126,13 @@ export function SettingsPanel() {
         </div>
         <RulesPanel />
       </div>
-    </>
+
+      <FormActions
+        onSave={() => void submit()}
+        onCancel={() => void closeTab('settings')}
+        busy={busy}
+      />
+      {saved && <span className="card__meta">{t('saved')}</span>}
+    </div>
   );
 }

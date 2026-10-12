@@ -1295,13 +1295,14 @@ textarea.searchbox {
   margin-top: 1px;
 }
 
-/* 设置 tab 中的「规则库」区（与上方单列表单分隔）。 */
+/* 设置 tab 中的「规则库」区（与上方字段分隔）。 */
 .settings-rules {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-width: 520px;
-  margin: 28px auto 0;
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
 }
 
 /* ---- Chat messages ---- */
