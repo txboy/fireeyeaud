@@ -39,6 +39,7 @@ export function ExplorerPanel() {
   const loadSessions = useChatStore((s) => s.loadSessions);
   const selectSession = useChatStore((s) => s.selectSession);
   const newSession = useChatStore((s) => s.newSession);
+  const createSession = useChatStore((s) => s.createSession);
   const deleteSession = useChatStore((s) => s.deleteSession);
 
   const [refreshKey, setRefreshKey] = useState(0);
@@ -150,7 +151,7 @@ export function ExplorerPanel() {
             title={t('newSession')}
             aria-label={t('newSession')}
             onClick={() => {
-              newSession();
+              void createSession();
               showSession();
             }}
           >
@@ -169,10 +170,12 @@ export function ExplorerPanel() {
                   void selectSession(session.id);
                   showSession();
                 }}
-                title={session.title ?? session.id}
+                title={session.title ?? t('untitledSession')}
               >
                 <MessageSquare size={13} strokeWidth={1.75} />
-                <span className="session__title">{session.title || session.id}</span>
+                <span className="session__title">
+                  {session.title || t('untitledSession')}
+                </span>
                 <button
                   type="button"
                   className="session__del"

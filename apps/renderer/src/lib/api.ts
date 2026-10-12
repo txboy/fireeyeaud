@@ -110,7 +110,7 @@ export interface SessionInfo {
 }
 
 export function createSessionApi(input: {
-  title?: string;
+  title?: string | null;
   dataSourceIds?: string[];
 }): Promise<SessionInfo> {
   return request<SessionInfo>('/sessions', {
@@ -145,6 +145,13 @@ export function getSessionMessagesApi(id: string): Promise<{ items: SessionMessa
 
 export function deleteSessionApi(id: string): Promise<{ ok: boolean }> {
   return request<{ ok: boolean }>(`/sessions/${id}`, { method: 'DELETE' });
+}
+
+export function renameSessionApi(id: string, title: string): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/sessions/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ title }),
+  });
 }
 
 export interface ChatHandlers {

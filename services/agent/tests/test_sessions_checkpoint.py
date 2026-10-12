@@ -52,3 +52,22 @@ async def test_session_messages_persisted(tmp_path, monkeypatch) -> None:
         listed = (await client.get("/api/v1/sessions")).json()["items"]
         assert listed[0]["id"] == session_id
         await client.post("/api/v1/workspaces/close")
+
+
+async def test_session_create_untitled_and_rename(tmp_path) -> None:
+    async with _client() as client:
+        await client.post("/api/v1/workspaces/open", json={"path": str(tmp_path)})
+
+        created = await client.post("/api/v1/sessions", json={"title": None})
+        session_id = created.json()["id"]
+        assert created.json()["title"] is None
+
+        renamed = await client.patch(
+            f"/api/v1/sessions/{session_id}", json={"title": "新标题"}
+        )
+        assert renamed.status_code == 200
+
+        listed = (await client.get("/api/v1/sessions")).json()["items"]
+        assert listed[0]["id"] == session_id
+        assert listed[0]["title"] == "新标题"
+        await client.post("/api/v1/workspaces/close")

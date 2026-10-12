@@ -106,6 +106,7 @@ export default {
     deleteDataSourceConfirm:
       'Delete data source "{{name}}"? Its tables and registration will be removed (the original file on disk is kept).',
     noSessions: 'No sessions yet',
+    untitledSession: 'New session',
     noFiles: 'No files',
     loading: 'Loading…',
   },

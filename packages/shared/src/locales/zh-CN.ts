@@ -105,6 +105,7 @@ export default {
     deleteConfirm: '确定删除「{{name}}」？此操作不可撤销。',
     deleteDataSourceConfirm: '确定删除数据源「{{name}}」？将移除其数据表与登记记录（不删除磁盘原文件）。',
     noSessions: '暂无历史会话',
+    untitledSession: '新会话',
     noFiles: '暂无文件',
     loading: '加载中…',
   },

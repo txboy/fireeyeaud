@@ -20,6 +20,10 @@ class CreateSessionBody(BaseModel):
     dataSourceIds: list[str] | None = None
 
 
+class UpdateSessionBody(BaseModel):
+    title: str = Field(min_length=1)
+
+
 class ChatBody(BaseModel):
     message: str = Field(min_length=1)
     locale: str | None = None
@@ -55,6 +59,13 @@ def list_sessions() -> dict[str, object]:
 def get_messages(session_id: str) -> dict[str, object]:
     root = _root()
     return {"items": sessions_store.get_messages(root / ".fireeye", session_id)}
+
+
+@router.patch("/sessions/{session_id}")
+def update_session(session_id: str, body: UpdateSessionBody) -> dict[str, object]:
+    root = _root()
+    sessions_store.update_session_title(root / ".fireeye", session_id, body.title)
+    return {"ok": True}
 
 
 @router.delete("/sessions/{session_id}")

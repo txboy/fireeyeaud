@@ -7,6 +7,7 @@ import {
   EMPTY_CONTEXT,
   getSessionMessagesApi,
   listSessionsApi,
+  renameSessionApi,
   streamChat,
   type AttachmentRef,
   type ChatContext,
@@ -51,6 +52,7 @@ interface ChatState {
   loadSessions: () => Promise<void>;
   selectSession: (id: string) => Promise<void>;
   newSession: () => void;
+  createSession: () => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
   setModel: (id: string | null) => void;
   setContext: (patch: Partial<ChatContext>) => void;
@@ -153,7 +155,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   selectSession: async (id) => {
-    set({ sessionId: id, messages: [], context: EMPTY_CONTEXT, attachments: [] });
+    set({
+      sessionId: id,
+      messages: [],
+      streaming: false,
+      context: EMPTY_CONTEXT,
+      attachments: [],
+    });
     try {
       const page = await getSessionMessagesApi(id);
       if (get().sessionId !== id) return; // 已切换到别的会话
@@ -179,7 +187,46 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   newSession: () =>
-    set({ sessionId: null, messages: [], context: EMPTY_CONTEXT, attachments: [] }),
+    set({
+      sessionId: null,
+      messages: [],
+      streaming: false,
+      context: EMPTY_CONTEXT,
+      attachments: [],
+    }),
+
+  // 立即在后台创建一条空会话并选中（标题留空，首条消息发送时再补标题）。
+  createSession: async () => {
+    try {
+      const session = await createSessionApi({ title: null });
+      set({
+        sessionId: session.id,
+        messages: [],
+        streaming: false,
+        context: EMPTY_CONTEXT,
+        attachments: [],
+      });
+      await get().loadSessions();
+    } catch (err) {
+      const e = err as ApiError;
+      set({
+        sessionId: null,
+        messages: [
+          {
+            id: nextId(),
+            role: 'assistant',
+            content: '',
+            thinking: '',
+            phase: null,
+            streaming: false,
+            errorKey: e.messageKey ?? 'error.sidecarNotReady',
+            tools: [],
+            findingIds: [],
+          },
+        ],
+      });
+    }
+  },
 
   setModel: (id) => set({ modelId: id }),
 
@@ -220,6 +267,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
         sessionId = session.id;
         set({ sessionId });
         void get().loadSessions();
+      } else {
+        // 「点击即建」的空会话：首条消息发送时补上标题。
+        const current = get().sessions.find((s) => s.id === sessionId);
+        if (current && !current.title) {
+          const title = trimmed.slice(0, 40);
+          set((s) => ({
+            sessions: s.sessions.map((it) =>
+              it.id === sessionId ? { ...it, title } : it,
+            ),
+          }));
+          void renameSessionApi(sessionId, title).catch(() => {
+            /* 标题更新失败不阻塞对话 */
+          });
+        }
       }
     } catch (err) {
       const e = err as ApiError;
