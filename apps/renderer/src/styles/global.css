@@ -468,8 +468,8 @@ body {
 
 /* ---- Results column ---- */
 .results {
-  width: 460px;
-  flex: 0 0 460px;
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   background: var(--panel-bg);
