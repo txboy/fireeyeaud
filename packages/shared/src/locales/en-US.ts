@@ -217,6 +217,8 @@ export default {
     name: 'Name',
     provider: 'Provider',
     baseUrl: 'Base URL',
+    apiKey: 'API Key',
+    apiKeyKeep: 'Leave blank to keep unchanged',
     modelName: 'Model',
     temperature: 'Temperature',
     scope: 'Scope',

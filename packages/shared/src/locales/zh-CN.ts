@@ -217,6 +217,8 @@ export default {
     name: '名称',
     provider: '提供方',
     baseUrl: 'Base URL',
+    apiKey: 'API Key',
+    apiKeyKeep: '留空则不变',
     modelName: '模型名',
     temperature: '温度',
     scope: '作用域',

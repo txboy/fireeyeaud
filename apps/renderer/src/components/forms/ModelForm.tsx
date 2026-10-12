@@ -12,6 +12,7 @@ interface FormState {
   baseUrl: string;
   model: string;
   temperature: string;
+  apiKey: string;
   isDefault: boolean;
   scope: ConfigScope;
 }
@@ -22,6 +23,7 @@ const EMPTY: FormState = {
   baseUrl: 'http://127.0.0.1:11434/v1',
   model: 'qwen2.5',
   temperature: '0.2',
+  apiKey: '',
   isDefault: false,
   scope: 'global',
 };
@@ -34,6 +36,8 @@ function init(entity?: ModelProfile): FormState {
     baseUrl: entity.baseUrl,
     model: entity.model,
     temperature: String(entity.temperature ?? 0.2),
+    // 密钥只写不读：编辑时不回填，留空表示保持原密钥。
+    apiKey: '',
     isDefault: Boolean(entity.isDefault),
     scope: entity.scope,
   };
@@ -62,19 +66,24 @@ export function ModelForm({
   const dirty = JSON.stringify(form) !== JSON.stringify(initialRef.current);
 
   const save = async (): Promise<boolean> => {
-    const payload = {
-      name: form.name.trim(),
-      provider: form.provider.trim(),
-      baseUrl: form.baseUrl.trim(),
-      model: form.model.trim(),
-      temperature: Number(form.temperature) || 0.2,
-      isDefault: form.isDefault,
-      scope: form.scope,
-    };
-    if (!payload.name || !payload.baseUrl || !payload.model) return false;
+    if (!form.name.trim() || !form.baseUrl.trim() || !form.model.trim()) return false;
     setBusy(true);
     setLocalError(null);
     try {
+      let apiKeyRef: string | undefined;
+      if (form.apiKey && window.fireeyeaud) {
+        apiKeyRef = (await window.fireeyeaud.putSecret(form.apiKey)) ?? undefined;
+      }
+      const payload = {
+        name: form.name.trim(),
+        provider: form.provider.trim(),
+        baseUrl: form.baseUrl.trim(),
+        model: form.model.trim(),
+        temperature: Number(form.temperature) || 0.2,
+        apiKeyRef,
+        isDefault: form.isDefault,
+        scope: form.scope,
+      };
       if (entity) await edit(entity.id, entity.scope, payload);
       else await add(payload);
       return true;
@@ -117,6 +126,16 @@ export function ModelForm({
           className="searchbox"
           value={form.baseUrl}
           onChange={(e) => setForm((f) => ({ ...f, baseUrl: e.target.value }))}
+        />
+      </label>
+      <label className="field">
+        <span className="field__label">{t('apiKey')}</span>
+        <input
+          className="searchbox"
+          type="password"
+          placeholder={entity ? t('apiKeyKeep') : ''}
+          value={form.apiKey}
+          onChange={(e) => setForm((f) => ({ ...f, apiKey: e.target.value }))}
         />
       </label>
       <label className="field">
