@@ -34,7 +34,13 @@ export interface FormTab {
   name?: string;
 }
 
-export type RightTab = SessionTab | PreviewTab | FormTab;
+/** 右侧区「设置」tab（全局单例）。 */
+export interface SettingsTab {
+  id: 'settings';
+  kind: 'settings';
+}
+
+export type RightTab = SessionTab | PreviewTab | FormTab | SettingsTab;
 
 /**
  * 离开当前右侧 tab 前的守卫（用于未保存确认）。
@@ -66,6 +72,7 @@ interface UiState {
     entity?: { id: string; scope: ConfigScope; name: string },
   ) => Promise<void>;
   openSession: (sessionId: string) => Promise<void>;
+  openSettings: () => Promise<void>;
   closeRightTab: (id: string) => Promise<void>;
   activateRightTab: (id: string) => Promise<void>;
   resetRightTabs: () => void;
@@ -137,6 +144,16 @@ export const useUiStore = create<UiState>((set, get) => {
           ? state.rightTabs
           : [...state.rightTabs, { id, kind: 'session' as const, sessionId }];
         return { rightTabs, activeRightTabId: id };
+      });
+    },
+
+    openSettings: async () => {
+      const tab: SettingsTab = { id: 'settings', kind: 'settings' };
+      if (!(await allowLeave(tab.id))) return;
+      set((state) => {
+        const exists = state.rightTabs.some((t) => t.id === tab.id);
+        const rightTabs = exists ? state.rightTabs : [...state.rightTabs, tab];
+        return { rightTabs, activeRightTabId: tab.id };
       });
     },
 

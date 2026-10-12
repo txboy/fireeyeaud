@@ -1317,6 +1317,19 @@ textarea.searchbox {
   margin-top: 1px;
 }
 
+.settingsview {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: 14px 16px;
+  display: flex;
+}
+
+.settingsview .settings {
+  flex: 1;
+  min-width: 0;
+}
+
 .settings {
   display: flex;
   gap: 14px;

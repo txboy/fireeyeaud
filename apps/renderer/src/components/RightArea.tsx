@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { File as FileIcon, MessageSquare, X } from 'lucide-react';
+import { File as FileIcon, MessageSquare, Settings, X } from 'lucide-react';
 import {
   useUiStore,
   type FormTab,
@@ -13,6 +13,7 @@ import { AgentColumn } from './AgentColumn';
 import { ResultsColumn } from './ResultsColumn';
 import { FilePreview } from './FilePreview';
 import { FormTabView } from './FormTabView';
+import { SettingsPanel } from './panels/SettingsPanel';
 import { FORM_DOMAIN_ICON, useFormTitle } from './forms/meta';
 
 /** 「会话」tab：对话栏 + 成果栏一体（左对话、右成果）。 */
@@ -33,6 +34,7 @@ function SessionView({ sessionId }: { sessionId: string }) {
 export function RightArea() {
   const { t } = useTranslation('preview');
   const { t: te } = useTranslation('explorer');
+  const { t: ts } = useTranslation('settings');
   const formTitle = useFormTitle();
   const tabs = useUiStore((s) => s.rightTabs);
   const activeId = useUiStore((s) => s.activeRightTabId);
@@ -52,7 +54,9 @@ export function RightArea() {
       ? sessionLabel(tab)
       : tab.kind === 'form'
         ? formTitle(tab)
-        : tab.name;
+        : tab.kind === 'settings'
+          ? ts('title')
+          : tab.name;
 
   const handleClose = async (tab: RightTab) => {
     // 关闭正在生成的会话 tab：先警告并中止生成（保留已生成部分）。
@@ -70,7 +74,9 @@ export function RightArea() {
               ? MessageSquare
               : tab.kind === 'form'
                 ? FORM_DOMAIN_ICON[tab.domain]
-                : FileIcon;
+                : tab.kind === 'settings'
+                  ? Settings
+                  : FileIcon;
           const label = labelOf(tab);
           return (
             <div
@@ -110,6 +116,10 @@ export function RightArea() {
           <SessionView sessionId={active.sessionId} />
         ) : active.kind === 'form' ? (
           <FormTabView tab={active as FormTab} />
+        ) : active.kind === 'settings' ? (
+          <div className="settingsview">
+            <SettingsPanel />
+          </div>
         ) : (
           <FilePreview target={active as PreviewTab} />
         )}

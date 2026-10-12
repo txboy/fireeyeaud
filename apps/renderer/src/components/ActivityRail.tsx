@@ -36,6 +36,10 @@ export function ActivityRail() {
   const { t } = useTranslation('navigation');
   const activeView = useUiStore((s) => s.activeView);
   const setActiveView = useUiStore((s) => s.setActiveView);
+  const openSettings = useUiStore((s) => s.openSettings);
+  const settingsActive = useUiStore((s) =>
+    s.rightTabs.some((tab) => tab.kind === 'settings' && tab.id === s.activeRightTabId),
+  );
   const theme = useSettingsStore((s) => s.theme);
   const setTheme = useSettingsStore((s) => s.setTheme);
 
@@ -69,8 +73,8 @@ export function ActivityRail() {
         type="button"
         title={t('settings')}
         aria-label={t('settings')}
-        className={`activitybar__item${activeView === 'settings' ? ' activitybar__item--active' : ''}`}
-        onClick={() => setActiveView('settings')}
+        className={`activitybar__item${settingsActive ? ' activitybar__item--active' : ''}`}
+        onClick={() => void openSettings()}
       >
         <Settings size={18} strokeWidth={1.75} />
       </button>
