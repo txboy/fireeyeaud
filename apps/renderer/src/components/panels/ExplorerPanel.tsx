@@ -36,15 +36,12 @@ export function ExplorerPanel() {
   const removeDatasource = useDatasourcesStore((s) => s.remove);
 
   const sessions = useChatStore((s) => s.sessions);
-  const loadSessions = useChatStore((s) => s.loadSessions);
   const createSession = useChatStore((s) => s.createSession);
   const deleteSession = useChatStore((s) => s.deleteSession);
-  const clearAllChats = useChatStore((s) => s.clearAllChats);
 
   const [refreshKey, setRefreshKey] = useState(0);
   const [actionError, setActionError] = useState<string | null>(null);
   const [selectedDir, setSelectedDir] = useState<string>('');
-  const resetRightTabs = useUiStore((s) => s.resetRightTabs);
   const openSession = useUiStore((s) => s.openSession);
   const rightTabs = useUiStore((s) => s.rightTabs);
   const activeRightTabId = useUiStore((s) => s.activeRightTabId);
@@ -136,25 +133,13 @@ export function ExplorerPanel() {
     }
   };
 
-  // 切换工作区时刷新数据源 / 会话，重置右侧 tab 与聊天分片，并自动打开最近一条会话。
+  // 打开/切换工作区时只做左侧本地初始化；工作区生命周期（清空右区、自动开会话）
+  // 由 App 统一处理，避免左侧面板挂载/切换视图时误动右侧区域。
   useEffect(() => {
     if (!path) return;
     setSelectedDir(path);
     void load();
-    resetRightTabs();
-    clearAllChats();
-    let cancelled = false;
-    void (async () => {
-      await loadSessions();
-      if (cancelled) return;
-      const list = useChatStore.getState().sessions;
-      const last = list[list.length - 1];
-      if (last) await openSession(last.id);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [path, load, loadSessions, resetRightTabs, clearAllChats, openSession]);
+  }, [path, load]);
 
   if (!workspace || !path) {
     return (
