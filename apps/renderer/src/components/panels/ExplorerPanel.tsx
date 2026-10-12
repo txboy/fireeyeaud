@@ -12,6 +12,7 @@ import {
 import { useWorkspaceStore } from '../../store/workspace';
 import { useDatasourcesStore } from '../../store/datasources';
 import { useChatStore } from '../../store/chat';
+import { useUiStore } from '../../store/ui';
 import { FileTree } from '../FileTree';
 
 export function ExplorerPanel() {
@@ -39,14 +40,17 @@ export function ExplorerPanel() {
   const deleteSession = useChatStore((s) => s.deleteSession);
 
   const [refreshKey, setRefreshKey] = useState(0);
+  const resetRightTabs = useUiStore((s) => s.resetRightTabs);
+  const showSession = useUiStore((s) => s.showSession);
 
-  // 切换工作区时刷新数据源 / 会话，并重置当前对话。
+  // 切换工作区时刷新数据源 / 会话，并重置当前对话与右侧 tab。
   useEffect(() => {
     if (!path) return;
     void load();
     newSession();
     void loadSessions();
-  }, [path, load, newSession, loadSessions]);
+    resetRightTabs();
+  }, [path, load, newSession, loadSessions, resetRightTabs]);
 
   if (!workspace || !path) {
     return (
@@ -81,7 +85,10 @@ export function ExplorerPanel() {
             className="icon-button"
             title={t('newSession')}
             aria-label={t('newSession')}
-            onClick={newSession}
+            onClick={() => {
+              newSession();
+              showSession();
+            }}
           >
             <Plus size={15} strokeWidth={2} />
           </button>
@@ -94,7 +101,10 @@ export function ExplorerPanel() {
               <div
                 key={session.id}
                 className={`session${session.id === activeSessionId ? ' session--active' : ''}`}
-                onClick={() => void selectSession(session.id)}
+                onClick={() => {
+                  void selectSession(session.id);
+                  showSession();
+                }}
                 title={session.title ?? session.id}
               >
                 <MessageSquare size={13} strokeWidth={1.75} />

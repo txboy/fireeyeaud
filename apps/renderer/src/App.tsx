@@ -2,8 +2,7 @@ import { useEffect } from 'react';
 import { TitleBar } from './components/TitleBar';
 import { ActivityRail } from './components/ActivityRail';
 import { SideBar } from './components/SideBar';
-import { AgentColumn } from './components/AgentColumn';
-import { ResultsColumn } from './components/ResultsColumn';
+import { RightArea } from './components/RightArea';
 import { StatusBar } from './components/StatusBar';
 import { Welcome } from './components/Welcome';
 import { useSidecarStore } from './store/sidecar';
@@ -25,8 +24,7 @@ export default function App() {
           <div className="app__body">
             <ActivityRail />
             <SideBar />
-            <AgentColumn />
-            <ResultsColumn />
+            <RightArea />
           </div>
           <StatusBar />
         </>

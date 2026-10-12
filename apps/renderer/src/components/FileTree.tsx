@@ -8,6 +8,7 @@ import {
   FolderOpen,
 } from 'lucide-react';
 import type { FsEntry } from '@fireeyeaud/shared';
+import { useUiStore } from '../store/ui';
 
 interface TreeNodeProps {
   entry: FsEntry;
@@ -17,13 +18,14 @@ interface TreeNodeProps {
 
 /** 单个文件/文件夹节点，目录按需展开（懒加载子项）。 */
 function TreeNode({ entry, root, depth }: TreeNodeProps) {
+  const openPreview = useUiStore((s) => s.openPreview);
   const [open, setOpen] = useState(false);
   const [children, setChildren] = useState<FsEntry[] | null>(null);
   const [loading, setLoading] = useState(false);
 
   const toggle = async () => {
     if (!entry.isDir) {
-      void window.fireeyeaud?.openPath(entry.path);
+      openPreview(root, entry.path, entry.name);
       return;
     }
     const next = !open;

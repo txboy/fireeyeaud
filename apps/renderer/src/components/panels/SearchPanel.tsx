@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { FileSpreadsheet, FileText, Loader2, SearchX } from 'lucide-react';
 import type { SearchResult } from '@fireeyeaud/shared';
 import { useWorkspaceStore } from '../../store/workspace';
+import { useUiStore } from '../../store/ui';
 
 const SPREADSHEET_EXT = new Set(['.xlsx', '.xlsm', '.xls', '.csv']);
 
@@ -12,10 +13,17 @@ function iconFor(filePath: string) {
   return SPREADSHEET_EXT.has(ext) ? FileSpreadsheet : FileText;
 }
 
+/** 把搜索结果里的相对路径（`/` 分隔）拼成绝对路径。 */
+function joinPath(root: string, relPath: string) {
+  const sep = root.includes('\\') ? '\\' : '/';
+  return `${root}${sep}${relPath.split('/').join(sep)}`;
+}
+
 export function SearchPanel() {
   const { t } = useTranslation('search');
   const { t: te } = useTranslation('error');
   const root = useWorkspaceStore((s) => s.path);
+  const openPreview = useUiStore((s) => s.openPreview);
 
   const [query, setQuery] = useState('');
   const [include, setInclude] = useState('');
@@ -127,9 +135,18 @@ export function SearchPanel() {
 
       {result?.files.map((group) => {
         const Icon = iconFor(group.path);
+        const absPath = root ? joinPath(root, group.path) : group.path;
+        const name = group.path.split('/').pop() ?? group.path;
+        const open = () => {
+          if (root) openPreview(root, absPath, name);
+        };
         return (
           <div key={group.path} className="tree">
-            <div className="tree__row tree__row--folder">
+            <div
+              className="tree__row tree__row--folder"
+              onClick={open}
+              title={group.path}
+            >
               <Icon size={14} strokeWidth={1.75} />
               <span>{group.path}</span>
             </div>
@@ -139,6 +156,7 @@ export function SearchPanel() {
                 className="tree__row"
                 style={{ paddingLeft: 22 }}
                 title={hit.text}
+                onClick={open}
               >
                 <span
                   className="mono"
