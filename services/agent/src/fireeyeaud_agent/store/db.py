@@ -60,6 +60,31 @@ def create_connection(
     return updated
 
 
+def update_connection(
+    connection_id: str,
+    scope: str,
+    data: dict[str, Any],
+    *,
+    cred_ref: str | None = None,
+    root: Path | None = None,
+) -> dict[str, Any]:
+    from ..errors import ApiError
+
+    driver = data.get("driver")
+    if driver is not None:
+        driver = str(driver).lower()
+        if driver not in _DRIVERS:
+            raise ApiError("E_DB_DRIVER", 400, "error.dbDriver", {"driver": driver})
+        data = {**data, "driver": driver}
+    payload = {k: v for k, v in data.items() if k not in ("password", "credRef")}
+    if cred_ref is not None:
+        payload["credRef"] = cred_ref
+    # drop_none=False：允许显式传 null 清空字段（如换驱动时清掉 host/port）。
+    return store.update_item(
+        KIND, connection_id, scope, payload, root, drop_none=False
+    )
+
+
 def delete_connection(connection_id: str, scope: str, root: Path | None = None) -> None:
     conn = store.get_item(KIND, connection_id, scope, root)
     store.delete_item(KIND, connection_id, scope, root)

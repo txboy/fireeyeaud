@@ -29,6 +29,17 @@ class AuthorizationBody(BaseModel):
     tables: dict[str, list[str]]
 
 
+class ConnectionPatch(BaseModel):
+    name: str | None = None
+    driver: str | None = None
+    host: str | None = None
+    port: int | None = None
+    database: str | None = None
+    username: str | None = None
+    credRef: str | None = None
+    path: str | None = None
+
+
 @router.get("/db/connections")
 def list_connections(scope: str | None = Query(default=None)) -> dict:
     root = workspace_manager.root
@@ -49,6 +60,17 @@ def create_connection(body: ConnectionBody) -> dict:
 def delete_connection(connection_id: str, scope: str = Query(default="global")) -> dict:
     db.delete_connection(connection_id, scope, workspace_manager.root)
     return {"ok": True}
+
+
+@router.patch("/db/connections/{connection_id}")
+def update_connection(
+    connection_id: str, body: ConnectionPatch, scope: str = Query(default="global")
+) -> dict:
+    data = body.model_dump(exclude_unset=True)
+    cred_ref = data.pop("credRef", None)
+    return db.update_connection(
+        connection_id, scope, data, cred_ref=cred_ref, root=workspace_manager.root
+    )
 
 
 @router.post("/db/connections/{connection_id}/test")

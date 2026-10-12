@@ -130,13 +130,20 @@ def update_item(
     scope: str,
     patch: dict[str, Any],
     root: Path | None = None,
+    *,
+    drop_none: bool = True,
 ) -> dict[str, Any]:
     items = list_items(kind, scope, root)
     for index, item in enumerate(items):
         if item.get("id") == item_id:
+            applied = (
+                {k: v for k, v in patch.items() if v is not None}
+                if drop_none
+                else dict(patch)
+            )
             updated = {
                 **item,
-                **{k: v for k, v in patch.items() if v is not None},
+                **applied,
                 "id": item_id,
                 "scope": scope,
                 "updatedAt": now_iso(),

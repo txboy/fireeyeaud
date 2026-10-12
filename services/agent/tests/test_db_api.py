@@ -24,12 +24,13 @@ async def test_db_connections_api(tmp_path, monkeypatch):
         await client.post(
             "/api/v1/workspaces/open", json={"path": str(tmp_path / "ws")}
         )
+        db_path = str(_sqlite_file(tmp_path))
         res = await client.post(
             "/api/v1/db/connections",
             json={
                 "name": "本地",
                 "driver": "sqlite",
-                "path": str(_sqlite_file(tmp_path)),
+                "path": db_path,
                 "scope": "project",
             },
         )
@@ -39,6 +40,13 @@ async def test_db_connections_api(tmp_path, monkeypatch):
 
         listed = (await client.get("/api/v1/db/connections")).json()["items"]
         assert [c["id"] for c in listed] == ["conn_1"]
+
+        patched = await client.patch(
+            "/api/v1/db/connections/conn_1?scope=project",
+            json={"name": "本地库", "path": db_path},
+        )
+        assert patched.status_code == 200
+        assert patched.json()["name"] == "本地库"
 
         ok = (
             await client.post("/api/v1/db/connections/conn_1/test?scope=project")
