@@ -1318,6 +1318,13 @@ textarea.searchbox {
   color: var(--text-2);
 }
 
+/* 表单内的作用域等选项竖排成一列，每项一行。 */
+.field .search-opts {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+}
+
 .search-opt {
   display: inline-flex;
   align-items: center;
