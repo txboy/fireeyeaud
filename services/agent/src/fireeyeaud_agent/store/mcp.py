@@ -37,6 +37,8 @@ def create_server(data: dict[str, Any], root: Path | None = None) -> dict[str, A
         "net": bool(perms.get("net", False)),
         "toolsAllow": list(perms.get("toolsAllow") or []),
     }
+    if payload.get("env"):
+        payload["env"] = {str(k): str(v) for k, v in payload["env"].items()}
     return store.create_item(KIND, payload, root)
 
 

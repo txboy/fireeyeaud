@@ -1063,6 +1063,25 @@ textarea.searchbox {
   color: var(--text-1);
 }
 
+.kv-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.kv-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  width: 100%;
+}
+
+.kv-row .searchbox {
+  flex: 1;
+  min-width: 0;
+}
+
 .searchbox {
   width: 100%;
   background: var(--editor-bg);

@@ -19,19 +19,28 @@ async def test_mcp_api(tmp_path, monkeypatch):
                 "transport": "stdio",
                 "command": "npx",
                 "args": ["-y", "server-filesystem", "."],
+                "env": {"LOG_LEVEL": "info"},
+                "apiKeyRef": "sec_1",
+                "apiKeyEnv": "FS_API_KEY",
                 "enabled": True,
                 "scope": "project",
             },
         )
         assert res.status_code == 200
-        assert res.json()["id"] == "mcp_1"
+        body = res.json()
+        assert body["id"] == "mcp_1"
+        assert body["env"] == {"LOG_LEVEL": "info"}
+        assert body["apiKeyRef"] == "sec_1"
+        assert body["apiKeyEnv"] == "FS_API_KEY"
         listed = (await client.get("/api/v1/mcp/servers")).json()["items"]
         assert listed[0]["name"] == "filesystem"
 
         patched = await client.patch(
-            "/api/v1/mcp/servers/mcp_1?scope=project", json={"enabled": False}
+            "/api/v1/mcp/servers/mcp_1?scope=project",
+            json={"enabled": False, "apiKeyEnv": "OTHER_KEY"},
         )
         assert patched.json()["enabled"] is False
+        assert patched.json()["apiKeyEnv"] == "OTHER_KEY"
 
         await client.delete("/api/v1/mcp/servers/mcp_1?scope=project")
         await client.post("/api/v1/workspaces/close")

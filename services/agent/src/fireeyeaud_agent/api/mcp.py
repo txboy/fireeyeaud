@@ -20,6 +20,8 @@ class ServerBody(BaseModel):
     args: list[str] | None = None
     env: dict | None = None
     url: str | None = None
+    apiKeyRef: str | None = None
+    apiKeyEnv: str | None = None
     enabled: bool = True
     scope: str = "global"
     permissions: dict | None = None
@@ -33,7 +35,10 @@ class ServerPatch(BaseModel):
     enabled: bool | None = None
     permissions: dict | None = None
     args: list[str] | None = None
+    env: dict | None = None
     url: str | None = None
+    apiKeyRef: str | None = None
+    apiKeyEnv: str | None = None
     isDefault: bool | None = None
 
 

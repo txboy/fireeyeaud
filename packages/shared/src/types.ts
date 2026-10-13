@@ -391,8 +391,13 @@ export interface McpServer {
   transport: McpTransport;
   command?: string | null;
   args?: string[] | null;
+  /** 明文环境变量（stdio 传给子进程；敏感值请改用 apiKeyRef）。 */
   env?: Record<string, string> | null;
   url?: string | null;
+  /** 远程鉴权（sse/http 作为 Authorization: Bearer）或 stdio 注入用的密钥引用。 */
+  apiKeyRef?: string | null;
+  /** 若设置，stdio 启动时把密钥注入为该环境变量名。 */
+  apiKeyEnv?: string | null;
   enabled: boolean;
   scope: ConfigScope;
   permissions?: McpPermissions;

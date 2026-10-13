@@ -108,6 +108,14 @@ export function McpPanel() {
                 {t('tools')}: {server.permissions.toolsAllow.join(', ')}
               </span>
             ) : null}
+            {server.apiKeyRef ? (
+              <span className="card__meta">{t('keySet')}</span>
+            ) : null}
+            {server.env && Object.keys(server.env).length ? (
+              <span className="card__meta">
+                {t('env')}: {Object.keys(server.env).join(', ')}
+              </span>
+            ) : null}
           </div>
         ))
       )}

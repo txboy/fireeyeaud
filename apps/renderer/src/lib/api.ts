@@ -596,7 +596,10 @@ export interface McpServerInput {
   transport: McpTransport;
   command?: string | null;
   args?: string[] | null;
+  env?: Record<string, string> | null;
   url?: string | null;
+  apiKeyRef?: string | null;
+  apiKeyEnv?: string | null;
   enabled?: boolean;
   scope: ConfigScope;
   permissions?: {
