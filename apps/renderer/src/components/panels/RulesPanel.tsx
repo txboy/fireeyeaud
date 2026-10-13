@@ -56,6 +56,7 @@ export function RulesPanel() {
   const { t: tc } = useTranslation('common');
   const { t: terr } = useTranslation('error');
   const items = useRulesStore((s) => s.items);
+  const loading = useRulesStore((s) => s.loading);
   const errorKey = useRulesStore((s) => s.errorKey);
   const load = useRulesStore((s) => s.load);
   const edit = useRulesStore((s) => s.edit);
@@ -82,23 +83,28 @@ export function RulesPanel() {
     void preview(rule.id, sourceId);
   };
 
+  if (!path) {
+    return (
+      <div className="panel-empty">
+        <span>{tc('noWorkspace')}</span>
+      </div>
+    );
+  }
+
   return (
     <>
-      <div className="section-head">
-        <span>{t('title')}</span>
-        <button
-          type="button"
-          className="button button--sm"
-          onClick={() => void openForm('rules', 'create')}
-        >
-          <Plus size={13} strokeWidth={1.9} /> {t('addRule')}
-        </button>
-      </div>
+      <button
+        type="button"
+        className="button button--sm"
+        onClick={() => void openForm('rules', 'create')}
+      >
+        <Plus size={12} strokeWidth={2} /> {t('addRule')}
+      </button>
 
-      <div className="field field--inline">
+      <div className="field">
         <span className="field__label">{t('pickDatabase')}</span>
         <select
-          className="rule-select"
+          className="searchbox"
           value={runDb}
           onChange={(e) => setRunDb(e.target.value)}
         >
@@ -113,10 +119,14 @@ export function RulesPanel() {
       </div>
 
       {errorKey && (
-        <span className="panel-error">{terr(errorKey.replace(/^error\./, ''))}</span>
+        <div className="panel-error">{terr(errorKey.replace(/^error\./, ''))}</div>
       )}
 
-      {items.length === 0 ? (
+      {loading && items.length === 0 ? (
+        <div className="panel-empty">
+          <span>{tc('loading')}</span>
+        </div>
+      ) : items.length === 0 ? (
         <div className="panel-empty">
           <span>{t('empty')}</span>
         </div>
@@ -159,11 +169,11 @@ export function RulesPanel() {
               </button>
               <button
                 type="button"
-                className="icon-btn"
+                className="button button--sm button--ghost"
                 title={tc('delete')}
                 onClick={() => void remove(rule.id)}
               >
-                <Trash2 size={13} strokeWidth={1.75} />
+                <Trash2 size={12} strokeWidth={2} />
               </button>
             </div>
             {rule.description && <span className="card__meta">{rule.description}</span>}
