@@ -40,7 +40,15 @@ export interface SettingsTab {
   kind: 'settings';
 }
 
-export type RightTab = SessionTab | PreviewTab | FormTab | SettingsTab;
+/** 右侧区「规则试跑」tab（每条规则一个，SQL 工作台）。 */
+export interface RuleRunTab {
+  id: string;
+  kind: 'ruleRun';
+  ruleId: string;
+  name: string;
+}
+
+export type RightTab = SessionTab | PreviewTab | FormTab | SettingsTab | RuleRunTab;
 
 /**
  * 离开当前右侧 tab 前的守卫（用于未保存确认）。
@@ -73,6 +81,7 @@ interface UiState {
   ) => Promise<void>;
   openSession: (sessionId: string) => Promise<void>;
   openSettings: () => Promise<void>;
+  openRuleRun: (ruleId: string, name: string) => Promise<void>;
   closeRightTab: (id: string) => Promise<void>;
   activateRightTab: (id: string) => Promise<void>;
   resetRightTabs: () => void;
@@ -154,6 +163,19 @@ export const useUiStore = create<UiState>((set, get) => {
         const exists = state.rightTabs.some((t) => t.id === tab.id);
         const rightTabs = exists ? state.rightTabs : [...state.rightTabs, tab];
         return { rightTabs, activeRightTabId: tab.id };
+      });
+    },
+
+    openRuleRun: async (ruleId, name) => {
+      const id = `ruleRun:${ruleId}`;
+      if (!(await allowLeave(id))) return;
+      const tab: RuleRunTab = { id, kind: 'ruleRun', ruleId, name };
+      set((state) => {
+        const exists = state.rightTabs.some((t) => t.id === id);
+        const rightTabs = exists
+          ? state.rightTabs.map((t) => (t.id === id ? tab : t))
+          : [...state.rightTabs, tab];
+        return { rightTabs, activeRightTabId: id };
       });
     },
 

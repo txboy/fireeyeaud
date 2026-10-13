@@ -140,6 +140,16 @@ export interface AuditRule {
   databaseId?: string | null;
 }
 
+/** 规则试跑结果（sql_query 的输出 + ruleId）。 */
+export interface RuleRunResult {
+  ruleId: string;
+  columns: string[];
+  rows: unknown[][];
+  rowCount: number;
+  truncated?: boolean;
+  artifactRef?: string;
+}
+
 export interface ModelProfile {
   id: string;
   name: string;

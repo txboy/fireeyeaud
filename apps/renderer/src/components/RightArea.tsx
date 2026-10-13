@@ -1,10 +1,11 @@
 import { useTranslation } from 'react-i18next';
-import { File as FileIcon, MessageSquare, Settings, X } from 'lucide-react';
+import { File as FileIcon, MessageSquare, Play, Settings, X } from 'lucide-react';
 import {
   useUiStore,
   type FormTab,
   type PreviewTab,
   type RightTab,
+  type RuleRunTab,
   type SessionTab,
 } from '../store/ui';
 import { useChatStore } from '../store/chat';
@@ -13,6 +14,7 @@ import { AgentColumn } from './AgentColumn';
 import { ResultsColumn } from './ResultsColumn';
 import { FilePreview } from './FilePreview';
 import { FormTabView } from './FormTabView';
+import { RuleRunView } from './RuleRunView';
 import { SettingsPanel } from './panels/SettingsPanel';
 import { FORM_DOMAIN_ICON, useFormTitle } from './forms/meta';
 
@@ -76,7 +78,9 @@ export function RightArea() {
                 ? FORM_DOMAIN_ICON[tab.domain]
                 : tab.kind === 'settings'
                   ? Settings
-                  : FileIcon;
+                  : tab.kind === 'ruleRun'
+                    ? Play
+                    : FileIcon;
           const label = labelOf(tab);
           return (
             <div
@@ -116,6 +120,8 @@ export function RightArea() {
           <SessionView sessionId={active.sessionId} />
         ) : active.kind === 'form' ? (
           <FormTabView key={active.id} tab={active as FormTab} />
+        ) : active.kind === 'ruleRun' ? (
+          <RuleRunView key={active.id} tab={active as RuleRunTab} />
         ) : active.kind === 'settings' ? (
           <div className="formtab">
             <div className="formtab__head">

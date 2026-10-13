@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from ..errors import ApiError
@@ -30,6 +30,13 @@ class RulePatch(BaseModel):
     sql: str | None = None
     databaseId: str | None = None
     enabled: bool | None = None
+
+
+class RunBody(BaseModel):
+    # 试跑工作台可传编辑后的 SQL；缺省用规则保存的 SQL。
+    sql: str | None = None
+    # 显式传 "" 表示工作区；缺省回退规则的默认数据库。
+    sourceId: str | None = None
 
 
 def _root() -> Path:
@@ -62,8 +69,9 @@ def update_rule(rule_id: str, body: RulePatch) -> dict:
 
 
 @router.post("/rules/{rule_id}/run")
-def run_single(rule_id: str, sourceId: str | None = Query(default=None)) -> dict:
-    return run_rule(_root(), rule_id, sourceId)
+def run_single(rule_id: str, body: RunBody | None = None) -> dict:
+    payload = body or RunBody()
+    return run_rule(_root(), rule_id, sql=payload.sql, source_id=payload.sourceId)
 
 
 @router.delete("/rules/{rule_id}")

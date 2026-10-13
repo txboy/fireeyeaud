@@ -1610,6 +1610,10 @@ textarea.searchbox {
 }
 
 /* ---- Rules panel ---- */
+.rule-run__form {
+  max-width: 960px;
+}
+
 .rule-def {
   font-family: var(--font-mono);
   white-space: pre-wrap;
@@ -1622,7 +1626,7 @@ textarea.searchbox {
   background: var(--hover);
   border-radius: 5px;
   padding: 4px 8px;
-  max-height: 160px;
+  max-height: 360px;
   overflow: auto;
 }
 

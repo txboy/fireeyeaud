@@ -18,6 +18,7 @@ import type {
   McpServer,
   McpTransport,
   ModelProfile,
+  RuleRunResult,
   Skill,
   SseEvent,
   WorkingPaperFormat,
@@ -366,9 +367,16 @@ export function deleteRuleApi(id: string): Promise<{ ok: boolean }> {
   return request<{ ok: boolean }>(`/rules/${id}`, { method: 'DELETE' });
 }
 
-export function runRuleApi(id: string, sourceId?: string): Promise<Record<string, unknown>> {
-  const query = sourceId ? `?sourceId=${encodeURIComponent(sourceId)}` : '';
-  return request<Record<string, unknown>>(`/rules/${id}/run${query}`, { method: 'POST' });
+export interface RuleRunInput {
+  sql?: string;
+  sourceId?: string;
+}
+
+export function runRuleApi(id: string, input: RuleRunInput = {}): Promise<RuleRunResult> {
+  return request<RuleRunResult>(`/rules/${id}/run`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
 }
 
 export interface ModelsPage {

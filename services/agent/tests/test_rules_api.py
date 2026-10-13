@@ -22,6 +22,12 @@ async def test_rules_api_crud_and_run(tmp_path):
         assert run.status_code == 200
         assert run.json()["rowCount"] == 1
 
+        override = await client.post(
+            f"/api/v1/rules/{created['id']}/run", json={"sql": "SELECT 2 AS n"}
+        )
+        assert override.status_code == 200
+        assert override.json()["rows"] == [[2]]
+
         await client.patch(f"/api/v1/rules/{created['id']}", json={"enabled": False})
         after = {
             r["id"]: r for r in (await client.get("/api/v1/rules")).json()["items"]

@@ -4,7 +4,6 @@ import {
   createRule,
   deleteRuleApi,
   listRules,
-  runRuleApi,
   updateRuleApi,
   type RuleInput,
 } from '../lib/api';
@@ -13,12 +12,10 @@ interface RulesState {
   items: AuditRule[];
   loading: boolean;
   errorKey: string | null;
-  previewById: Record<string, Record<string, unknown>>;
   load: () => Promise<void>;
   add: (input: RuleInput) => Promise<boolean>;
   edit: (id: string, patch: RuleInput) => Promise<boolean>;
   remove: (id: string) => Promise<void>;
-  preview: (id: string, sourceId?: string) => Promise<void>;
   reset: () => void;
 }
 
@@ -26,7 +23,6 @@ export const useRulesStore = create<RulesState>((set, get) => ({
   items: [],
   loading: false,
   errorKey: null,
-  previewById: {},
 
   load: async () => {
     set({ loading: true, errorKey: null });
@@ -70,15 +66,5 @@ export const useRulesStore = create<RulesState>((set, get) => ({
     await get().load();
   },
 
-  preview: async (id, sourceId) => {
-    set({ errorKey: null });
-    try {
-      const result = await runRuleApi(id, sourceId);
-      set((s) => ({ previewById: { ...s.previewById, [id]: result } }));
-    } catch (err) {
-      set({ errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal' });
-    }
-  },
-
-  reset: () => set({ items: [], loading: false, errorKey: null, previewById: {} }),
+  reset: () => set({ items: [], loading: false, errorKey: null }),
 }));
