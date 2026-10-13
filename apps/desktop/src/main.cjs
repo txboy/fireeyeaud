@@ -184,28 +184,50 @@ function registerIpc() {
     });
     return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0];
   });
-  ipcMain.handle('dialog:open-files', async (_event, kind) => {
-    const filters =
-      kind === 'attachments'
-        ? [
-            {
-              name: '支持的附件',
-              extensions: [
-                'txt', 'md', 'markdown', 'json', 'csv', 'tsv', 'log', 'xml',
-                'yaml', 'yml', 'ini', 'conf', 'sql', 'py', 'js', 'ts',
-                'xlsx', 'xlsm', 'docx', 'pdf',
-              ],
-            },
-            { name: '所有文件', extensions: ['*'] },
-          ]
-        : [
-            { name: '所有文件', extensions: ['*'] },
-            { name: '数据文件', extensions: ['xlsx', 'xlsm', 'csv', 'txt'] },
-          ];
+  ipcMain.handle('dialog:open-files', async (_event, kind, options) => {
+    const DB_EXT = {
+      sqlite: ['db', 'sqlite', 'sqlite3', 'db3', 's3db', 'sl3'],
+      access: ['mdb', 'accdb'],
+    };
+    let filters;
+    let title;
+    let properties = ['openFile', 'multiSelections'];
+    if (kind === 'attachments') {
+      filters = [
+        {
+          name: '支持的附件',
+          extensions: [
+            'txt', 'md', 'markdown', 'json', 'csv', 'tsv', 'log', 'xml',
+            'yaml', 'yml', 'ini', 'conf', 'sql', 'py', 'js', 'ts',
+            'xlsx', 'xlsm', 'docx', 'pdf',
+          ],
+        },
+        { name: '所有文件', extensions: ['*'] },
+      ];
+      title = '选择附件文件';
+    } else if (kind === 'database') {
+      // 按驱动过滤：SQLite 与 Access 扩展名不同，单选。
+      const driver = options?.driver === 'access' ? 'access' : 'sqlite';
+      filters = [
+        {
+          name: driver === 'access' ? 'Access 数据库' : 'SQLite 数据库',
+          extensions: DB_EXT[driver],
+        },
+        { name: '所有文件', extensions: ['*'] },
+      ];
+      title = '选择数据库文件';
+      properties = ['openFile'];
+    } else {
+      filters = [
+        { name: '所有文件', extensions: ['*'] },
+        { name: '数据文件', extensions: ['xlsx', 'xlsm', 'csv', 'txt'] },
+      ];
+      title = kind === 'all' ? '选择文件' : '选择数据文件';
+    }
     const result = await dialog.showOpenDialog(mainWindow ?? undefined, {
-      title: kind === 'attachments' ? '选择附件文件' : kind === 'all' ? '选择文件' : '选择数据文件',
+      title,
       filters,
-      properties: ['openFile', 'multiSelections'],
+      properties,
     });
     return result.canceled ? [] : result.filePaths;
   });

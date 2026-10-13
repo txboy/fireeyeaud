@@ -1,11 +1,15 @@
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronDown, ChevronRight, Zap } from 'lucide-react';
+import { ChevronDown, ChevronRight, FolderOpen, Zap } from 'lucide-react';
 import type { ConfigScope, DbConnection, DbDriver } from '@fireeyeaud/shared';
 import { useDatabaseStore } from '../../store/database';
+import { useWorkspaceStore } from '../../store/workspace';
 import { FormActions } from './FormActions';
 import { FormError } from './FormError';
 import { useUnsavedGuard } from './UnsavedGuard';
+
+/** 上传的数据库文件复制到工作区此可见目录。 */
+const DB_UPLOAD_DIR = '数据库';
 
 const DRIVERS: DbDriver[] = ['sqlite', 'access', 'postgresql', 'mysql', 'mssql'];
 
@@ -63,6 +67,7 @@ export function DatabaseForm({
   const { t } = useTranslation('database');
   const { t: te } = useTranslation('enums');
   const { t: tc } = useTranslation('common');
+  const { t: terr } = useTranslation('error');
   const create = useDatabaseStore((s) => s.create);
   const edit = useDatabaseStore((s) => s.edit);
   const testParams = useDatabaseStore((s) => s.testParams);
@@ -72,12 +77,14 @@ export function DatabaseForm({
   const reflect = useDatabaseStore((s) => s.reflect);
   const setAuthDraft = useDatabaseStore((s) => s.setAuthDraft);
   const saveAuthorization = useDatabaseStore((s) => s.saveAuthorization);
+  const root = useWorkspaceStore((s) => s.path);
 
   const initialRef = useRef<FormState>(init(entity));
   const [form, setForm] = useState<FormState>(initialRef.current);
   const [busy, setBusy] = useState(false);
   const [testStatus, setTestStatus] = useState<'ok' | 'fail' | null>(null);
   const [openCols, setOpenCols] = useState<Record<string, boolean>>({});
+  const [localError, setLocalError] = useState<string | null>(null);
 
   const isFile = form.driver === 'sqlite' || form.driver === 'access';
   const dirty = JSON.stringify(form) !== JSON.stringify(initialRef.current);
@@ -117,6 +124,26 @@ export function DatabaseForm({
       scope: entity?.scope,
     });
     setTestStatus(ok ? 'ok' : 'fail');
+  };
+
+  /** 选择本地数据库文件并复制到工作区，路径写回表单。 */
+  const chooseFile = async () => {
+    const api = window.fireeyeaud;
+    if (!api || !root) return;
+    const files = await api.openFiles('database', { driver: form.driver });
+    const sourcePath = files[0];
+    if (!sourcePath) return;
+    const res = await api.copyFiles({
+      root,
+      targetDir: `${root}/${DB_UPLOAD_DIR}`,
+      sourcePaths: [sourcePath],
+    });
+    if (res.ok && res.paths?.[0]) {
+      setLocalError(null);
+      setForm((prev) => ({ ...prev, path: res.paths![0] }));
+    } else {
+      setLocalError(terr('opFailed'));
+    }
   };
 
   const save = async (): Promise<boolean> => {
@@ -175,14 +202,25 @@ export function DatabaseForm({
         </select>
       </label>
       {isFile ? (
-        <label className="field">
+        <div className="field">
           <span className="field__label">{t('path')}</span>
-          <input
-            className="searchbox"
-            value={form.path}
-            onChange={(e) => setForm({ ...form, path: e.target.value })}
-          />
-        </label>
+          <div className="kv-row">
+            <input
+              className="searchbox"
+              value={form.path}
+              onChange={(e) => setForm({ ...form, path: e.target.value })}
+            />
+            <button
+              type="button"
+              className="button button--sm"
+              onClick={() => void chooseFile()}
+            >
+              <FolderOpen size={12} strokeWidth={2} /> {tc('upload')}
+            </button>
+          </div>
+          <span className="card__meta">{t('uploadHint')}</span>
+          {localError && <span className="panel-error">{localError}</span>}
+        </div>
       ) : (
         <>
           <label className="field">

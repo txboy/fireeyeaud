@@ -8,7 +8,10 @@ declare global {
       getSidecarInfo: () => Promise<SidecarInfo>;
       getAppInfo: () => Promise<AppInfo>;
       openFolder: () => Promise<string | null>;
-      openFiles: (kind?: 'tables' | 'attachments' | 'all') => Promise<string[]>;
+      openFiles: (
+        kind?: 'tables' | 'attachments' | 'all' | 'database',
+        options?: { driver?: string },
+      ) => Promise<string[]>;
       searchRun: (payload: {
         root: string;
         query: string;

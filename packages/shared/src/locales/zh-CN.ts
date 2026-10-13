@@ -151,6 +151,7 @@ export default {
     cancel: '取消',
     delete: '删除',
     sqliteHint: 'SQLite / Access 用文件路径，其余按主机 / 端口 / 库名填写',
+    uploadHint: '选择后自动复制到工作区「数据库」目录',
   },
   knowledge: {
     title: '知识库',

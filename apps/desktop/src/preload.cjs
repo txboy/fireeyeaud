@@ -7,7 +7,7 @@ contextBridge.exposeInMainWorld('fireeyeaud', {
   getSidecarInfo: () => ipcRenderer.invoke('sidecar:info'),
   getAppInfo: () => ipcRenderer.invoke('app:info'),
   openFolder: () => ipcRenderer.invoke('dialog:open-folder'),
-  openFiles: (kind) => ipcRenderer.invoke('dialog:open-files', kind),
+  openFiles: (kind, options) => ipcRenderer.invoke('dialog:open-files', kind, options),
   searchRun: (payload) => ipcRenderer.invoke('search:run', payload),
   readDir: (payload) => ipcRenderer.invoke('fs:read-dir', payload),
   readFile: (payload) => ipcRenderer.invoke('fs:read-file', payload),

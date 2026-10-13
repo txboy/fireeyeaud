@@ -152,6 +152,7 @@ export default {
     cancel: 'Cancel',
     delete: 'Delete',
     sqliteHint: 'SQLite / Access use a file path; others use host / port / database',
+    uploadHint: 'Selected file is copied into the workspace 数据库 folder',
   },
   knowledge: {
     title: 'Knowledge',
