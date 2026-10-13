@@ -202,7 +202,7 @@ export default {
     keySet: '已配置密钥',
     enabled: '启用',
     tools: '允许的工具（逗号分隔）',
-    permissions: '权限',
+    scope: '作用域',
     fsScope: '文件系统范围',
     fsWorkspace: '仅工作区',
     fsNone: '无',

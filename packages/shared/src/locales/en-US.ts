@@ -203,7 +203,7 @@ export default {
     keySet: 'Key configured',
     enabled: 'Enabled',
     tools: 'Allowed tools (comma separated)',
-    permissions: 'Permissions',
+    scope: 'Scope',
     fsScope: 'Filesystem scope',
     fsWorkspace: 'Workspace only',
     fsNone: 'None',

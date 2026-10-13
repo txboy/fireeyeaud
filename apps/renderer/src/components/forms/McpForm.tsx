@@ -275,42 +275,39 @@ export function McpForm({
           onChange={(e) => setForm({ ...form, toolsAllow: e.target.value })}
         />
       </label>
-      <div className="field">
-        <span className="field__label">{t('permissions')}</span>
-        <div className="search-opts">
-          <label className="search-opt">
-            <select
-              className="searchbox"
-              value={form.fsScope}
-              onChange={(e) =>
-                setForm({ ...form, fsScope: e.target.value as 'workspace' | 'none' })
-              }
-            >
-              <option value="workspace">{t('fsWorkspace')}</option>
-              <option value="none">{t('fsNone')}</option>
-            </select>
-          </label>
-          <label className="search-opt">
-            <input
-              type="checkbox"
-              checked={form.net}
-              onChange={(e) => setForm({ ...form, net: e.target.checked })}
-            />
-            <span>{t('net')}</span>
-          </label>
-          <label className="search-opt">
-            <select
-              className="searchbox"
-              value={form.scope}
-              disabled={Boolean(entity)}
-              onChange={(e) => setForm({ ...form, scope: e.target.value as ConfigScope })}
-            >
-              <option value="project">{te('configScope.project')}</option>
-              <option value="global">{te('configScope.global')}</option>
-            </select>
-          </label>
-        </div>
-      </div>
+      <label className="field">
+        <span className="field__label">{t('fsScope')}</span>
+        <select
+          className="searchbox"
+          value={form.fsScope}
+          onChange={(e) =>
+            setForm({ ...form, fsScope: e.target.value as 'workspace' | 'none' })
+          }
+        >
+          <option value="workspace">{t('fsWorkspace')}</option>
+          <option value="none">{t('fsNone')}</option>
+        </select>
+      </label>
+      <label className="field field--inline">
+        <input
+          type="checkbox"
+          checked={form.net}
+          onChange={(e) => setForm({ ...form, net: e.target.checked })}
+        />
+        <span>{t('net')}</span>
+      </label>
+      <label className="field">
+        <span className="field__label">{t('scope')}</span>
+        <select
+          className="searchbox"
+          value={form.scope}
+          disabled={Boolean(entity)}
+          onChange={(e) => setForm({ ...form, scope: e.target.value as ConfigScope })}
+        >
+          <option value="project">{te('configScope.project')}</option>
+          <option value="global">{te('configScope.global')}</option>
+        </select>
+      </label>
 
       <label className="field field--inline">
         <input
