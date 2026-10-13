@@ -47,11 +47,9 @@ body {
 }
 
 .flame {
-  width: 12px;
-  height: 18px;
-  border-radius: 3px;
-  background: linear-gradient(180deg, var(--accent), #d9480f);
-  transform: rotate(4deg);
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
 }
 
 .tag {

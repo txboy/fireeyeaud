@@ -61,11 +61,9 @@ body {
 }
 
 .titlebar__flame {
-  width: 10px;
+  width: 16px;
   height: 16px;
-  border-radius: 3px;
-  background: linear-gradient(180deg, var(--accent), #d9480f);
-  transform: rotate(4deg);
+  object-fit: contain;
 }
 
 .titlebar__brand {
@@ -1992,12 +1990,7 @@ textarea.searchbox {
 .welcome__mark {
   width: 72px;
   height: 72px;
-  border-radius: 18px;
-  background: var(--accent-weak);
-  color: var(--accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  object-fit: contain;
   margin-bottom: 20px;
 }
 

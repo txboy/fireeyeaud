@@ -4,6 +4,7 @@ import type { SidecarStatus } from '@fireeyeaud/shared';
 import { Copy, Minus, Square, X } from 'lucide-react';
 import { useSidecarStore } from '../store/sidecar';
 import { useWorkspaceStore } from '../store/workspace';
+import { logoUrl } from '../lib/logo';
 
 const STATUS_KEY: Record<SidecarStatus, string> = {
   running: 'statusRunning',
@@ -34,7 +35,7 @@ export function TitleBar() {
         void window.fireeyeaud?.toggleMaximizeWindow();
       }}
     >
-      <span className="titlebar__flame" />
+      <img className="titlebar__flame" src={logoUrl} alt="" draggable={false} />
       <span className="titlebar__brand">{t('appName')}</span>
       {workspace && <span className="titlebar__project">{workspace.name}</span>}
       <span className="titlebar__spacer" />

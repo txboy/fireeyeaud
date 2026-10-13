@@ -1,7 +1,8 @@
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { ChevronRight, Clock, Eye, FolderOpen, Loader2, X } from 'lucide-react';
+import { ChevronRight, Clock, FolderOpen, Loader2, X } from 'lucide-react';
 import { useWorkspaceStore } from '../store/workspace';
+import { logoUrl } from '../lib/logo';
 
 /** 相对时间（刚刚 / N 分钟前 / N 小时前 / 昨天 / N 天前）。 */
 function relativeTime(ts: number, t: TFunction): string {
@@ -30,9 +31,7 @@ export function Welcome() {
   return (
     <div className="welcome">
       <div className="welcome__center">
-        <div className="welcome__mark">
-          <Eye size={34} strokeWidth={1.8} />
-        </div>
+        <img className="welcome__mark" src={logoUrl} alt="" draggable={false} />
         <h1 className="welcome__title">{tc('appName')}</h1>
         <p className="welcome__tagline">{t('tagline')}</p>
 
