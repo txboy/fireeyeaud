@@ -429,6 +429,17 @@ export function testModel(id: string, scope: ConfigScope): Promise<{ ok: boolean
   });
 }
 
+/** 按表单当前填写值试连（不落盘）。 */
+export function testModelParams(input: {
+  baseUrl?: string;
+  model?: string;
+}): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>('/models/test', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
 export interface DbConnectionsPage {
   items: DbConnection[];
   nextCursor: string | null;
@@ -484,6 +495,26 @@ export function testDbConnection(
 ): Promise<{ ok: boolean }> {
   return request<{ ok: boolean }>(`/db/connections/${id}/test?scope=${scope}`, {
     method: 'POST',
+  });
+}
+
+/** 按表单当前填写值试连（不落盘）；给了 id 时密码缺省回退已保存凭据。 */
+export interface DbTestInput {
+  driver: DbDriver;
+  host?: string | null;
+  port?: number | null;
+  database?: string | null;
+  username?: string | null;
+  path?: string | null;
+  password?: string | null;
+  id?: string;
+  scope?: ConfigScope;
+}
+
+export function testDbParams(input: DbTestInput): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>('/db/test', {
+    method: 'POST',
+    body: JSON.stringify(input),
   });
 }
 
@@ -561,6 +592,21 @@ export function testKbProvider(
   scope: ConfigScope,
 ): Promise<{ ok: boolean; knowledgeCount: number }> {
   return request(`/kb/providers/${id}/test?scope=${scope}`, { method: 'POST' });
+}
+
+/** 按表单当前填写值试连（不落盘）；给了 id 时 key 缺省回退已保存凭据。 */
+export interface KbTestInput {
+  type: KbProviderType;
+  baseUrl: string;
+  apiKey?: string | null;
+  id?: string;
+  scope?: ConfigScope;
+}
+
+export function testKbParams(
+  input: KbTestInput,
+): Promise<{ ok: boolean; knowledgeCount: number }> {
+  return request('/kb/test', { method: 'POST', body: JSON.stringify(input) });
 }
 
 export function listKbKnowledge(

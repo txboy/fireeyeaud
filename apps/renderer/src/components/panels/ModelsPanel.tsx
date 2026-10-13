@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pencil, Plus, Server, Trash2, X, Zap } from 'lucide-react';
 import type { ModelProfile } from '@fireeyeaud/shared';
+import { ScopeBadge } from '../ScopeBadge';
 import { useModelsStore } from '../../store/models';
 import { useUiStore } from '../../store/ui';
-import { ScopeBadge } from '../ScopeBadge';
 
 export function ModelsPanel() {
   const { t } = useTranslation('models');
@@ -57,11 +57,27 @@ export function ModelsPanel() {
 
       {items.map((item) => (
         <div key={item.id} className="card">
-          <div className="card__row">
+          <div className="card__head">
             <Server size={14} strokeWidth={1.75} />
             <span className="card__name">{item.name}</span>
             {item.isDefault && <span className="scope-badge">{t('isDefault')}</span>}
+            <span className="spacer" />
             <ScopeBadge scope={item.scope} />
+          </div>
+          <span className="card__meta">
+            {item.model} · {item.baseUrl}
+          </span>
+          {status[item.id] === 'ok' && (
+            <span className="model-status model-status--ok">
+              <Zap size={11} strokeWidth={2} /> {t('testOk')}
+            </span>
+          )}
+          {status[item.id] === 'fail' && (
+            <span className="model-status model-status--fail">
+              <X size={11} strokeWidth={2} /> {t('testFail')}
+            </span>
+          )}
+          <div className="card__foot">
             <span className="spacer" />
             <button
               type="button"
@@ -94,19 +110,6 @@ export function ModelsPanel() {
               <Trash2 size={13} strokeWidth={1.75} />
             </button>
           </div>
-          <span className="card__meta">
-            {item.model} · {item.baseUrl}
-          </span>
-          {status[item.id] === 'ok' && (
-            <span className="model-status model-status--ok">
-              <Zap size={11} strokeWidth={2} /> {t('testOk')}
-            </span>
-          )}
-          {status[item.id] === 'fail' && (
-            <span className="model-status model-status--fail">
-              <X size={11} strokeWidth={2} /> {t('testFail')}
-            </span>
-          )}
         </div>
       ))}
     </>

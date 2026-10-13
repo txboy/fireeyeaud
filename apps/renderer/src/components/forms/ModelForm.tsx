@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Zap } from 'lucide-react';
 import type { ConfigScope, ModelProfile } from '@fireeyeaud/shared';
 import { useModelsStore } from '../../store/models';
 import { FormActions } from './FormActions';
@@ -54,16 +55,27 @@ export function ModelForm({
 }) {
   const { t } = useTranslation('models');
   const { t: ten } = useTranslation('enums');
+  const { t: tc } = useTranslation('common');
   const add = useModelsStore((s) => s.add);
   const edit = useModelsStore((s) => s.edit);
+  const testParams = useModelsStore((s) => s.testParams);
   const errorKey = useModelsStore((s) => s.errorKey);
 
   const initialRef = useRef<FormState>(init(entity));
   const [form, setForm] = useState<FormState>(initialRef.current);
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [testStatus, setTestStatus] = useState<'ok' | 'fail' | null>(null);
 
   const dirty = JSON.stringify(form) !== JSON.stringify(initialRef.current);
+
+  const runTest = async () => {
+    const ok = await testParams({
+      baseUrl: form.baseUrl.trim(),
+      model: form.model.trim(),
+    });
+    setTestStatus(ok ? 'ok' : 'fail');
+  };
 
   const save = async (): Promise<boolean> => {
     if (!form.name.trim() || !form.baseUrl.trim() || !form.model.trim()) return false;
@@ -185,6 +197,21 @@ export function ModelForm({
             <span>{t('isDefault')}</span>
           </label>
         </div>
+      </div>
+
+      <div className="form-test">
+        <button
+          type="button"
+          className="button button--sm button--ghost"
+          disabled={!form.baseUrl.trim() || !form.model.trim()}
+          onClick={() => void runTest()}
+        >
+          <Zap size={13} strokeWidth={1.9} /> {tc('test')}
+        </button>
+        {testStatus === 'ok' && <span className="model-status model-status--ok">{t('testOk')}</span>}
+        {testStatus === 'fail' && (
+          <span className="model-status model-status--fail">{t('testFail')}</span>
+        )}
       </div>
 
       <FormError errorKey={localError ?? errorKey} />

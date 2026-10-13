@@ -12,6 +12,7 @@ interface FormState {
   toolIds: string;
   scope: ConfigScope;
   isDefault: boolean;
+  enabled: boolean;
 }
 
 const EMPTY: FormState = {
@@ -20,6 +21,7 @@ const EMPTY: FormState = {
   toolIds: '',
   scope: 'project',
   isDefault: false,
+  enabled: true,
 };
 
 function init(entity?: Skill): FormState {
@@ -30,6 +32,7 @@ function init(entity?: Skill): FormState {
     toolIds: (entity.toolIds ?? []).join(' '),
     scope: entity.scope,
     isDefault: Boolean(entity.isDefault),
+    enabled: entity.enabled,
   };
 }
 
@@ -70,10 +73,11 @@ export function SkillForm({
       toolIds: parseTokens(form.toolIds),
       scope: form.scope,
       isDefault: form.isDefault,
+      enabled: form.enabled,
     };
     const ok = entity
       ? await edit(entity.id, form.scope, payload)
-      : await create({ ...payload, enabled: true });
+      : await create({ ...payload, enabled: form.enabled });
     setBusy(false);
     return ok;
   };
@@ -143,6 +147,15 @@ export function SkillForm({
           </label>
         </div>
       </div>
+
+      <label className="field field--inline">
+        <input
+          type="checkbox"
+          checked={form.enabled}
+          onChange={(e) => setForm({ ...form, enabled: e.target.checked })}
+        />
+        <span>{t('enabled')}</span>
+      </label>
 
       <FormError errorKey={errorKey} />
       <FormActions

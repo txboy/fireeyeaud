@@ -44,6 +44,19 @@ async def test_models_crud_scope(tmp_path, monkeypatch) -> None:
         test = await client.post(f"/api/v1/models/{model_id}/test")
         assert test.json()["ok"] is True
 
+        params_ok = (
+            await client.post(
+                "/api/v1/models/test",
+                json={"baseUrl": "http://127.0.0.1:11434/v1", "model": "qwen2.5"},
+            )
+        ).json()
+        assert params_ok["ok"] is True
+
+        params_bad = (
+            await client.post("/api/v1/models/test", json={"baseUrl": "", "model": ""})
+        ).json()
+        assert params_bad["ok"] is False
+
         deleted = await client.delete(f"/api/v1/models/{model_id}?scope=global")
         assert deleted.status_code == 200
         assert (await client.get("/api/v1/models?scope=global")).json()["items"] == []

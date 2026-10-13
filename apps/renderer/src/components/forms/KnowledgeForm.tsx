@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ConfigScope, KbProvider, KbProviderType } from '@fireeyeaud/shared';
+import { BookOpen, Zap } from 'lucide-react';
+import type { ConfigScope, KbEnabledEntry, KbProvider, KbProviderType } from '@fireeyeaud/shared';
 import { useKnowledgeStore } from '../../store/knowledge';
 import { FormActions } from './FormActions';
 import { FormError } from './FormError';
@@ -57,15 +58,72 @@ export function KnowledgeForm({
 }) {
   const { t } = useTranslation('knowledge');
   const { t: te } = useTranslation('enums');
+  const { t: tc } = useTranslation('common');
   const create = useKnowledgeStore((s) => s.create);
   const edit = useKnowledgeStore((s) => s.edit);
+  const testParams = useKnowledgeStore((s) => s.testParams);
   const errorKey = useKnowledgeStore((s) => s.errorKey);
+  const knowledgeByProvider = useKnowledgeStore((s) => s.knowledgeByProvider);
+  const enabled = useKnowledgeStore((s) => s.enabled);
+  const loadKnowledge = useKnowledgeStore((s) => s.loadKnowledge);
+  const setEnabled = useKnowledgeStore((s) => s.setEnabled);
 
   const initialRef = useRef<FormState>(init(entity));
   const [form, setForm] = useState<FormState>(initialRef.current);
   const [busy, setBusy] = useState(false);
+  const [testStatus, setTestStatus] = useState<'ok' | 'fail' | null>(null);
+  const [kbDraft, setKbDraft] = useState<Record<string, boolean>>({});
 
   const dirty = JSON.stringify(form) !== JSON.stringify(initialRef.current);
+
+  const remote = entity ? knowledgeByProvider[entity.id] : undefined;
+
+  const enabledMap = useMemo(
+    () =>
+      Object.fromEntries(
+        enabled.map((e) => [`${e.providerId}:${e.knowledgeId}`, e.enabled]),
+      ),
+    [enabled],
+  );
+
+  const isOn = (knowledgeId: string) =>
+    entity
+      ? kbDraft[knowledgeId] ?? enabledMap[`${entity.id}:${knowledgeId}`] ?? false
+      : false;
+
+  const toggleKb = (knowledgeId: string) =>
+    setKbDraft((d) => ({ ...d, [knowledgeId]: !isOn(knowledgeId) }));
+
+  const saveEnabled = async () => {
+    if (!entity) return;
+    const base = new Map<string, KbEnabledEntry>(
+      enabled
+        .filter((e) => e.scope === entity.scope)
+        .map((e) => [`${e.providerId}:${e.knowledgeId}`, { ...e }]),
+    );
+    for (const k of knowledgeByProvider[entity.id] ?? []) {
+      base.set(`${entity.id}:${k.id}`, {
+        providerId: entity.id,
+        knowledgeId: k.id,
+        name: k.name,
+        scope: entity.scope,
+        enabled: isOn(k.id),
+      });
+    }
+    await setEnabled(entity.scope, [...base.values()]);
+    setKbDraft({});
+  };
+
+  const runTest = async () => {
+    const ok = await testParams({
+      type: form.type,
+      baseUrl: form.baseUrl.trim(),
+      apiKey: form.apiKey || null,
+      id: entity?.id,
+      scope: entity?.scope,
+    });
+    setTestStatus(ok ? 'ok' : 'fail');
+  };
 
   const save = async (): Promise<boolean> => {
     if (!form.name.trim() || !form.baseUrl.trim()) return false;
@@ -191,7 +249,71 @@ export function KnowledgeForm({
         </div>
       </div>
 
+      <div className="form-test">
+        <button
+          type="button"
+          className="button button--sm button--ghost"
+          disabled={!form.baseUrl.trim()}
+          onClick={() => void runTest()}
+        >
+          <Zap size={13} strokeWidth={1.9} /> {t('test')}
+        </button>
+        {testStatus === 'ok' && (
+          <span className="model-status model-status--ok">{tc('connected')}</span>
+        )}
+        {testStatus === 'fail' && (
+          <span className="model-status model-status--fail">{t('testFail')}</span>
+        )}
+      </div>
+
       <span className="card__meta">{t('egress')}</span>
+
+      {entity && (
+        <div className="db-tables">
+          <div className="card__row">
+            <span className="field__label">{t('remoteKb')}</span>
+            <span className="spacer" />
+            <button
+              type="button"
+              className="button button--sm"
+              onClick={() => void loadKnowledge(entity.id, entity.scope)}
+            >
+              <BookOpen size={12} strokeWidth={2} /> {t('browse')}
+            </button>
+          </div>
+          {remote && (
+            <>
+              {remote.length === 0 && (
+                <span className="card__meta">{tc('notConfigured')}</span>
+              )}
+              {remote.map((kb) => (
+                <label key={kb.id} className="db-col">
+                  <input
+                    type="checkbox"
+                    checked={isOn(kb.id)}
+                    onChange={() => toggleKb(kb.id)}
+                  />
+                  <span>{kb.name}</span>
+                  {kb.documentCount !== undefined && (
+                    <span className="card__meta">
+                      {t('documents', { count: kb.documentCount })}
+                    </span>
+                  )}
+                </label>
+              ))}
+              <button
+                type="button"
+                className="button button--sm"
+                disabled={remote.length === 0}
+                onClick={() => void saveEnabled()}
+              >
+                {t('save')}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       <FormError errorKey={errorKey} />
       <FormActions
         onSave={() => void save().then((ok) => ok && close(onSaved))}

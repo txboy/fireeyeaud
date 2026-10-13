@@ -28,6 +28,7 @@ interface FormState {
   net: boolean;
   toolsAllow: string;
   isDefault: boolean;
+  enabled: boolean;
 }
 
 const EMPTY: FormState = {
@@ -44,6 +45,7 @@ const EMPTY: FormState = {
   net: false,
   toolsAllow: '',
   isDefault: false,
+  enabled: true,
 };
 
 function init(entity?: McpServer): FormState {
@@ -63,6 +65,7 @@ function init(entity?: McpServer): FormState {
     net: Boolean(entity.permissions?.net),
     toolsAllow: (entity.permissions?.toolsAllow ?? []).join(' '),
     isDefault: Boolean(entity.isDefault),
+    enabled: entity.enabled,
   };
 }
 
@@ -123,6 +126,7 @@ export function McpForm({
       apiKeyEnv: form.apiKeyEnv.trim(),
       ...(apiKeyRef ? { apiKeyRef } : {}),
       isDefault: form.isDefault,
+      enabled: form.enabled,
       permissions: {
         fsScope: form.fsScope,
         net: form.net,
@@ -131,7 +135,7 @@ export function McpForm({
     };
     const ok = entity
       ? await edit(entity.id, entity.scope, payload)
-      : await create({ ...payload, enabled: true });
+      : await create({ ...payload, enabled: form.enabled });
     setBusy(false);
     return ok;
   };
@@ -327,6 +331,15 @@ export function McpForm({
           </label>
         </div>
       </div>
+
+      <label className="field field--inline">
+        <input
+          type="checkbox"
+          checked={form.enabled}
+          onChange={(e) => setForm({ ...form, enabled: e.target.checked })}
+        />
+        <span>{t('enabled')}</span>
+      </label>
 
       <span className="card__meta">{t('stdioHint')}</span>
       <FormError errorKey={errorKey} />

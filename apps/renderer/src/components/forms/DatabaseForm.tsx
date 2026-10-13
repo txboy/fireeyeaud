@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ChevronDown, ChevronRight, Zap } from 'lucide-react';
 import type { ConfigScope, DbConnection, DbDriver } from '@fireeyeaud/shared';
 import { useDatabaseStore } from '../../store/database';
 import { FormActions } from './FormActions';
@@ -61,16 +62,62 @@ export function DatabaseForm({
 }) {
   const { t } = useTranslation('database');
   const { t: te } = useTranslation('enums');
+  const { t: tc } = useTranslation('common');
   const create = useDatabaseStore((s) => s.create);
   const edit = useDatabaseStore((s) => s.edit);
+  const testParams = useDatabaseStore((s) => s.testParams);
   const errorKey = useDatabaseStore((s) => s.errorKey);
+  const reflectByConn = useDatabaseStore((s) => s.reflectByConn);
+  const authByConn = useDatabaseStore((s) => s.authByConn);
+  const reflect = useDatabaseStore((s) => s.reflect);
+  const setAuthDraft = useDatabaseStore((s) => s.setAuthDraft);
+  const saveAuthorization = useDatabaseStore((s) => s.saveAuthorization);
 
   const initialRef = useRef<FormState>(init(entity));
   const [form, setForm] = useState<FormState>(initialRef.current);
   const [busy, setBusy] = useState(false);
+  const [testStatus, setTestStatus] = useState<'ok' | 'fail' | null>(null);
+  const [openCols, setOpenCols] = useState<Record<string, boolean>>({});
 
   const isFile = form.driver === 'sqlite' || form.driver === 'access';
   const dirty = JSON.stringify(form) !== JSON.stringify(initialRef.current);
+
+  const tables = entity ? reflectByConn[entity.id] : undefined;
+  const draft = entity ? (authByConn[entity.id] ?? {}) : {};
+
+  const toggleTable = (table: string) => {
+    if (!entity) return;
+    const cur = { ...draft };
+    if (table in cur) delete cur[table];
+    else cur[table] = ['*'];
+    setAuthDraft(entity.id, cur);
+  };
+
+  const toggleColumn = (table: string, column: string) => {
+    if (!entity) return;
+    const cur = { ...draft };
+    const list = cur[table]?.includes('*') ? [] : [...(cur[table] ?? [])];
+    const idx = list.indexOf(column);
+    if (idx >= 0) list.splice(idx, 1);
+    else list.push(column);
+    cur[table] = list;
+    setAuthDraft(entity.id, cur);
+  };
+
+  const runTest = async () => {
+    const ok = await testParams({
+      driver: form.driver,
+      host: isFile ? null : form.host.trim() || null,
+      port: isFile || !form.port ? null : Number(form.port),
+      database: isFile ? null : form.database.trim() || null,
+      username: isFile ? null : form.username.trim() || null,
+      path: isFile ? form.path.trim() || null : null,
+      password: form.password || null,
+      id: entity?.id,
+      scope: entity?.scope,
+    });
+    setTestStatus(ok ? 'ok' : 'fail');
+  };
 
   const save = async (): Promise<boolean> => {
     if (!form.name.trim()) return false;
@@ -214,7 +261,116 @@ export function DatabaseForm({
         </div>
       </div>
 
+      <div className="form-test">
+        <button
+          type="button"
+          className="button button--sm button--ghost"
+          disabled={isFile ? !form.path.trim() : !form.host.trim() || !form.database.trim()}
+          onClick={() => void runTest()}
+        >
+          <Zap size={13} strokeWidth={1.9} /> {t('test')}
+        </button>
+        {testStatus === 'ok' && (
+          <span className="model-status model-status--ok">{t('testOk')}</span>
+        )}
+        {testStatus === 'fail' && (
+          <span className="model-status model-status--fail">{t('testFail')}</span>
+        )}
+      </div>
+
       <span className="card__meta">{t('sqliteHint')}</span>
+
+      {entity && (
+        <div className="db-tables">
+          <div className="card__row">
+            <span className="field__label">{t('tables')}</span>
+            <span className="spacer" />
+            <button
+              type="button"
+              className="button button--sm"
+              onClick={() => void reflect(entity.id, entity.scope)}
+            >
+              {t('reflect')}
+            </button>
+          </div>
+          {tables && (
+            <>
+              {tables.length === 0 && (
+                <span className="card__meta">{tc('notConfigured')}</span>
+              )}
+              {tables.map((tb) => {
+                const cols = draft[tb.table];
+                const checked = cols !== undefined;
+                const allCols = cols?.includes('*') ?? false;
+                const colOpen = openCols[tb.table];
+                return (
+                  <div key={tb.table} className="db-table">
+                    <div className="card__row">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleTable(tb.table)}
+                      />
+                      <span style={{ fontSize: 12 }}>{tb.table}</span>
+                      {checked && (
+                        <button
+                          type="button"
+                          className="link-btn"
+                          onClick={() =>
+                            setOpenCols((prev) => ({
+                              ...prev,
+                              [tb.table]: !prev[tb.table],
+                            }))
+                          }
+                        >
+                          {colOpen ? (
+                            <ChevronDown size={12} strokeWidth={2} />
+                          ) : (
+                            <ChevronRight size={12} strokeWidth={2} />
+                          )}
+                          {t('columns')}
+                        </button>
+                      )}
+                      {allCols && <span className="card__meta">{t('selectAll')}</span>}
+                    </div>
+                    {checked && colOpen && (
+                      <div className="db-cols">
+                        {allCols && <span className="card__meta">{t('selectAll')}</span>}
+                        {tb.columns.map((c) => (
+                          <label key={c.name} className="db-col">
+                            <input
+                              type="checkbox"
+                              checked={allCols || (cols ?? []).includes(c.name)}
+                              disabled={allCols}
+                              onChange={() => toggleColumn(tb.table, c.name)}
+                            />
+                            <span>{c.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              <button
+                type="button"
+                className="button button--sm"
+                onClick={() =>
+                  void saveAuthorization(
+                    entity.id,
+                    Object.fromEntries(
+                      Object.entries(draft).filter(([, v]) => v.length > 0),
+                    ),
+                  )
+                }
+              >
+                {t('saveAuth')}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       <FormError errorKey={errorKey} />
       <FormActions
         onSave={() => void save().then((ok) => ok && close(onSaved))}

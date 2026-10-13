@@ -140,6 +140,7 @@ export default {
     scope: '作用域',
     test: '测试连通',
     testOk: '连接正常',
+    testFail: '连接失败',
     reflect: '读取表结构',
     tables: '数据表',
     columns: '字段',

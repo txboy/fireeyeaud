@@ -141,6 +141,7 @@ export default {
     scope: 'Scope',
     test: 'Test connection',
     testOk: 'Connection OK',
+    testFail: 'Connection failed',
     reflect: 'Reflect schema',
     tables: 'Tables',
     columns: 'Columns',

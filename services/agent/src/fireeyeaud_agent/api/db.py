@@ -26,6 +26,21 @@ class ConnectionBody(BaseModel):
     isDefault: bool = False
 
 
+class TestBody(BaseModel):
+    """按表单当前填写的连接参数试连（不落盘）。"""
+
+    driver: str
+    host: str | None = None
+    port: int | None = None
+    database: str | None = None
+    username: str | None = None
+    path: str | None = None
+    # 明文密码仅在内存使用；缺省且给了 id 时回退到已保存凭据。
+    password: str | None = None
+    id: str | None = None
+    scope: str | None = None
+
+
 class AuthorizationBody(BaseModel):
     tables: dict[str, list[str]]
 
@@ -83,6 +98,26 @@ def test_connection(connection_id: str, scope: str = Query(default="global")) ->
     ok = db_engine.test_connection(
         conn, db.get_secret(conn.get("credRef") or connection_id)
     )
+    return {"ok": ok}
+
+
+@router.post("/db/test")
+def test_connection_params(body: TestBody) -> dict:
+    root = workspace_manager.root
+    password = body.password
+    if not password and body.id:
+        conn = db.get_connection(body.id, body.scope or "global", root)
+        if conn is not None:
+            password = db.get_secret(conn.get("credRef") or body.id)
+    conn = {
+        "driver": body.driver,
+        "host": body.host,
+        "port": body.port,
+        "database": body.database,
+        "username": body.username,
+        "path": body.path,
+    }
+    ok = db_engine.test_connection(conn, password)
     return {"ok": ok}
 
 

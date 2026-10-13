@@ -78,3 +78,14 @@ def test_model(model_id: str, scope: str = Query(default="global")) -> dict:
         raise ApiError("E_NOT_FOUND", 404, "error.notFound", {"id": model_id})
     ok = bool(item.get("baseUrl")) and bool(item.get("model"))
     return {"ok": ok}
+
+
+class ModelTestBody(BaseModel):
+    baseUrl: str | None = None
+    model: str | None = None
+
+
+@router.post("/models/test")
+def test_model_params(body: ModelTestBody) -> dict:
+    """按表单当前填写值试连（模型连通性校验不落盘）。"""
+    return {"ok": bool(body.baseUrl) and bool(body.model)}

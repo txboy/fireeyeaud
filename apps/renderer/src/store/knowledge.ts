@@ -7,9 +7,11 @@ import {
   listKbKnowledge,
   listKbProviders,
   setKbEnabled,
+  testKbParams,
   testKbProvider,
   updateKbProvider,
   type KbProviderInput,
+  type KbTestInput,
 } from '../lib/api';
 
 interface KnowledgeState {
@@ -27,6 +29,7 @@ interface KnowledgeState {
   ) => Promise<boolean>;
   remove: (id: string, scope: KbProvider['scope']) => Promise<void>;
   test: (id: string, scope: KbProvider['scope']) => Promise<boolean>;
+  testParams: (input: KbTestInput) => Promise<boolean>;
   loadKnowledge: (id: string, scope: KbProvider['scope']) => Promise<void>;
   setEnabled: (scope: KbProvider['scope'], items: KbEnabledEntry[]) => Promise<void>;
   reset: () => void;
@@ -86,6 +89,17 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
     set({ errorKey: null });
     try {
       const res = await testKbProvider(id, scope);
+      return res.ok;
+    } catch (err) {
+      set({ errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal' });
+      return false;
+    }
+  },
+
+  testParams: async (input) => {
+    set({ errorKey: null });
+    try {
+      const res = await testKbParams(input);
       return res.ok;
     } catch (err) {
       set({ errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal' });

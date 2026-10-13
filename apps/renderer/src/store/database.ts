@@ -7,8 +7,10 @@ import {
   reflectDbConnection,
   setDbAuthorization,
   testDbConnection,
+  testDbParams,
   updateDbConnection,
   type DbConnectionInput,
+  type DbTestInput,
 } from '../lib/api';
 
 interface DatabaseState {
@@ -22,6 +24,7 @@ interface DatabaseState {
   edit: (id: string, scope: DbConnection['scope'], patch: Partial<DbConnectionInput>) => Promise<boolean>;
   remove: (id: string, scope: DbConnection['scope']) => Promise<void>;
   test: (id: string, scope: DbConnection['scope']) => Promise<boolean>;
+  testParams: (input: DbTestInput) => Promise<boolean>;
   reflect: (id: string, scope: DbConnection['scope']) => Promise<void>;
   setAuthDraft: (id: string, tables: Record<string, string[]>) => void;
   saveAuthorization: (
@@ -84,6 +87,17 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
     set({ errorKey: null });
     try {
       const res = await testDbConnection(id, scope);
+      return res.ok;
+    } catch (err) {
+      set({ errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal' });
+      return false;
+    }
+  },
+
+  testParams: async (input) => {
+    set({ errorKey: null });
+    try {
+      const res = await testDbParams(input);
       return res.ok;
     } catch (err) {
       set({ errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal' });

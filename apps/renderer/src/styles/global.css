@@ -269,6 +269,59 @@ body {
   background: var(--accent-weak);
 }
 
+/* ---- Enable state chip（启用 / 停用） ---- */
+.state-chip {
+  font-size: 10px;
+  border-radius: 4px;
+  padding: 2px 7px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.state-chip--on {
+  color: var(--success);
+  background: var(--success-weak);
+}
+
+.state-chip--off {
+  color: var(--text-3);
+  background: var(--hover);
+}
+
+/* 卡片头（名称 + 肩标）/ 底部控制行 */
+.card__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card__head .card__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card__foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 8px;
+  margin-top: 2px;
+  border-top: 1px solid var(--border);
+}
+
+/* 表单内「试连」行：按钮自适应宽度，右侧状态文字 */
+.form-test {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.form-test .button {
+  flex: 0 0 auto;
+}
+
 .titlebar__btn {
   display: inline-flex;
   align-items: center;

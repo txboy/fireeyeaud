@@ -5,6 +5,7 @@ import {
   deleteModelApi,
   listModels,
   testModel,
+  testModelParams,
   updateModel,
   type ModelInput,
 } from '../lib/api';
@@ -18,6 +19,7 @@ interface ModelsState {
   edit: (id: string, scope: ModelProfile['scope'], patch: Partial<ModelInput>) => Promise<void>;
   remove: (id: string, scope: ModelProfile['scope']) => Promise<void>;
   test: (id: string, scope: ModelProfile['scope']) => Promise<boolean>;
+  testParams: (input: { baseUrl?: string; model?: string }) => Promise<boolean>;
   reset: () => void;
 }
 
@@ -56,6 +58,11 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
 
   test: async (id, scope) => {
     const res = await testModel(id, scope);
+    return res.ok;
+  },
+
+  testParams: async (input) => {
+    const res = await testModelParams(input);
     return res.ok;
   },
 

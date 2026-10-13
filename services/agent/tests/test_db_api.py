@@ -57,6 +57,26 @@ async def test_db_connections_api(tmp_path, monkeypatch):
         await client.post("/api/v1/workspaces/close")
 
 
+async def test_db_test_params(tmp_path, monkeypatch):
+    monkeypatch.setenv("FIREYEAUD_GLOBAL_DIR", str(tmp_path / "global"))
+    db_path = str(_sqlite_file(tmp_path))
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        ok = (
+            await client.post(
+                "/api/v1/db/test", json={"driver": "sqlite", "path": db_path}
+            )
+        ).json()
+        assert ok["ok"] is True
+
+        bad = await client.post(
+            "/api/v1/db/test",
+            json={"driver": "sqlite", "path": str(tmp_path / "missing.db")},
+        )
+        assert bad.status_code == 502
+
+
 async def test_db_connections_no_workspace():
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"

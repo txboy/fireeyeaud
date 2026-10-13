@@ -94,6 +94,32 @@ def test_provider(provider_id: str, scope: str = Query(default="global")) -> dic
     return {"ok": True, "knowledgeCount": len(items)}
 
 
+class KbTestBody(BaseModel):
+    type: str
+    baseUrl: str
+    # 明文 key 仅在内存使用；缺省且给了 id 时回退到已保存凭据。
+    apiKey: str | None = None
+    id: str | None = None
+    scope: str | None = None
+
+
+@router.post("/kb/test")
+def test_provider_params(body: KbTestBody) -> dict:
+    """按表单当前填写值试连（不落盘）。"""
+    api_key = body.apiKey
+    if not api_key and body.id:
+        provider = knowledge.get_provider(body.id, body.scope or "global", _root())
+        if provider is not None:
+            api_key = knowledge.get_secret(provider.get("apiKeyRef") or body.id)
+    try:
+        items = kb.adapter_for(body.type).list_knowledge(body.baseUrl, api_key or "")
+    except ApiError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise ApiError("E_KB_CONN", 502, "error.kbConn", {"reason": str(exc)}) from exc
+    return {"ok": True, "knowledgeCount": len(items)}
+
+
 @router.get("/kb/providers/{provider_id}/knowledge")
 def list_remote_knowledge(
     provider_id: str, scope: str = Query(default="global")

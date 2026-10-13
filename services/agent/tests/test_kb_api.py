@@ -75,3 +75,22 @@ async def test_kb_providers_no_workspace():
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
         assert (await client.get("/api/v1/kb/providers")).json()["items"] == []
+
+
+async def test_kb_test_params(monkeypatch):
+    from fireeyeaud_agent import kb
+
+    class _Adapter:
+        @staticmethod
+        def list_knowledge(base_url, key, **kwargs):
+            return [{"id": "d1"}]
+
+    monkeypatch.setattr(kb, "adapter_for", lambda _t: _Adapter)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        res = await client.post(
+            "/api/v1/kb/test",
+            json={"type": "dify", "baseUrl": "http://kb", "apiKey": "k"},
+        )
+        assert res.json() == {"ok": True, "knowledgeCount": 1}
