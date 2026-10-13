@@ -5,7 +5,6 @@ import { supportedLocales } from '@fireeyeaud/shared/locales';
 import { useSettingsStore } from '../../store/settings';
 import { useUiStore } from '../../store/ui';
 import { FormActions } from '../forms/FormActions';
-import { RulesPanel } from './RulesPanel';
 
 /** 「设置」tab 内容：与配置表单一致的布局（单列表单 + 保存/取消）。 */
 export function SettingsPanel() {
@@ -119,13 +118,6 @@ export function SettingsPanel() {
         />
       </label>
       <span className="card__meta">{t('systemPromptHint')}</span>
-
-      <div className="settings-rules">
-        <div className="section-head">
-          <span>{t('navRules')}</span>
-        </div>
-        <RulesPanel />
-      </div>
 
       <FormActions
         onSave={() => void submit()}

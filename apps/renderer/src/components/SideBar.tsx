@@ -8,6 +8,7 @@ import { KnowledgePanel } from './panels/KnowledgePanel';
 import { McpPanel } from './panels/McpPanel';
 import { ModelsPanel } from './panels/ModelsPanel';
 import { SkillsPanel } from './panels/SkillsPanel';
+import { RulesPanel } from './panels/RulesPanel';
 import { PlaceholderPanel } from './panels/PlaceholderPanel';
 
 interface HeadMeta {
@@ -24,6 +25,7 @@ const HEAD: Record<ActivityView, HeadMeta> = {
   knowledge: { titleNs: 'knowledge', titleKey: 'title', subNs: 'knowledge', subKey: 'subtitle' },
   mcp: { titleNs: 'mcp', titleKey: 'title', subNs: 'mcp', subKey: 'subtitle' },
   skills: { titleNs: 'skills', titleKey: 'title', subNs: 'skills', subKey: 'subtitle' },
+  rules: { titleNs: 'rules', titleKey: 'title', subNs: 'rules', subKey: 'subtitle' },
   models: { titleNs: 'models', titleKey: 'title', subNs: 'models', subKey: 'subtitle' },
 };
 
@@ -41,6 +43,8 @@ function PanelBody({ view }: { view: ActivityView }) {
       return <McpPanel />;
     case 'skills':
       return <SkillsPanel />;
+    case 'rules':
+      return <RulesPanel />;
     case 'models':
       return <ModelsPanel />;
     default:

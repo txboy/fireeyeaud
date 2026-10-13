@@ -47,6 +47,7 @@ export default {
     knowledge: 'Knowledge',
     mcp: 'MCP',
     skills: 'Skills',
+    rules: 'Rules',
     models: 'Models',
     theme: 'Theme',
     settings: 'Settings',
@@ -242,6 +243,7 @@ export default {
   },
   rules: {
     title: 'Rules',
+    subtitle: 'Built-in and project audit rules (SQL / prompt), preview and run in batch',
     builtin: 'Built-in rules',
     custom: 'Project rules',
     addRule: 'Add rule',
@@ -388,9 +390,8 @@ export default {
   },
   settings: {
     title: 'Settings',
-    subtitle: 'Appearance, audit rules, web search and local data options',
+    subtitle: 'Appearance, language, web search and system prompt',
     navAppearance: 'Appearance & language',
-    navRules: 'Rules',
     navWeb: 'Web search',
     navData: 'Data & storage',
     navAbout: 'About',

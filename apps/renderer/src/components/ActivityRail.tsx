@@ -8,6 +8,7 @@ import {
   Plug,
   Search,
   Settings,
+  ShieldCheck,
   Sparkles,
   Sun,
   type LucideIcon,
@@ -29,6 +30,7 @@ const TOP_ITEMS: RailItem[] = [
   { view: 'knowledge', icon: BookOpen, labelKey: 'knowledge' },
   { view: 'mcp', icon: Plug, labelKey: 'mcp' },
   { view: 'skills', icon: Sparkles, labelKey: 'skills' },
+  { view: 'rules', icon: ShieldCheck, labelKey: 'rules' },
   { view: 'models', icon: Cpu, labelKey: 'models' },
 ];
 

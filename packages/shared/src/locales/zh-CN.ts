@@ -47,6 +47,7 @@ export default {
     knowledge: '知识库',
     mcp: 'MCP',
     skills: 'Skills',
+    rules: '规则库',
     models: 'Models',
     theme: '主题',
     settings: '设置',
@@ -241,6 +242,7 @@ export default {
   },
   rules: {
     title: '规则库',
+    subtitle: '内置与项目自定义审计规则（SQL / 提示词），可试跑与批量运行',
     builtin: '内置规则',
     custom: '项目自定义规则',
     addRule: '新增规则',
@@ -386,9 +388,8 @@ export default {
   },
   settings: {
     title: '设置',
-    subtitle: '配置外观与语言、审计规则、联网检索与本地数据选项',
+    subtitle: '配置外观与语言、联网检索与系统提示词',
     navAppearance: '外观与语言',
-    navRules: '规则库',
     navWeb: '联网检索',
     navData: '数据与存储',
     navAbout: '关于',

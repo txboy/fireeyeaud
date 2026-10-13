@@ -7,6 +7,7 @@ export type ActivityView =
   | 'knowledge'
   | 'mcp'
   | 'skills'
+  | 'rules'
   | 'models';
 
 export type ThemeMode = 'light' | 'dark';

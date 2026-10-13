@@ -1293,16 +1293,6 @@ textarea.searchbox {
   margin-top: 1px;
 }
 
-/* 设置 tab 中的「规则库」区（与上方字段分隔）。 */
-.settings-rules {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-top: 8px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
-}
-
 /* ---- Chat messages ---- */
 .msg {
   display: flex;
