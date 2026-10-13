@@ -47,7 +47,7 @@ export default {
     knowledge: 'Knowledge',
     mcp: 'MCP',
     skills: 'Skills',
-    rules: 'Rules',
+    rules: 'SQL',
     models: 'Models',
     theme: 'Theme',
     settings: 'Settings',
@@ -249,7 +249,7 @@ export default {
     testFail: 'Connection failed',
   },
   rules: {
-    title: 'Rules',
+    title: 'SQL',
     subtitle: 'Custom SQL rules: queries the model can perceive and run',
     addRule: 'Add rule',
     editRule: 'Edit rule',

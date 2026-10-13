@@ -47,7 +47,7 @@ export default {
     knowledge: '知识库',
     mcp: 'MCP',
     skills: 'Skills',
-    rules: '规则库',
+    rules: 'SQL库',
     models: 'Models',
     theme: '主题',
     settings: '设置',
@@ -248,7 +248,7 @@ export default {
     testFail: '连接失败',
   },
   rules: {
-    title: '规则库',
+    title: 'SQL库',
     subtitle: '自定义 SQL 规则：模型可感知并运行的专用查询',
     addRule: '新增规则',
     editRule: '编辑规则',
