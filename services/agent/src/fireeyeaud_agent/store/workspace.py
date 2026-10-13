@@ -20,7 +20,6 @@ from .evidence import verify_evidence_chain
 _SUBDIRS = ["config", "templates", "index", "artifacts"]
 _COUNTERS = [
     "finding",
-    "rule",
     "session",
     "message",
     "dataSource",

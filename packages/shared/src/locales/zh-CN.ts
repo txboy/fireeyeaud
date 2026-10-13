@@ -260,6 +260,7 @@ export default {
     defaultDatabase: '默认数据库',
     workspace: '工作区数据',
     database: '数据库',
+    scope: '作用域',
     enabled: '启用',
     preview: '试跑',
     execute: '执行',

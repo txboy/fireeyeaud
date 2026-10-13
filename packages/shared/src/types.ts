@@ -138,6 +138,8 @@ export interface AuditRule {
   enabled: boolean;
   /** 默认数据库连接 id；缺省在工作区 DuckDB 上运行。 */
   databaseId?: string | null;
+  /** 作用域：全局（跨工作区共享）或本项目。 */
+  scope: ConfigScope;
 }
 
 /** 规则试跑结果（sql_query 的输出 + ruleId）。 */

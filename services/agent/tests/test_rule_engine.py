@@ -18,15 +18,17 @@ def _seed(tmp_path):
     db.close()
 
 
-def test_run_sql_rule(tmp_path):
+def test_run_sql_rule(tmp_path, monkeypatch):
+    monkeypatch.setenv("FIREYEAUD_GLOBAL_DIR", str(tmp_path / "global"))
     _seed(tmp_path)
     rule = create_rule(
-        tmp_path,
         {
             "name": "余额非零",
             "description": "查余额表全部行",
             "sql": "SELECT * FROM src_ds1_余额表",
+            "scope": "project",
         },
+        tmp_path,
     )
     result = run_rule(tmp_path, rule["id"])
     assert result["ruleId"] == rule["id"]
@@ -34,7 +36,8 @@ def test_run_sql_rule(tmp_path):
     assert len(result["rows"]) == 2
 
 
-def test_run_rule_not_found(tmp_path):
+def test_run_rule_not_found(tmp_path, monkeypatch):
+    monkeypatch.setenv("FIREYEAUD_GLOBAL_DIR", str(tmp_path / "global"))
     (tmp_path / ".fireeye").mkdir()
     with pytest.raises(ApiError):
-        run_rule(tmp_path, "R-9999")
+        run_rule(tmp_path, "rule_9999")

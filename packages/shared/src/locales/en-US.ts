@@ -261,6 +261,7 @@ export default {
     defaultDatabase: 'Default database',
     workspace: 'Workspace data',
     database: 'Database',
+    scope: 'Scope',
     enabled: 'Enabled',
     preview: 'Preview',
     execute: 'Run',

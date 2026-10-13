@@ -347,6 +347,7 @@ export interface RuleInput {
   sql?: string;
   databaseId?: string | null;
   enabled?: boolean;
+  scope?: ConfigScope;
 }
 
 export function createRule(input: RuleInput): Promise<AuditRule> {
@@ -356,15 +357,19 @@ export function createRule(input: RuleInput): Promise<AuditRule> {
   });
 }
 
-export function updateRuleApi(id: string, patch: RuleInput): Promise<AuditRule> {
-  return request<AuditRule>(`/rules/${id}`, {
+export function updateRuleApi(
+  id: string,
+  scope: ConfigScope,
+  patch: RuleInput,
+): Promise<AuditRule> {
+  return request<AuditRule>(`/rules/${id}?scope=${scope}`, {
     method: 'PATCH',
     body: JSON.stringify(patch),
   });
 }
 
-export function deleteRuleApi(id: string): Promise<{ ok: boolean }> {
-  return request<{ ok: boolean }>(`/rules/${id}`, { method: 'DELETE' });
+export function deleteRuleApi(id: string, scope: ConfigScope): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/rules/${id}?scope=${scope}`, { method: 'DELETE' });
 }
 
 export interface RuleRunInput {

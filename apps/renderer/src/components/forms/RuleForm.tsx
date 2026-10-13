@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { AuditRule } from '@fireeyeaud/shared';
+import type { AuditRule, ConfigScope } from '@fireeyeaud/shared';
 import { useRulesStore } from '../../store/rules';
 import { useDatabaseStore } from '../../store/database';
 import { FormActions } from './FormActions';
@@ -12,6 +12,7 @@ interface FormState {
   description: string;
   sql: string;
   databaseId: string;
+  scope: ConfigScope;
   enabled: boolean;
 }
 
@@ -20,6 +21,7 @@ const EMPTY: FormState = {
   description: '',
   sql: '',
   databaseId: '',
+  scope: 'project',
   enabled: true,
 };
 
@@ -30,6 +32,7 @@ function init(entity?: AuditRule): FormState {
     description: entity.description ?? '',
     sql: entity.sql ?? '',
     databaseId: entity.databaseId ?? '',
+    scope: entity.scope,
     enabled: entity.enabled,
   };
 }
@@ -44,6 +47,7 @@ export function RuleForm({
   onCancel: () => void;
 }) {
   const { t } = useTranslation('rules');
+  const { t: te } = useTranslation('enums');
   const add = useRulesStore((s) => s.add);
   const edit = useRulesStore((s) => s.edit);
   const errorKey = useRulesStore((s) => s.errorKey);
@@ -70,7 +74,9 @@ export function RuleForm({
       databaseId: form.databaseId || null,
       enabled: form.enabled,
     };
-    const ok = entity ? await edit(entity.id, payload) : await add(payload);
+    const ok = entity
+      ? await edit(entity.id, entity.scope, payload)
+      : await add({ ...payload, scope: form.scope });
     setBusy(false);
     return ok;
   };
@@ -125,6 +131,29 @@ export function RuleForm({
           ))}
         </select>
       </label>
+      <div className="field">
+        <span className="field__label">{t('scope')}</span>
+        <div className="search-opts">
+          <label className="search-opt">
+            <input
+              type="radio"
+              checked={form.scope === 'global'}
+              disabled={Boolean(entity)}
+              onChange={() => setForm({ ...form, scope: 'global' })}
+            />
+            <span>{te('configScope.global')}</span>
+          </label>
+          <label className="search-opt">
+            <input
+              type="radio"
+              checked={form.scope === 'project'}
+              disabled={Boolean(entity)}
+              onChange={() => setForm({ ...form, scope: 'project' })}
+            />
+            <span>{te('configScope.project')}</span>
+          </label>
+        </div>
+      </div>
       <label className="field field--inline">
         <input
           type="checkbox"

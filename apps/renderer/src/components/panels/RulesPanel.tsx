@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pencil, Play, Plus, ShieldCheck, Trash2 } from 'lucide-react';
+import { ScopeBadge } from '../ScopeBadge';
 import { StateChip } from '../StateChip';
 import { useRulesStore } from '../../store/rules';
 import { useUiStore } from '../../store/ui';
@@ -60,6 +61,7 @@ export function RulesPanel() {
               <ShieldCheck size={14} strokeWidth={1.75} />
               <span className="card__name">{rule.name || rule.id}</span>
               <span className="spacer" />
+              <ScopeBadge scope={rule.scope} />
               <StateChip enabled={rule.enabled} />
             </div>
             {rule.description && <span className="card__meta">{rule.description}</span>}
@@ -81,7 +83,7 @@ export function RulesPanel() {
                 onClick={() =>
                   void openForm('rules', 'edit', {
                     id: rule.id,
-                    scope: 'project',
+                    scope: rule.scope,
                     name: rule.name || rule.id,
                   })
                 }
@@ -92,7 +94,7 @@ export function RulesPanel() {
                 type="button"
                 className="icon-btn"
                 title={tc('delete')}
-                onClick={() => void remove(rule.id)}
+                onClick={() => void remove(rule.id, rule.scope)}
               >
                 <Trash2 size={13} strokeWidth={1.75} />
               </button>

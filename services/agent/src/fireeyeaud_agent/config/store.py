@@ -23,6 +23,7 @@ _ID_PREFIX = {
     "knowledge": "kb",
     "mcp": "mcp",
     "skills": "sk",
+    "rules": "rule",
 }
 
 

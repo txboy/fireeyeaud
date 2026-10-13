@@ -56,7 +56,8 @@ export function RuleRunView({ tab }: { tab: RuleRunTab }) {
   };
 
   const save = async () => {
-    const ok = await edit(tab.ruleId, { sql });
+    if (!rule) return;
+    const ok = await edit(tab.ruleId, rule.scope, { sql });
     if (ok) setSaved(true);
   };
 

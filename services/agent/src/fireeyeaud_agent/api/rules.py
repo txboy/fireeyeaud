@@ -1,10 +1,10 @@
-"""规则库路由（用户自定义 SQL 规则）。"""
+"""规则库路由（用户自定义 SQL 规则，global/project 作用域）。"""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from ..errors import ApiError
@@ -22,6 +22,7 @@ class RuleBody(BaseModel):
     sql: str = ""
     databaseId: str | None = None
     enabled: bool = True
+    scope: str = "global"
 
 
 class RulePatch(BaseModel):
@@ -54,18 +55,15 @@ def list_rules() -> dict:
 
 @router.post("/rules")
 def create_rule(body: RuleBody) -> dict:
-    return rules_store.create_rule(_root(), body.model_dump())
+    return rules_store.create_rule(body.model_dump(), _root())
 
 
 @router.patch("/rules/{rule_id}")
-def update_rule(rule_id: str, body: RulePatch) -> dict:
+def update_rule(
+    rule_id: str, body: RulePatch, scope: str = Query(default="global")
+) -> dict:
     patch = body.model_dump(exclude_unset=True)
-    if "enabled" in patch:
-        rules_store.set_enabled(_root(), rule_id, bool(patch["enabled"]))
-        patch.pop("enabled")
-    if patch:
-        return rules_store.update_rule(_root(), rule_id, patch)
-    return rules_store.get_rule(_root(), rule_id)
+    return rules_store.update_rule(_root(), rule_id, scope, patch)
 
 
 @router.post("/rules/{rule_id}/run")
@@ -75,6 +73,6 @@ def run_single(rule_id: str, body: RunBody | None = None) -> dict:
 
 
 @router.delete("/rules/{rule_id}")
-def delete_rule(rule_id: str) -> dict:
-    rules_store.delete_rule(_root(), rule_id)
+def delete_rule(rule_id: str, scope: str = Query(default="global")) -> dict:
+    rules_store.delete_rule(_root(), rule_id, scope)
     return {"ok": True}

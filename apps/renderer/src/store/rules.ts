@@ -14,8 +14,8 @@ interface RulesState {
   errorKey: string | null;
   load: () => Promise<void>;
   add: (input: RuleInput) => Promise<boolean>;
-  edit: (id: string, patch: RuleInput) => Promise<boolean>;
-  remove: (id: string) => Promise<void>;
+  edit: (id: string, scope: AuditRule['scope'], patch: RuleInput) => Promise<boolean>;
+  remove: (id: string, scope: AuditRule['scope']) => Promise<void>;
   reset: () => void;
 }
 
@@ -49,10 +49,10 @@ export const useRulesStore = create<RulesState>((set, get) => ({
     }
   },
 
-  edit: async (id, patch) => {
+  edit: async (id, scope, patch) => {
     set({ errorKey: null });
     try {
-      await updateRuleApi(id, patch);
+      await updateRuleApi(id, scope, patch);
       await get().load();
       return true;
     } catch (err) {
@@ -61,8 +61,8 @@ export const useRulesStore = create<RulesState>((set, get) => ({
     }
   },
 
-  remove: async (id) => {
-    await deleteRuleApi(id);
+  remove: async (id, scope) => {
+    await deleteRuleApi(id, scope);
     await get().load();
   },
 
