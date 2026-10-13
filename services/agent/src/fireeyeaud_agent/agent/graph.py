@@ -166,15 +166,11 @@ async def run_agent(
     from ..store.rules import list_rules
     from ..store.skills import prompts_for
 
-    prompt_rules = [
-        r
-        for r in list_rules(root)
-        if r.get("enabled") and r.get("type") == "prompt" and r.get("definition")
-    ]
+    rules = [r for r in list_rules(root) if r.get("enabled") and r.get("sql")]
     skill_prompts = prompts_for(root, (context or {}).get("skillIds"))
     custom_prompt = (app_settings.load().get("systemPrompt") or "").strip() or None
     messages: list[BaseMessage] = [
-        SystemMessage(content=system_prompt(locale, prompt_rules, skill_prompts, custom_prompt))
+        SystemMessage(content=system_prompt(locale, rules, skill_prompts, custom_prompt))
     ]
     if attachments:
         from ..store.attachments import extract_attachments, render_context

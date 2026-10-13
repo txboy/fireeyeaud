@@ -6,38 +6,37 @@ from fireeyeaud_agent.store.rules import (
 )
 
 
-def test_builtin_and_custom_rules(tmp_path):
+def test_custom_rules_crud(tmp_path):
     (tmp_path / ".fireeye").mkdir()
-    rules = list_rules(tmp_path)
-    ids = {r["id"] for r in rules}
-    assert {"tie_check", "related_party_undisclosed"} <= ids
-    builtin = next(r for r in rules if r["id"] == "tie_check")
-    assert builtin["builtin"] is True and builtin["enabled"] is True
+    assert list_rules(tmp_path) == []
 
     created = create_rule(
         tmp_path,
         {
             "name": "大额关联方",
-            "type": "sql",
-            "severity": "high",
-            "definition": "SELECT 1",
+            "description": "查关联方大额往来",
+            "sql": "SELECT 1",
+            "databaseId": "conn_1",
             "enabled": True,
         },
     )
     assert created["id"] == "R-0001"
-    assert created["scope"] == "custom"
+    assert created["databaseId"] == "conn_1"
 
     set_enabled(tmp_path, "R-0001", False)
     after = {r["id"]: r for r in list_rules(tmp_path)}
     assert after["R-0001"]["enabled"] is False
 
-    update_rule(tmp_path, "R-0001", {"severity": "medium"})
+    update_rule(tmp_path, "R-0001", {"description": "更新描述", "databaseId": None})
     after = {r["id"]: r for r in list_rules(tmp_path)}
-    assert after["R-0001"]["severity"] == "medium"
+    assert after["R-0001"]["description"] == "更新描述"
+    assert after["R-0001"]["databaseId"] is None
 
 
-def test_builtin_override(tmp_path):
+def test_delete_rule(tmp_path):
     (tmp_path / ".fireeye").mkdir()
-    set_enabled(tmp_path, "tie_check", False)
-    rules = {r["id"]: r for r in list_rules(tmp_path)}
-    assert rules["tie_check"]["enabled"] is False
+    create_rule(tmp_path, {"name": "x", "sql": "SELECT 1"})
+    from fireeyeaud_agent.store.rules import delete_rule
+
+    delete_rule(tmp_path, "R-0001")
+    assert list_rules(tmp_path) == []

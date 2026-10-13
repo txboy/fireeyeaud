@@ -1,15 +1,15 @@
-"""规则库路由（设计 §14.8 / §14.12）。"""
+"""规则库路由（用户自定义 SQL 规则）。"""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from ..errors import ApiError
 from ..store import rules as rules_store
-from ..store.rule_engine import run_all_rules, run_rule
+from ..store.rule_engine import run_rule
 from ..store.workspace import workspace_manager
 from .deps import require_token
 
@@ -17,20 +17,18 @@ router = APIRouter(tags=["rules"], dependencies=[Depends(require_token)])
 
 
 class RuleBody(BaseModel):
-    name: str | None = None
-    type: str = "sql"
-    definition: str = ""
-    severity: str = "medium"
-    params: dict = {}
+    name: str
+    description: str = ""
+    sql: str = ""
+    databaseId: str | None = None
     enabled: bool = True
 
 
 class RulePatch(BaseModel):
     name: str | None = None
-    type: str | None = None
-    definition: str | None = None
-    severity: str | None = None
-    params: dict | None = None
+    description: str | None = None
+    sql: str | None = None
+    databaseId: str | None = None
     enabled: bool | None = None
 
 
@@ -52,11 +50,6 @@ def create_rule(body: RuleBody) -> dict:
     return rules_store.create_rule(_root(), body.model_dump())
 
 
-@router.post("/rules/run")
-def run_rules() -> dict:
-    return run_all_rules(_root())
-
-
 @router.patch("/rules/{rule_id}")
 def update_rule(rule_id: str, body: RulePatch) -> dict:
     patch = body.model_dump(exclude_unset=True)
@@ -69,8 +62,8 @@ def update_rule(rule_id: str, body: RulePatch) -> dict:
 
 
 @router.post("/rules/{rule_id}/run")
-def run_single(rule_id: str) -> dict:
-    return run_rule(_root(), rule_id)
+def run_single(rule_id: str, sourceId: str | None = Query(default=None)) -> dict:
+    return run_rule(_root(), rule_id, sourceId)
 
 
 @router.delete("/rules/{rule_id}")

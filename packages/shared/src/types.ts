@@ -130,17 +130,14 @@ export interface ImportProgressData {
 
 export interface AuditRule {
   id: string;
-  scope: 'builtin' | 'custom';
-  type: 'sql' | 'prompt';
-  detector?: string;
-  name?: string | { lang: string; text: string } | null;
-  nameKey?: string;
-  descriptionKey?: string;
-  definition?: string;
-  severity: Severity;
-  params?: Record<string, unknown>;
+  name: string;
+  /** 自然语言描述：告诉模型这条 SQL 在查什么。 */
+  description: string;
+  /** 只读 SQL（SELECT/WITH/EXPLAIN/DESCRIBE）。 */
+  sql: string;
   enabled: boolean;
-  builtin: boolean;
+  /** 默认数据库连接 id；缺省在工作区 DuckDB 上运行。 */
+  databaseId?: string | null;
 }
 
 export interface ModelProfile {
@@ -414,8 +411,7 @@ export interface Skill {
   toolIds?: string[];
   params?: Record<string, unknown>;
   enabled: boolean;
-  builtin: boolean;
-  scope: ConfigScope | 'builtin';
+  scope: ConfigScope;
   /** 默认自动提供给模型（无需在对话上下文栏勾选）。 */
   isDefault?: boolean;
   createdAt?: string;

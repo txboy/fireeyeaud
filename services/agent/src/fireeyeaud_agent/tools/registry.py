@@ -13,6 +13,7 @@ from .check_tie import check_tie
 from .describe_source import describe_source
 from .kb_search import kb_search
 from .parse_ledger import parse_ledger
+from .run_rule import run_rule
 from .sql_query import sql_query
 from .web_search import web_search
 
@@ -66,6 +67,13 @@ class WebSearchArgs(BaseModel):
     maxResults: int | None = Field(default=None, description="结果条数上限")
 
 
+class RunRuleArgs(BaseModel):
+    ruleId: str = Field(description="规则 id，如 R-0001")
+    sourceId: str | None = Field(
+        default=None, description="数据库连接 id；缺省用规则的默认数据库"
+    )
+
+
 _SPECS: list[tuple[str, str, ToolFn, type[BaseModel]]] = [
     (
         "describe_source",
@@ -78,6 +86,12 @@ _SPECS: list[tuple[str, str, ToolFn, type[BaseModel]]] = [
         "对原始表执行只读 SQL 查询；仅允许 SELECT/WITH/EXPLAIN/DESCRIBE。",
         sql_query,
         SqlQueryArgs,
+    ),
+    (
+        "run_rule",
+        "运行一条已保存的自定义 SQL 规则（返回查询结果行）。",
+        run_rule,
+        RunRuleArgs,
     ),
     (
         "kb_search",
@@ -116,7 +130,7 @@ def _context_wrapper(fn: ToolFn, context: dict[str, Any] | None) -> ToolFn:
 
     def wrapped(root: Path, params: dict[str, Any]) -> dict[str, Any]:
         merged = dict(params)
-        if fn is sql_query and "allowedConnectionIds" in context:
+        if fn in (sql_query, run_rule) and "allowedConnectionIds" in context:
             merged["allowedConnectionIds"] = context["allowedConnectionIds"]
         elif fn is kb_search and "allowedProviderIds" in context:
             merged["allowedProviderIds"] = context["allowedProviderIds"]

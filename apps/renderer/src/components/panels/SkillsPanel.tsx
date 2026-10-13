@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BookMarked, Pencil, Plus, Trash2 } from 'lucide-react';
-import type { ConfigScope } from '@fireeyeaud/shared';
 import { useSkillsStore } from '../../store/skills';
 import { useUiStore } from '../../store/ui';
 import { useWorkspaceStore } from '../../store/workspace';
@@ -60,47 +59,36 @@ export function SkillsPanel() {
             <div className="card__row">
               <BookMarked size={13} strokeWidth={1.75} />
               <span className="card__name">{skill.name}</span>
-              {skill.builtin && <span className="scope-badge">{t('builtin')}</span>}
               <span className="spacer" />
               <label className="db-col">
                 <input
                   type="checkbox"
                   checked={skill.enabled}
-                  onChange={(e) =>
-                    void toggle(
-                      skill.id,
-                      skill.builtin ? 'project' : (skill.scope as ConfigScope),
-                      e.target.checked,
-                    )
-                  }
+                  onChange={(e) => void toggle(skill.id, skill.scope, e.target.checked)}
                 />
                 <span>{t('enabled')}</span>
               </label>
-              {!skill.builtin && (
-                <>
-                  <button
-                    type="button"
-                    className="icon-btn"
-                    title={tc('edit')}
-                    onClick={() =>
-                      void openForm('skills', 'edit', {
-                        id: skill.id,
-                        scope: skill.scope as ConfigScope,
-                        name: skill.name,
-                      })
-                    }
-                  >
-                    <Pencil size={13} strokeWidth={1.75} />
-                  </button>
-                  <button
-                    type="button"
-                    className="button button--sm button--ghost"
-                    onClick={() => void remove(skill.id, skill.scope as ConfigScope)}
-                  >
-                    <Trash2 size={12} strokeWidth={2} />
-                  </button>
-                </>
-              )}
+              <button
+                type="button"
+                className="icon-btn"
+                title={tc('edit')}
+                onClick={() =>
+                  void openForm('skills', 'edit', {
+                    id: skill.id,
+                    scope: skill.scope,
+                    name: skill.name,
+                  })
+                }
+              >
+                <Pencil size={13} strokeWidth={1.75} />
+              </button>
+              <button
+                type="button"
+                className="button button--sm button--ghost"
+                onClick={() => void remove(skill.id, skill.scope)}
+              >
+                <Trash2 size={12} strokeWidth={2} />
+              </button>
             </div>
             <span className="card__meta">{skill.prompt}</span>
             {skill.toolIds?.length ? (

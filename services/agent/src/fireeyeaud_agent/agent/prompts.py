@@ -8,6 +8,7 @@ _BASE = (
     "可用工具：\n"
     "- describe_source(sourceId?, table?)：查看已导入表的结构与列；构造 SQL 前必须先调用。\n"
     "- sql_query(sql, limit?)：对原始表执行只读 SQL（仅允许 SELECT/WITH/EXPLAIN/DESCRIBE）。\n"
+    "- run_rule(ruleId, sourceId?)：运行一条已保存的自定义 SQL 规则。\n"
     "- parse_ledger(table, mapping?)：把记账凭证表解析为标准凭证行。\n"
     "- aggregate_subject(table, subjectCol, debitCol, creditCol, nameCol?)：按科目汇总借贷与余额。\n"
     "- check_tie(table, rules?)：校验科目勾稽或表级借贷平衡。\n"
@@ -27,7 +28,7 @@ _ZH_DIRECTIVE = "\n请用简体中文回答。\n"
 
 def system_prompt(
     locale: str | None,
-    prompt_rules: list[dict] | None = None,
+    rules: list[dict] | None = None,
     skills: list[dict] | None = None,
     custom: str | None = None,
 ) -> str:
@@ -35,13 +36,19 @@ def system_prompt(
     text = _BASE
     if custom and custom.strip():
         text += "\n".join(["", "用户自定义要求（须遵循）：", custom.strip()]) + "\n"
-    if prompt_rules:
+    if rules:
         lines = [
             "",
-            "须遵循的审计规则（命中时必须调用 report_finding，ruleKey 用规则 id）：",
+            "已知的自定义审计查询（用 run_rule 运行；不确定数据源时先 describe_source）：",
         ]
-        for rule in prompt_rules:
-            lines.append(f"- [{rule.get('id')}] {rule.get('definition', '')}")
+        for rule in rules:
+            lines.append(f"- [{rule.get('id')}] {rule.get('name', '')}")
+            if rule.get("description"):
+                lines.append(f"  说明：{rule['description']}")
+            if rule.get("sql"):
+                lines.append(f"  SQL: {rule['sql']}")
+            if rule.get("databaseId"):
+                lines.append(f"  默认数据库：{rule['databaseId']}")
         text += "\n".join(lines) + "\n"
     if skills:
         lines = ["", "可参考的审计技能（方法与视角，非强制流程）："]

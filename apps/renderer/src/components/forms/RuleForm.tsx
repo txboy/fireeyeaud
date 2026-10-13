@@ -1,40 +1,38 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AuditRule } from '@fireeyeaud/shared';
 import { useRulesStore } from '../../store/rules';
-import { ruleName } from '../../lib/rules';
+import { useDatabaseStore } from '../../store/database';
 import { FormActions } from './FormActions';
 import { FormError } from './FormError';
 import { useUnsavedGuard } from './UnsavedGuard';
 
 interface FormState {
   name: string;
-  type: 'sql' | 'prompt';
-  definition: string;
-  severity: string;
+  description: string;
+  sql: string;
+  databaseId: string;
   enabled: boolean;
 }
 
 const EMPTY: FormState = {
   name: '',
-  type: 'sql',
-  definition: '',
-  severity: 'medium',
+  description: '',
+  sql: '',
+  databaseId: '',
   enabled: true,
 };
 
 function init(entity?: AuditRule): FormState {
   if (!entity) return EMPTY;
   return {
-    name: ruleName(entity),
-    type: entity.type,
-    definition: entity.definition ?? '',
-    severity: entity.severity,
+    name: entity.name ?? '',
+    description: entity.description ?? '',
+    sql: entity.sql ?? '',
+    databaseId: entity.databaseId ?? '',
     enabled: entity.enabled,
   };
 }
-
-const SEVERITIES = ['high', 'medium', 'low'] as const;
 
 export function RuleForm({
   entity,
@@ -46,25 +44,30 @@ export function RuleForm({
   onCancel: () => void;
 }) {
   const { t } = useTranslation('rules');
-  const { t: te } = useTranslation('enums');
   const add = useRulesStore((s) => s.add);
   const edit = useRulesStore((s) => s.edit);
   const errorKey = useRulesStore((s) => s.errorKey);
+  const connections = useDatabaseStore((s) => s.items);
+  const loadConnections = useDatabaseStore((s) => s.load);
 
   const initialRef = useRef<FormState>(init(entity));
   const [form, setForm] = useState<FormState>(initialRef.current);
   const [busy, setBusy] = useState(false);
 
+  useEffect(() => {
+    void loadConnections();
+  }, [loadConnections]);
+
   const dirty = JSON.stringify(form) !== JSON.stringify(initialRef.current);
 
   const save = async (): Promise<boolean> => {
-    if (!form.name.trim()) return false;
+    if (!form.name.trim() || !form.sql.trim()) return false;
     setBusy(true);
     const payload = {
       name: form.name.trim(),
-      type: form.type,
-      definition: form.definition,
-      severity: form.severity,
+      description: form.description.trim(),
+      sql: form.sql,
+      databaseId: form.databaseId || null,
       enabled: form.enabled,
     };
     const ok = entity ? await edit(entity.id, payload) : await add(payload);
@@ -72,7 +75,7 @@ export function RuleForm({
     return ok;
   };
 
-  const { modal, forceLeave } = useUnsavedGuard(dirty, save, entity ? ruleName(entity) : undefined);
+  const { modal, forceLeave } = useUnsavedGuard(dirty, save, entity?.name);
 
   const close = (cb: () => void) => {
     forceLeave();
@@ -90,39 +93,38 @@ export function RuleForm({
         />
       </label>
       <label className="field">
-        <span className="field__label">{t('type')}</span>
-        <select
+        <span className="field__label">{t('description')}</span>
+        <textarea
           className="searchbox"
-          value={form.type}
-          onChange={(e) => setForm({ ...form, type: e.target.value as 'sql' | 'prompt' })}
-        >
-          <option value="sql">{t('typeSql')}</option>
-          <option value="prompt">{t('typePrompt')}</option>
-        </select>
+          rows={2}
+          value={form.description}
+          onChange={(e) => setForm({ ...form, description: e.target.value })}
+        />
       </label>
       <label className="field">
-        <span className="field__label">{t('definition')}</span>
+        <span className="field__label">{t('sql')}</span>
         <textarea
           className="searchbox"
           rows={6}
-          value={form.definition}
-          onChange={(e) => setForm({ ...form, definition: e.target.value })}
+          value={form.sql}
+          onChange={(e) => setForm({ ...form, sql: e.target.value })}
         />
       </label>
-      <div className="field">
-        <span className="field__label">{t('severity')}</span>
+      <label className="field">
+        <span className="field__label">{t('defaultDatabase')}</span>
         <select
           className="searchbox"
-          value={form.severity}
-          onChange={(e) => setForm({ ...form, severity: e.target.value })}
+          value={form.databaseId}
+          onChange={(e) => setForm({ ...form, databaseId: e.target.value })}
         >
-          {SEVERITIES.map((s) => (
-            <option key={s} value={s}>
-              {te(`severity.${s}`)}
+          <option value="">{t('workspace')}</option>
+          {connections.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
             </option>
           ))}
         </select>
-      </div>
+      </label>
       <label className="field field--inline">
         <input
           type="checkbox"
@@ -138,7 +140,7 @@ export function RuleForm({
         onCancel={() => close(onCancel)}
         busy={busy}
         create={!entity}
-        disabled={!form.name.trim()}
+        disabled={!form.name.trim() || !form.sql.trim()}
       />
       {modal}
     </div>

@@ -4,7 +4,6 @@ import {
   createRule,
   deleteRuleApi,
   listRules,
-  runAllRulesApi,
   runRuleApi,
   updateRuleApi,
   type RuleInput,
@@ -19,8 +18,7 @@ interface RulesState {
   add: (input: RuleInput) => Promise<boolean>;
   edit: (id: string, patch: RuleInput) => Promise<boolean>;
   remove: (id: string) => Promise<void>;
-  preview: (id: string) => Promise<void>;
-  runAll: () => Promise<number>;
+  preview: (id: string, sourceId?: string) => Promise<void>;
   reset: () => void;
 }
 
@@ -72,18 +70,14 @@ export const useRulesStore = create<RulesState>((set, get) => ({
     await get().load();
   },
 
-  preview: async (id) => {
+  preview: async (id, sourceId) => {
+    set({ errorKey: null });
     try {
-      const result = await runRuleApi(id);
+      const result = await runRuleApi(id, sourceId);
       set((s) => ({ previewById: { ...s.previewById, [id]: result } }));
     } catch (err) {
       set({ errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal' });
     }
-  },
-
-  runAll: async () => {
-    const result = await runAllRulesApi();
-    return result.count;
   },
 
   reset: () => set({ items: [], loading: false, errorKey: null, previewById: {} }),

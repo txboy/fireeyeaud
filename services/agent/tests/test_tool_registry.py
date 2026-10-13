@@ -6,6 +6,7 @@ def test_registry_has_phase1_tools():
     assert {
         "describe_source",
         "sql_query",
+        "run_rule",
         "parse_ledger",
         "aggregate_subject",
         "check_tie",
@@ -18,4 +19,5 @@ def test_build_langchain_tools(tmp_path):
     names = {t.name for t in tools}
     assert "describe_source" in names
     assert "kb_search" in names
-    assert len(tools) == 6
+    assert "run_rule" in names
+    assert len(tools) == 7

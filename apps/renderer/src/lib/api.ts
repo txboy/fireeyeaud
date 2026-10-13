@@ -342,10 +342,9 @@ export function listRules(): Promise<RulesPage> {
 
 export interface RuleInput {
   name?: string;
-  type?: 'sql' | 'prompt';
-  definition?: string;
-  severity?: string;
-  params?: Record<string, unknown>;
+  description?: string;
+  sql?: string;
+  databaseId?: string | null;
   enabled?: boolean;
 }
 
@@ -367,14 +366,9 @@ export function deleteRuleApi(id: string): Promise<{ ok: boolean }> {
   return request<{ ok: boolean }>(`/rules/${id}`, { method: 'DELETE' });
 }
 
-export function runRuleApi(id: string): Promise<Record<string, unknown>> {
-  return request<Record<string, unknown>>(`/rules/${id}/run`, { method: 'POST' });
-}
-
-export function runAllRulesApi(): Promise<{ created: string[]; count: number }> {
-  return request<{ created: string[]; count: number }>('/rules/run', {
-    method: 'POST',
-  });
+export function runRuleApi(id: string, sourceId?: string): Promise<Record<string, unknown>> {
+  const query = sourceId ? `?sourceId=${encodeURIComponent(sourceId)}` : '';
+  return request<Record<string, unknown>>(`/rules/${id}/run${query}`, { method: 'POST' });
 }
 
 export interface ModelsPage {

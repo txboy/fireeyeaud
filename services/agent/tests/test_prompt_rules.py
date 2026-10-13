@@ -1,14 +1,20 @@
 from fireeyeaud_agent.agent.prompts import system_prompt
 
 
-def test_system_prompt_injects_prompt_rules():
+def test_system_prompt_injects_rules():
     base = system_prompt("zh-CN")
     injected = system_prompt(
         "zh-CN",
-        prompt_rules=[
-            {"id": "related_party_undisclosed", "definition": "检查关联方披露。"},
+        rules=[
+            {
+                "id": "R-0001",
+                "name": "余额非零",
+                "description": "查非零余额",
+                "sql": "SELECT 1",
+            }
         ],
     )
-    assert "related_party_undisclosed" in injected
-    assert "检查关联方披露。" in injected
+    assert "R-0001" in injected
+    assert "余额非零" in injected
+    assert "SELECT 1" in injected
     assert injected != base

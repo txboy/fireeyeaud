@@ -28,7 +28,7 @@ function init(entity?: Skill): FormState {
     name: entity.name,
     prompt: entity.prompt,
     toolIds: (entity.toolIds ?? []).join(' '),
-    scope: entity.scope === 'builtin' ? 'project' : entity.scope,
+    scope: entity.scope,
     isDefault: Boolean(entity.isDefault),
   };
 }

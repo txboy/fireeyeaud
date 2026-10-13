@@ -5,7 +5,6 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
-from ..errors import ApiError
 from ..store import skills
 from ..store.workspace import workspace_manager
 from .deps import require_token
@@ -53,7 +52,5 @@ def update_skill(
 
 @router.delete("/skills/{skill_id}")
 def delete_skill(skill_id: str, scope: str = Query(default="global")) -> dict:
-    if skill_id.startswith("sk_builtin_"):
-        raise ApiError("E_SKILL_BUILTIN", 400, "error.skillBuiltin", {"id": skill_id})
     skills.delete_skill(skill_id, scope, workspace_manager.root)
     return {"ok": True}
