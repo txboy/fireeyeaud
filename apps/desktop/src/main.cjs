@@ -25,6 +25,7 @@ app.setName('fireeyeaud');
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 const DEV_SERVER_URL = process.env.FIREEYEAUD_DEV_SERVER_URL;
 const RENDERER_DIST = path.join(REPO_ROOT, 'apps', 'renderer', 'dist', 'index.html');
+const APP_ICON = path.join(__dirname, '..', 'build', 'icon.png');
 const SIDECAR_TOKEN = crypto.randomBytes(24).toString('hex');
 
 let mainWindow = null;
@@ -75,6 +76,7 @@ function createWindow() {
     frame: false,
     backgroundColor: '#1E1F22',
     title: '火眼审计助手',
+    ...(fs.existsSync(APP_ICON) ? { icon: APP_ICON } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,

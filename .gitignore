@@ -21,6 +21,9 @@ __pycache__/
 build/
 *.spec
 !services/agent/fireeyeaud-agent.spec
+# Electron 应用图标（electron-builder 的 buildResources 目录）
+!apps/desktop/build/
+!apps/desktop/build/**
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
