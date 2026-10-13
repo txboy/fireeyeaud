@@ -133,7 +133,7 @@ export interface AuditRule {
   scope: 'builtin' | 'custom';
   type: 'sql' | 'prompt';
   detector?: string;
-  name?: { lang: string; text: string } | null;
+  name?: string | { lang: string; text: string } | null;
   nameKey?: string;
   descriptionKey?: string;
   definition?: string;

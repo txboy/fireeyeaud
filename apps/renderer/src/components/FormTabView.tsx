@@ -4,11 +4,13 @@ import { useUiStore, type FormTab } from '../store/ui';
 import { useModelsStore } from '../store/models';
 import { useMcpStore } from '../store/mcp';
 import { useSkillsStore } from '../store/skills';
+import { useRulesStore } from '../store/rules';
 import { useDatabaseStore } from '../store/database';
 import { useKnowledgeStore } from '../store/knowledge';
 import { ModelForm } from './forms/ModelForm';
 import { McpForm } from './forms/McpForm';
 import { SkillForm } from './forms/SkillForm';
+import { RuleForm } from './forms/RuleForm';
 import { DatabaseForm } from './forms/DatabaseForm';
 import { KnowledgeForm } from './forms/KnowledgeForm';
 import { FORM_DOMAIN_ICON, useFormTitle } from './forms/meta';
@@ -21,6 +23,7 @@ export function FormTabView({ tab }: { tab: FormTab }) {
   const models = useModelsStore((s) => s.items);
   const mcp = useMcpStore((s) => s.items);
   const skills = useSkillsStore((s) => s.items);
+  const rules = useRulesStore((s) => s.items);
   const databases = useDatabaseStore((s) => s.items);
   const kbProviders = useKnowledgeStore((s) => s.items);
 
@@ -54,6 +57,12 @@ export function FormTabView({ tab }: { tab: FormTab }) {
     body =
       editing && !entity ? null : (
         <KnowledgeForm entity={entity} onSaved={onClose} onCancel={onClose} />
+      );
+  } else if (tab.domain === 'rules') {
+    const entity = editing ? rules.find((i) => i.id === tab.entityId) : undefined;
+    body =
+      editing && !entity ? null : (
+        <RuleForm entity={entity} onSaved={onClose} onCancel={onClose} />
       );
   } else {
     const entity = editing ? databases.find((i) => i.id === tab.entityId) : undefined;

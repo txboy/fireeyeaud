@@ -16,8 +16,8 @@ interface RulesState {
   errorKey: string | null;
   previewById: Record<string, Record<string, unknown>>;
   load: () => Promise<void>;
-  add: (input: RuleInput) => Promise<void>;
-  edit: (id: string, patch: RuleInput) => Promise<void>;
+  add: (input: RuleInput) => Promise<boolean>;
+  edit: (id: string, patch: RuleInput) => Promise<boolean>;
   remove: (id: string) => Promise<void>;
   preview: (id: string) => Promise<void>;
   runAll: () => Promise<number>;
@@ -44,13 +44,27 @@ export const useRulesStore = create<RulesState>((set, get) => ({
   },
 
   add: async (input) => {
-    await createRule(input);
-    await get().load();
+    set({ errorKey: null });
+    try {
+      await createRule(input);
+      await get().load();
+      return true;
+    } catch (err) {
+      set({ errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal' });
+      return false;
+    }
   },
 
   edit: async (id, patch) => {
-    await updateRuleApi(id, patch);
-    await get().load();
+    set({ errorKey: null });
+    try {
+      await updateRuleApi(id, patch);
+      await get().load();
+      return true;
+    } catch (err) {
+      set({ errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal' });
+      return false;
+    }
   },
 
   remove: async (id) => {

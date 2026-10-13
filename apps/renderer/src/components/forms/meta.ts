@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { BookOpen, Cpu, Database, Plug, Sparkles } from 'lucide-react';
+import { BookOpen, Cpu, Database, Plug, ShieldCheck, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { FormDomain, FormTab } from '../../store/ui';
 
@@ -9,6 +9,7 @@ export const FORM_DOMAIN_ICON: Record<FormDomain, LucideIcon> = {
   knowledge: BookOpen,
   mcp: Plug,
   skills: Sparkles,
+  rules: ShieldCheck,
   models: Cpu,
 };
 
@@ -19,6 +20,7 @@ export function useFormTitle(): (tab: FormTab) => string {
   const { t: tkb } = useTranslation('knowledge');
   const { t: tmcp } = useTranslation('mcp');
   const { t: tsk } = useTranslation('skills');
+  const { t: trl } = useTranslation('rules');
   const { t: tmd } = useTranslation('models');
 
   return (tab: FormTab) => {
@@ -35,6 +37,8 @@ export function useFormTitle(): (tab: FormTab) => string {
         return tmcp('addServer');
       case 'skills':
         return tsk('addSkill');
+      case 'rules':
+        return trl('addRule');
       case 'models':
         return tmd('addModel');
     }

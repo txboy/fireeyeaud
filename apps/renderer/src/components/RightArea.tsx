@@ -115,7 +115,7 @@ export function RightArea() {
         ) : active.kind === 'session' ? (
           <SessionView sessionId={active.sessionId} />
         ) : active.kind === 'form' ? (
-          <FormTabView tab={active as FormTab} />
+          <FormTabView key={active.id} tab={active as FormTab} />
         ) : active.kind === 'settings' ? (
           <div className="formtab">
             <div className="formtab__head">
