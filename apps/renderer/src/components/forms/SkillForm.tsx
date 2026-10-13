@@ -112,26 +112,37 @@ export function SkillForm({
           onChange={(e) => setForm({ ...form, toolIds: e.target.value })}
         />
       </label>
-      <label className="field">
+      <div className="field">
         <span className="field__label">{t('scope')}</span>
-        <select
-          className="searchbox"
-          value={form.scope}
-          disabled={Boolean(entity)}
-          onChange={(e) => setForm({ ...form, scope: e.target.value as ConfigScope })}
-        >
-          <option value="project">{te('configScope.project')}</option>
-          <option value="global">{te('configScope.global')}</option>
-        </select>
-      </label>
-      <label className="field field--inline">
-        <input
-          type="checkbox"
-          checked={form.isDefault}
-          onChange={(e) => setForm({ ...form, isDefault: e.target.checked })}
-        />
-        <span>{t('isDefault')}</span>
-      </label>
+        <div className="search-opts">
+          <label className="search-opt">
+            <input
+              type="radio"
+              checked={form.scope === 'global'}
+              disabled={Boolean(entity)}
+              onChange={() => setForm({ ...form, scope: 'global' })}
+            />
+            <span>{te('configScope.global')}</span>
+          </label>
+          <label className="search-opt">
+            <input
+              type="radio"
+              checked={form.scope === 'project'}
+              disabled={Boolean(entity)}
+              onChange={() => setForm({ ...form, scope: 'project' })}
+            />
+            <span>{te('configScope.project')}</span>
+          </label>
+          <label className="search-opt">
+            <input
+              type="checkbox"
+              checked={form.isDefault}
+              onChange={(e) => setForm({ ...form, isDefault: e.target.checked })}
+            />
+            <span>{t('isDefault')}</span>
+          </label>
+        </div>
+      </div>
 
       <FormError errorKey={errorKey} />
       <FormActions
