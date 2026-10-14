@@ -12,7 +12,7 @@
 
 ## 决策与偏差（执行前须知，2026-10-09 用户确认）
 
-1. **驱动范围**：SQLite / PostgreSQL / MySQL / SQL Server / **Access** 五类。SQLAlchemy 统一层；Access 走 `sqlalchemy-access`（若该包不可用则降级并返回 `E_DB_CONN`）。
+1. **驱动范围**：SQLite / PostgreSQL / MySQL / SQL Server / **Access** 五类。SQLAlchemy 统一层；Access 首选 `sqlalchemy-access`(ODBC)，失败回退纯 Python 解析(`access-parser` → 内存 SQLite)；文件上限 1G，回退实现见 `store/access_source.py`。
 2. **Agent 完整集成**：DB 连接反射后注册为数据源；`describe_source` 返回 DB 表（含授权过滤）；`sql_query` 支持 `sourceId` 路由到 DB 源并强制授权。
 3. **凭据存储**：**不落项目库**。密码写入 `<global_dir>/config/db_secrets.json`（本机，keyed by connectionId），`db.json` 只存 `credRef`。safeStorage 推迟 Phase 6（记为本期安全偏差）。
 4. **授权粒度**：表级在 SQL 层强制（`sqlglot` 解析 `FROM/JOIN`）；字段级在 `describe_source` 层强制（Agent 看不到未授权列），SQL 层对**显式列名**做 best-effort 校验；`SELECT *` 视为取该表全部授权列。
@@ -1212,7 +1212,7 @@ git commit -m "docs: Phase 5 验收记录与偏差说明"
 
 ## 风险与注意事项
 
-- **驱动缺失**：环境未装 ODBC / Access 驱动时，`create_engine` 或查询阶段抛错 → 统一转 `E_DB_CONN`（502），不崩溃。
+- **驱动缺失**：环境未装 ODBC / Access 驱动时，`create_engine` 或查询阶段抛错；Access 会自动回退到纯 Python 解析(`access-parser` → 内存 SQLite)，其余驱动统一转 `E_DB_CONN`（502），不崩溃。
 - **明文密码**：`db_secrets.json` 为明文（本机 `~/.fireeye/config/`）；safeStorage 推迟 Phase 6——安全偏差，README 标注。
 - **sqlglot 方言**：`access`/`mssql` 统一按 `tsql` 解析；解析失败 → `E_DB_UNAUTHORIZED`（拒绝而非放行）。
 - **字段级授权为 best-effort**：`SELECT *` 仅返回该表授权列（依赖 DB 引擎本身不做列裁剪——本实现**引用 `*` 时不裁剪返回列**，属已知偏差；严格列裁剪推迟）。
