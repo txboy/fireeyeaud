@@ -35,6 +35,7 @@ class _Entry:
 
 _lock = threading.Lock()
 _cache: "OrderedDict[tuple, _Entry]" = OrderedDict()
+_load_locks: dict[tuple, threading.Lock] = {}
 
 
 def _quote(name: str) -> str:
@@ -105,10 +106,14 @@ def _load(path: Path) -> sqlite3.Connection:
 
 
 def _evict_locked() -> None:
-    while len(_cache) > _CACHE_LIMIT:
-        key, entry = next(iter(_cache.items()))
+    if len(_cache) <= _CACHE_LIMIT:
+        return
+    for key in list(_cache.keys()):
+        if len(_cache) <= _CACHE_LIMIT:
+            break
+        entry = _cache[key]
         if entry.refs > 0:
-            return
+            continue  # 跳过在用连接，继续尝试其它可淘汰项
         _cache.pop(key)
         entry.con.close()
 
@@ -124,14 +129,26 @@ def open_db(path) -> Iterator[sqlite3.Connection]:
     if st.st_size > MAX_FILE_BYTES:
         raise ValueError("access file exceeds 1G limit")
     key = (str(path.resolve()), st.st_mtime_ns, st.st_size)
+
     with _lock:
-        entry = _cache.get(key)
+        load_lock = _load_locks.get(key)
+        if load_lock is None:
+            load_lock = _load_locks[key] = threading.Lock()
+    # 同一文件的解析串行化（避免重复解析），但不阻塞其它文件的缓存命中
+    with load_lock:
+        with _lock:
+            entry = _cache.get(key)
+            if entry is None:
+                entry = None
+            else:
+                _cache.move_to_end(key)
+                entry.refs += 1
         if entry is None:
-            entry = _Entry(_load(path))  # 持锁加载，避免重复解析
-            _cache[key] = entry
-        else:
-            _cache.move_to_end(key)
-        entry.refs += 1
+            con = _load(path)  # 解析在全局锁之外进行
+            entry = _Entry(con)
+            with _lock:
+                _cache[key] = entry
+                entry.refs += 1
     try:
         with entry.lock:
             yield entry.con
@@ -147,6 +164,7 @@ def reset_cache() -> None:
         for entry in _cache.values():
             entry.con.close()
         _cache.clear()
+        _load_locks.clear()
 
 
 def _transpile(sql: str) -> str:

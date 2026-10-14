@@ -159,3 +159,31 @@ def test_query_rejects_non_readonly_and_preserves_cache(sample_mdb):
 
 def test_count_returns_none_on_error(sample_mdb):
     assert access_source.count(sample_mdb, "SELECT * FROM nonexistent") is None
+
+
+def test_cache_evicts_when_over_limit(monkeypatch, sample_mdb, tmp_path):
+    import shutil
+
+    monkeypatch.setattr(access_source, "_CACHE_LIMIT", 2)
+    paths = [tmp_path / f"a{i}.mdb" for i in range(4)]
+    for p in paths:
+        shutil.copyfile(sample_mdb, p)
+    for p in paths:
+        with access_source.open_db(p):
+            pass
+    assert len(access_source._cache) <= 2
+
+
+def test_cache_eviction_skips_busy_entries(monkeypatch, sample_mdb, tmp_path):
+    import shutil
+
+    monkeypatch.setattr(access_source, "_CACHE_LIMIT", 2)
+    paths = [tmp_path / f"b{i}.mdb" for i in range(3)]
+    for p in paths:
+        shutil.copyfile(sample_mdb, p)
+    # 占住最早打开的连接：淘汰时必须跳过它，转而淘汰其它可淘汰项
+    with access_source.open_db(paths[0]):
+        for p in paths[1:]:
+            with access_source.open_db(p):
+                pass
+        assert len(access_source._cache) <= 2
