@@ -18,6 +18,8 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Iterator
 
+from .sandbox import validate_sql
+
 MAX_FILE_BYTES = 1024 * 1024 * 1024  # 1G
 _CACHE_LIMIT = 4
 
@@ -167,6 +169,11 @@ def probe(path) -> bool:
 
 
 def list_tables(path) -> list[dict[str, Any]]:
+    """反射表结构。
+
+    注意：数据物化到内存 SQLite 时不保留原始主键 / NOT NULL 约束，
+    因此 ``primaryKey`` 恒为 False、``nullable`` 恒为 True（已知限制，可接受）。
+    """
     out: list[dict[str, Any]] = []
     with open_db(path) as con:
         for (name,) in con.execute(
@@ -189,7 +196,24 @@ def list_tables(path) -> list[dict[str, Any]]:
 
 
 def query(path, sql: str, limit: int, offset: int) -> dict[str, Any]:
-    from .db_engine import _has_top_level_limit, _page_sql
+    from .db_engine import (
+        DEFAULT_LIMIT,
+        MAX_LIMIT,
+        _has_top_level_limit,
+        _page_sql,
+    )
+
+    sql = validate_sql(sql)
+    try:
+        limit = int(limit or DEFAULT_LIMIT)
+    except (TypeError, ValueError):
+        limit = DEFAULT_LIMIT
+    limit = max(1, min(limit, MAX_LIMIT))
+    try:
+        offset = int(offset or 0)
+    except (TypeError, ValueError):
+        offset = 0
+    offset = max(0, offset)
 
     exec_sql = _transpile(sql)
     first = exec_sql.split()[0].lower() if exec_sql.split() else ""
@@ -229,6 +253,7 @@ def query(path, sql: str, limit: int, offset: int) -> dict[str, Any]:
 
 def count(path, sql: str) -> int | None:
     try:
+        sql = validate_sql(sql)
         with open_db(path) as con:
             cur = con.execute(f"SELECT COUNT(*) FROM ({_transpile(sql)}) AS _sub")
             return int(cur.fetchone()[0])

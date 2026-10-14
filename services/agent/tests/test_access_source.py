@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from fireeyeaud_agent.errors import ApiError
 from fireeyeaud_agent.store import access_source
 
 
@@ -127,3 +128,34 @@ def test_query_user_limit_not_paginated(sample_mdb):
 def test_count(sample_mdb):
     assert access_source.count(sample_mdb, "SELECT id FROM users") == 5
     assert access_source.count(sample_mdb, "SELECT id FROM users WHERE id > 3") == 2
+
+
+def test_query_last_page_has_more_false(sample_mdb):
+    result = access_source.query(
+        sample_mdb, "SELECT id FROM users ORDER BY id", 2, 4
+    )
+    assert result["rows"] == [[5]]
+    assert result["hasMore"] is False
+    assert result["truncated"] is False
+    assert result["rowCount"] == 1
+
+
+def test_query_empty_result(sample_mdb):
+    result = access_source.query(
+        sample_mdb, "SELECT id FROM users WHERE id < 0", 10, 0
+    )
+    assert result["columns"] == ["id"]
+    assert result["rows"] == []
+    assert result["rowCount"] == 0
+    assert result["hasMore"] is False
+
+
+def test_query_rejects_non_readonly_and_preserves_cache(sample_mdb):
+    with pytest.raises(ApiError):
+        access_source.query(sample_mdb, "DROP TABLE users", 10, 0)
+    # 缓存中的物化库未被破坏
+    assert access_source.count(sample_mdb, "SELECT id FROM users") == 5
+
+
+def test_count_returns_none_on_error(sample_mdb):
+    assert access_source.count(sample_mdb, "SELECT * FROM nonexistent") is None
