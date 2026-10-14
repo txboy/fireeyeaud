@@ -74,3 +74,56 @@ def test_type_inference_and_coercion():
     assert access_source._coerce(True) == 1
     assert access_source._coerce(None) is None
     assert access_source._coerce(datetime.date(2024, 1, 5)) == "2024-01-05"
+
+
+def test_probe(sample_mdb):
+    assert access_source.probe(sample_mdb) is True
+
+
+def test_list_tables(sample_mdb):
+    schema = access_source.list_tables(sample_mdb)
+    names = {t["table"] for t in schema}
+    assert {"users", "orders"} <= names
+    users = next(t for t in schema if t["table"] == "users")
+    cols = {c["name"] for c in users["columns"]}
+    assert {"id", "name", "email", "age", "created"} <= cols
+    assert all(
+        set(c) == {"name", "type", "comment", "nullable", "primaryKey"}
+        for c in users["columns"]
+    )
+
+
+def test_query_paginates(sample_mdb):
+    result = access_source.query(
+        sample_mdb, "SELECT id, name FROM users ORDER BY id", 2, 0
+    )
+    assert result["columns"] == ["id", "name"]
+    assert result["rows"] == [[1, "Alice"], [2, "Bob"]]
+    assert result["hasMore"] is True
+    assert result["paginated"] is True
+
+    page2 = access_source.query(
+        sample_mdb, "SELECT id, name FROM users ORDER BY id", 2, 2
+    )
+    assert page2["rows"] == [[3, "Charlie"], [4, "Diana"]]
+
+
+def test_query_translates_access_syntax(sample_mdb):
+    # 方括号标识符 + TOP（Access 方言）应能转译并在 sqlite 上执行
+    result = access_source.query(
+        sample_mdb, "SELECT TOP 2 [id] FROM [users] ORDER BY [id]", 10, 0
+    )
+    assert result["rows"] == [[1], [2]]
+
+
+def test_query_user_limit_not_paginated(sample_mdb):
+    result = access_source.query(
+        sample_mdb, "SELECT id FROM users ORDER BY id LIMIT 2", 5, 0
+    )
+    assert result["paginated"] is False
+    assert result["rows"] == [[1], [2]]
+
+
+def test_count(sample_mdb):
+    assert access_source.count(sample_mdb, "SELECT id FROM users") == 5
+    assert access_source.count(sample_mdb, "SELECT id FROM users WHERE id > 3") == 2

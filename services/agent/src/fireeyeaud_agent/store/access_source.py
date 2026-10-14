@@ -145,3 +145,92 @@ def reset_cache() -> None:
         for entry in _cache.values():
             entry.con.close()
         _cache.clear()
+
+
+def _transpile(sql: str) -> str:
+    """把 Access(按 tsql 读) SQL 转成 SQLite；失败则原样返回。"""
+    try:
+        import sqlglot
+
+        out = sqlglot.transpile(sql, read="tsql", write="sqlite")
+        if out:
+            return out[0]
+    except Exception:  # noqa: BLE001
+        pass
+    return sql
+
+
+def probe(path) -> bool:
+    with open_db(path) as con:
+        con.execute("SELECT 1")
+    return True
+
+
+def list_tables(path) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    with open_db(path) as con:
+        for (name,) in con.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+        ).fetchall():
+            info = con.execute(f"PRAGMA table_info({_quote(name)})").fetchall()
+            # PRAGMA table_info: cid, name, type, notnull, dflt_value, pk
+            columns = [
+                {
+                    "name": r[1],
+                    "type": r[2] or "TEXT",
+                    "comment": None,
+                    "nullable": not bool(r[3]),
+                    "primaryKey": bool(r[5]),
+                }
+                for r in info
+            ]
+            out.append({"table": name, "comment": None, "columns": columns})
+    return out
+
+
+def query(path, sql: str, limit: int, offset: int) -> dict[str, Any]:
+    from .db_engine import _has_top_level_limit, _page_sql
+
+    exec_sql = _transpile(sql)
+    first = exec_sql.split()[0].lower() if exec_sql.split() else ""
+    paginated = first not in ("explain", "describe") and not _has_top_level_limit(
+        exec_sql, "sqlite"
+    )
+    with open_db(path) as con:
+        cur = con.cursor()
+        if not paginated:
+            cur.execute(exec_sql)
+            fetched = cur.fetchall()
+            has_more = False
+            rows = [list(r) for r in fetched]
+            executed = exec_sql
+        else:
+            executed, drop_lead, drop_tail = _page_sql(
+                "sqlite", exec_sql, limit, offset
+            )
+            cur.execute(executed)
+            fetched = cur.fetchall()
+            if drop_lead:
+                fetched = fetched[drop_lead:]
+            has_more = len(fetched) > limit
+            page = fetched[:limit]
+            rows = [list(r)[:-drop_tail] if drop_tail else list(r) for r in page]
+        columns = [d[0] for d in cur.description] if cur.description else []
+    return {
+        "columns": columns,
+        "rows": rows,
+        "rowCount": len(rows),
+        "hasMore": has_more,
+        "truncated": has_more,
+        "paginated": paginated,
+        "sql": executed,
+    }
+
+
+def count(path, sql: str) -> int | None:
+    try:
+        with open_db(path) as con:
+            cur = con.execute(f"SELECT COUNT(*) FROM ({_transpile(sql)}) AS _sub")
+            return int(cur.fetchone()[0])
+    except Exception:  # noqa: BLE001
+        return None
