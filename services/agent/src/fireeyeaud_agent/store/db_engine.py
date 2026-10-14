@@ -361,6 +361,8 @@ def count_query(
 def _access_probe(conn: dict[str, Any]) -> bool:
     try:
         return access_source.probe(conn.get("path"))
+    except ApiError:
+        raise
     except Exception as exc:  # noqa: BLE001
         raise ApiError("E_DB_CONN", 502, "error.dbConn", {"reason": str(exc)}) from exc
 
@@ -368,6 +370,8 @@ def _access_probe(conn: dict[str, Any]) -> bool:
 def _access_reflect(conn: dict[str, Any]) -> list[dict[str, Any]]:
     try:
         return access_source.list_tables(conn.get("path"))
+    except ApiError:
+        raise
     except Exception as exc:  # noqa: BLE001
         raise ApiError("E_DB_CONN", 502, "error.dbConn", {"reason": str(exc)}) from exc
 
