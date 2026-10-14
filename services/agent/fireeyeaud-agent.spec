@@ -10,6 +10,7 @@ hiddenimports = (
     + collect_submodules("sqlglot")
     + collect_submodules("pydantic")
     + collect_submodules("oracledb")
+    + collect_submodules("access_parser")
 )
 
 a = Analysis(
