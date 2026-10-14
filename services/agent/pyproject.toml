@@ -29,6 +29,7 @@ dependencies = [
   "sqlalchemy-access>=2.0.3",
   "oracledb>=2.5.0",
   "httpx>=0.28.1",
+  "access-parser>=0.0.6",
 ]
 
 [dependency-groups]
