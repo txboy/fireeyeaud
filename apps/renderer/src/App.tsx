@@ -7,6 +7,7 @@ import { StatusBar } from './components/StatusBar';
 import { Welcome } from './components/Welcome';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { PromptDialog } from './components/PromptDialog';
+import { AttachDbDialog } from './components/AttachDbDialog';
 import { useSidecarStore } from './store/sidecar';
 import { useWorkspaceStore } from './store/workspace';
 import { useUiStore } from './store/ui';
@@ -60,6 +61,7 @@ export default function App() {
       )}
       <ConfirmDialog />
       <PromptDialog />
+      <AttachDbDialog />
     </div>
   );
 }

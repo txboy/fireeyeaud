@@ -111,6 +111,13 @@ export default {
     untitledSession: 'New session',
     noFiles: 'No files',
     loading: 'Loading…',
+    openDbAuth: 'Table access',
+    attachDbTitle: 'Attach database',
+    attachDbMessage:
+      '"{{name}}" is not added to databases yet. Attach it as a read-only database connection?',
+    attachDbScope: 'Scope',
+    attachDbConfirm: 'Attach',
+    attachDbBusy: 'Attaching…',
   },
   search: {
     title: 'Search',

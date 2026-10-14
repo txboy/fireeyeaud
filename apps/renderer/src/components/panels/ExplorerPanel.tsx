@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Database,
@@ -11,9 +11,12 @@ import {
 } from 'lucide-react';
 import { useWorkspaceStore } from '../../store/workspace';
 import { useDatasourcesStore } from '../../store/datasources';
+import { useDatabaseStore } from '../../store/database';
 import { useChatStore } from '../../store/chat';
 import { useUiStore, type SessionTab } from '../../store/ui';
 import { useConfirmStore } from '../../store/confirm';
+import { useAttachDbStore } from '../../store/attachDb';
+import { dbDriverFor, normalizePath } from '../../lib/db-file';
 import { confirmStopSession } from '../../lib/stop-guard';
 import { FileTree } from '../FileTree';
 
@@ -47,6 +50,11 @@ export function ExplorerPanel() {
   const activeRightTabId = useUiStore((s) => s.activeRightTabId);
   const closeRightTab = useUiStore((s) => s.closeRightTab);
   const confirm = useConfirmStore((s) => s.confirm);
+  const openDbSchema = useUiStore((s) => s.openDbSchema);
+  const createReturning = useDatabaseStore((s) => s.createReturning);
+  const promptAttach = useAttachDbStore((s) => s.promptAttach);
+  const [attaching, setAttaching] = useState(false);
+  const attachingRef = useRef(false);
 
   const activeSessionTab = rightTabs.find(
     (tab): tab is SessionTab => tab.kind === 'session' && tab.id === activeRightTabId,
@@ -95,6 +103,52 @@ export function ExplorerPanel() {
     setActionError(null);
     void importPath(target);
   };
+
+  // 点击数据库文件：已附加则直接打开其授权页，否则弹窗确认附加后打开授权页。
+  const handleOpenDatabase = useCallback(
+    async (filePath: string, name: string) => {
+      const driver = dbDriverFor(name);
+      if (!driver || attachingRef.current) return;
+      setActionError(null);
+      attachingRef.current = true;
+      try {
+        await useDatabaseStore.getState().load();
+        const target = normalizePath(filePath);
+        const existing = useDatabaseStore
+          .getState()
+          .items.find((conn) => conn.path && normalizePath(conn.path) === target);
+        if (existing) {
+          await openDbSchema({ id: existing.id, scope: existing.scope, name: existing.name });
+          return;
+        }
+        const choice = await promptAttach({
+          title: t('attachDbTitle'),
+          message: t('attachDbMessage', { name }),
+          scopeLabel: t('attachDbScope'),
+          confirmLabel: t('attachDbConfirm'),
+          cancelLabel: tc('cancel'),
+          defaultScope: 'project',
+        });
+        if (!choice) return;
+        setAttaching(true);
+        const created = await createReturning({
+          name,
+          driver,
+          scope: choice.scope,
+          path: filePath,
+        });
+        if (!created) {
+          setActionError(useDatabaseStore.getState().errorKey ?? 'error.internal');
+          return;
+        }
+        await openDbSchema({ id: created.id, scope: created.scope, name: created.name });
+      } finally {
+        attachingRef.current = false;
+        setAttaching(false);
+      }
+    },
+    [openDbSchema, promptAttach, createReturning, t, tc],
+  );
 
   const handleDeleteDatasource = async (id: string, name: string) => {
     const confirmed = await confirm({
@@ -276,6 +330,8 @@ export function ExplorerPanel() {
             <span className="panel-error">{te(actionError.replace(/^error\./, ''))}</span>
           )}
 
+          {attaching && <span className="panel-hint">{t('attachDbBusy')}</span>}
+
           {items.length > 0 && (
             <div className="datasource-list">
               {items.map((ds) => (
@@ -315,6 +371,7 @@ export function ExplorerPanel() {
             onDeleted={handleDeleted}
             onError={setActionError}
             onImportData={handleImportData}
+            onOpenDatabase={handleOpenDatabase}
             onUpload={() => void handleUpload()}
           />
         </div>

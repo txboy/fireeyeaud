@@ -110,6 +110,12 @@ export default {
     untitledSession: '新会话',
     noFiles: '暂无文件',
     loading: '加载中…',
+    openDbAuth: '读取表授权',
+    attachDbTitle: '附加数据库',
+    attachDbMessage: '「{{name}}」尚未添加到数据库，是否将其附加为只读数据库连接？',
+    attachDbScope: '作用域',
+    attachDbConfirm: '附加',
+    attachDbBusy: '正在附加…',
   },
   search: {
     title: '搜索',

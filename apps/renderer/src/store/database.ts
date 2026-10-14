@@ -21,6 +21,8 @@ interface DatabaseState {
   authByConn: Record<string, Record<string, string[]>>;
   load: () => Promise<void>;
   create: (input: DbConnectionInput) => Promise<boolean>;
+  /** 创建连接并返回新建实体（取消 / 失败返回 null），用于创建后立即打开其 tab。 */
+  createReturning: (input: DbConnectionInput) => Promise<DbConnection | null>;
   edit: (id: string, scope: DbConnection['scope'], patch: Partial<DbConnectionInput>) => Promise<boolean>;
   remove: (id: string, scope: DbConnection['scope']) => Promise<void>;
   test: (id: string, scope: DbConnection['scope']) => Promise<boolean>;
@@ -63,6 +65,18 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
     } catch (err) {
       set({ errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal' });
       return false;
+    }
+  },
+
+  createReturning: async (input) => {
+    set({ errorKey: null });
+    try {
+      const created = await createDbConnection(input);
+      await get().load();
+      return created;
+    } catch (err) {
+      set({ errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal' });
+      return null;
     }
   },
 

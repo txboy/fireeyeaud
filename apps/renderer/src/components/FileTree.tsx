@@ -9,6 +9,7 @@ import {
   FolderOpen,
 } from 'lucide-react';
 import type { FsEntry } from '@fireeyeaud/shared';
+import { dbDriverFor } from '../lib/db-file';
 import { useUiStore } from '../store/ui';
 import { useConfirmStore } from '../store/confirm';
 import { usePromptStore } from '../store/prompt';
@@ -64,6 +65,8 @@ interface TreeApi {
   onDeleted: (path: string) => void;
   onError: (key: string) => void;
   onImportData: (path: string) => void;
+  /** 点击数据库文件：附加到数据库或跳转其授权页。 */
+  onOpenDatabase: (path: string, name: string) => void;
   onUpload: () => void;
   setDropDir: (path: string | null) => void;
   openMenu: (
@@ -110,6 +113,10 @@ function TreeNode({ entry, depth, isRoot, protectedPath, api }: TreeNodeProps) {
 
   const toggle = async () => {
     if (!entry.isDir) {
+      if (dbDriverFor(entry.name)) {
+        api.onOpenDatabase(entry.path, entry.name);
+        return;
+      }
       openPreview(api.root, entry.path, entry.name);
       return;
     }
@@ -208,6 +215,8 @@ interface FileTreeProps {
   onDeleted: (path: string) => void;
   onError: (key: string) => void;
   onImportData: (path: string) => void;
+  /** 点击数据库文件：附加到数据库或跳转其授权页。 */
+  onOpenDatabase: (path: string, name: string) => void;
   onUpload: () => void;
 }
 
@@ -220,6 +229,7 @@ export function FileTree({
   onDeleted,
   onError,
   onImportData,
+  onOpenDatabase,
   onUpload,
 }: FileTreeProps) {
   const { t } = useTranslation('explorer');
@@ -277,6 +287,7 @@ export function FileTree({
     onDeleted,
     onError,
     onImportData,
+    onOpenDatabase,
     onUpload,
     setDropDir,
     openMenu,
@@ -365,6 +376,13 @@ export function FileTree({
           key: 'import',
           label: t('importData'),
           onSelect: () => onImportData(entry.path),
+        });
+      }
+      if (!entry.isDir && dbDriverFor(entry.name)) {
+        items.push({
+          key: 'openDb',
+          label: t('openDbAuth'),
+          onSelect: () => onOpenDatabase(entry.path, entry.name),
         });
       }
       items.push({
