@@ -6,6 +6,7 @@ import type {
   DataSourceInfo,
   DbConnection,
   DbDriver,
+  DbQueryResult,
   DbTableSchema,
   EvidenceItem,
   Finding,
@@ -465,6 +466,7 @@ export interface DbConnectionInput {
   credRef?: string | null;
   path?: string | null;
   isDefault?: boolean;
+  connectBy?: 'service' | 'sid' | null;
 }
 
 export function createDbConnection(input: DbConnectionInput): Promise<DbConnection> {
@@ -514,6 +516,7 @@ export interface DbTestInput {
   password?: string | null;
   id?: string;
   scope?: ConfigScope;
+  connectBy?: 'service' | 'sid' | null;
 }
 
 export function testDbParams(input: DbTestInput): Promise<{ ok: boolean }> {
@@ -547,6 +550,24 @@ export function setDbAuthorization(
     `/db/connections/${id}/authorization`,
     { method: 'PATCH', body: JSON.stringify({ tables }) },
   );
+}
+
+export interface DbQueryInput {
+  sql: string;
+  limit?: number;
+  offset?: number;
+  includeTotal?: boolean;
+}
+
+export function runDbQuery(
+  id: string,
+  scope: ConfigScope,
+  input: DbQueryInput,
+): Promise<DbQueryResult> {
+  return request<DbQueryResult>(`/db/connections/${id}/query?scope=${scope}`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
 }
 
 export interface KbProvidersPage {

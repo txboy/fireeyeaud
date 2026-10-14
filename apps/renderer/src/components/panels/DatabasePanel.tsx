@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pencil, Plus, Trash2, Zap } from 'lucide-react';
+import { Pencil, Plus, Trash2, X, Zap, KeyRound } from 'lucide-react';
+import type { DbConnection } from '@fireeyeaud/shared';
 import { ScopeBadge } from '../ScopeBadge';
 import { useDatabaseStore } from '../../store/database';
 import { useUiStore } from '../../store/ui';
@@ -19,13 +20,25 @@ export function DatabasePanel() {
   const remove = useDatabaseStore((s) => s.remove);
   const test = useDatabaseStore((s) => s.test);
   const openForm = useUiStore((s) => s.openForm);
+  const openDbSchema = useUiStore((s) => s.openDbSchema);
   const path = useWorkspaceStore((s) => s.path);
 
-  const [testOk, setTestOk] = useState<Record<string, boolean>>({});
+  const [status, setStatus] = useState<Record<string, 'ok' | 'fail'>>({});
+  const [testing, setTesting] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (path) void load();
   }, [load, path]);
+
+  const runTest = async (conn: DbConnection) => {
+    setTesting((s) => ({ ...s, [conn.id]: true }));
+    try {
+      const ok = await test(conn.id, conn.scope);
+      setStatus((s) => ({ ...s, [conn.id]: ok ? 'ok' : 'fail' }));
+    } finally {
+      setTesting((s) => ({ ...s, [conn.id]: false }));
+    }
+  };
 
   if (!path) {
     return (
@@ -67,9 +80,9 @@ export function DatabasePanel() {
                 className="status-dot"
                 style={{
                   background:
-                    testOk[conn.id] === true
+                    status[conn.id] === 'ok'
                       ? 'var(--success)'
-                      : testOk[conn.id] === false
+                      : status[conn.id] === 'fail'
                         ? 'var(--danger, #d9480f)'
                         : 'var(--text-3)',
                 }}
@@ -80,20 +93,41 @@ export function DatabasePanel() {
               <ScopeBadge scope={conn.scope} />
             </div>
             {conn.path ? <span className="card__meta">{conn.path}</span> : null}
-            {testOk[conn.id] === true && (
-              <span className="card__meta">{t('testOk')}</span>
+            {testing[conn.id] && (
+              <span className="model-status">{t('testing')}</span>
+            )}
+            {status[conn.id] === 'ok' && (
+              <span className="model-status model-status--ok">
+                <Zap size={11} strokeWidth={2} /> {t('testOk')}
+              </span>
+            )}
+            {status[conn.id] === 'fail' && (
+              <span className="model-status model-status--fail">
+                <X size={11} strokeWidth={2} /> {t('testFail')}
+              </span>
             )}
             <div className="card__foot">
               <span className="spacer" />
               <button
                 type="button"
                 className="icon-btn"
-                title={t('test')}
+                title={t('authorize')}
                 onClick={() =>
-                  void test(conn.id, conn.scope).then((ok) =>
-                    setTestOk((prev) => ({ ...prev, [conn.id]: ok })),
-                  )
+                  void openDbSchema({
+                    id: conn.id,
+                    scope: conn.scope,
+                    name: conn.name,
+                  })
                 }
+              >
+                <KeyRound size={13} strokeWidth={1.75} />
+              </button>
+              <button
+                type="button"
+                className="icon-btn"
+                title={t('test')}
+                disabled={testing[conn.id]}
+                onClick={() => void runTest(conn)}
               >
                 <Zap size={13} strokeWidth={1.75} />
               </button>

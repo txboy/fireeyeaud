@@ -1,7 +1,17 @@
 import { useTranslation } from 'react-i18next';
-import { File as FileIcon, MessageSquare, Play, Settings, X } from 'lucide-react';
+import {
+  Database,
+  File as FileIcon,
+  MessageSquare,
+  Play,
+  Settings,
+  Table2,
+  X,
+} from 'lucide-react';
 import {
   useUiStore,
+  type DbDataTab,
+  type DbSchemaTab,
   type FormTab,
   type PreviewTab,
   type RightTab,
@@ -15,6 +25,8 @@ import { ResultsColumn } from './ResultsColumn';
 import { FilePreview } from './FilePreview';
 import { FormTabView } from './FormTabView';
 import { RuleRunView } from './RuleRunView';
+import { DbSchemaView } from './DbSchemaView';
+import { DbDataView } from './DbDataView';
 import { SettingsPanel } from './panels/SettingsPanel';
 import { FORM_DOMAIN_ICON, useFormTitle } from './forms/meta';
 
@@ -58,7 +70,9 @@ export function RightArea() {
         ? formTitle(tab)
         : tab.kind === 'settings'
           ? ts('title')
-          : tab.name;
+          : tab.kind === 'dbData'
+            ? `${tab.name} / ${tab.table.table}`
+            : tab.name;
 
   const handleClose = async (tab: RightTab) => {
     // 关闭正在生成的会话 tab：先警告并中止生成（保留已生成部分）。
@@ -80,7 +94,11 @@ export function RightArea() {
                   ? Settings
                   : tab.kind === 'ruleRun'
                     ? Play
-                    : FileIcon;
+                    : tab.kind === 'dbSchema'
+                      ? Database
+                      : tab.kind === 'dbData'
+                        ? Table2
+                        : FileIcon;
           const label = labelOf(tab);
           return (
             <div
@@ -122,6 +140,10 @@ export function RightArea() {
           <FormTabView key={active.id} tab={active as FormTab} />
         ) : active.kind === 'ruleRun' ? (
           <RuleRunView key={active.id} tab={active as RuleRunTab} />
+        ) : active.kind === 'dbSchema' ? (
+          <DbSchemaView key={active.id} tab={active as DbSchemaTab} />
+        ) : active.kind === 'dbData' ? (
+          <DbDataView key={active.id} tab={active as DbDataTab} />
         ) : active.kind === 'settings' ? (
           <div className="formtab">
             <div className="formtab__head">

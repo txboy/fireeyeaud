@@ -46,3 +46,37 @@ async def test_reflect_registers_datasource_and_schema(tmp_path, monkeypatch):
         schema = (await client.get("/api/v1/datasources")).json()["items"]
         assert any(ds.get("connectionId") == conn["id"] for ds in schema)
         await client.post("/api/v1/workspaces/close")
+
+
+async def test_reflect_is_idempotent_per_connection(tmp_path, monkeypatch):
+    monkeypatch.setenv("FIREYEAUD_GLOBAL_DIR", str(tmp_path / "global"))
+    (tmp_path / "ws").mkdir()
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        await client.post(
+            "/api/v1/workspaces/open", json={"path": str(tmp_path / "ws")}
+        )
+        conn = (
+            await client.post(
+                "/api/v1/db/connections",
+                json={
+                    "name": "本地",
+                    "driver": "sqlite",
+                    "path": str(_sqlite_file(tmp_path)),
+                    "scope": "project",
+                },
+            )
+        ).json()
+
+        first = (
+            await client.post(f"/api/v1/db/connections/{conn['id']}/reflect?scope=project")
+        ).json()
+        second = (
+            await client.post(f"/api/v1/db/connections/{conn['id']}/reflect?scope=project")
+        ).json()
+
+        assert first["sourceId"] == second["sourceId"]
+        items = (await client.get("/api/v1/datasources")).json()["items"]
+        assert len([ds for ds in items if ds.get("connectionId") == conn["id"]]) == 1
+        await client.post("/api/v1/workspaces/close")

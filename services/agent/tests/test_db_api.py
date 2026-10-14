@@ -77,6 +77,35 @@ async def test_db_test_params(tmp_path, monkeypatch):
         assert bad.status_code == 502
 
 
+async def test_db_create_oracle_connection_keeps_connect_by(tmp_path, monkeypatch):
+    monkeypatch.setenv("FIREYEAUD_GLOBAL_DIR", str(tmp_path / "global"))
+    (tmp_path / "ws").mkdir()
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        await client.post(
+            "/api/v1/workspaces/open", json={"path": str(tmp_path / "ws")}
+        )
+        res = await client.post(
+            "/api/v1/db/connections",
+            json={
+                "name": "orcl",
+                "driver": "oracle",
+                "host": "h",
+                "port": 1521,
+                "database": "XE",
+                "username": "u",
+                "connectBy": "sid",
+                "scope": "project",
+            },
+        )
+        assert res.status_code == 200
+        conn = res.json()
+        assert conn["driver"] == "oracle"
+        assert conn["connectBy"] == "sid"
+        await client.post("/api/v1/workspaces/close")
+
+
 async def test_db_connections_no_workspace():
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"

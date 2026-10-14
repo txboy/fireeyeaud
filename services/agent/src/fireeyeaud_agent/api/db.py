@@ -24,6 +24,8 @@ class ConnectionBody(BaseModel):
     credRef: str | None = None
     path: str | None = None
     isDefault: bool = False
+    # Oracle：连接方式（"service" 服务名 / "sid"）。
+    connectBy: str | None = None
 
 
 class TestBody(BaseModel):
@@ -39,10 +41,20 @@ class TestBody(BaseModel):
     password: str | None = None
     id: str | None = None
     scope: str | None = None
+    connectBy: str | None = None
 
 
 class AuthorizationBody(BaseModel):
     tables: dict[str, list[str]]
+
+
+class QueryBody(BaseModel):
+    """通用只读查询（表数据预览）：分页 + 可选总数。"""
+
+    sql: str
+    limit: int | None = None
+    offset: int | None = None
+    includeTotal: bool = True
 
 
 class ConnectionPatch(BaseModel):
@@ -55,6 +67,7 @@ class ConnectionPatch(BaseModel):
     credRef: str | None = None
     path: str | None = None
     isDefault: bool | None = None
+    connectBy: str | None = None
 
 
 @router.get("/db/connections")
@@ -116,6 +129,7 @@ def test_connection_params(body: TestBody) -> dict:
         "database": body.database,
         "username": body.username,
         "path": body.path,
+        "connectBy": body.connectBy,
     }
     ok = db_engine.test_connection(conn, password)
     return {"ok": ok}
@@ -143,3 +157,43 @@ def reflect_connection(
     return db_engine.reflect_and_register(
         root, conn, db.get_secret(conn.get("credRef") or connection_id)
     )
+
+
+@router.post("/db/connections/{connection_id}/query")
+def run_connection_query(
+    connection_id: str, body: QueryBody, scope: str = Query(default="global")
+) -> dict:
+    """执行只读 SQL 并分页返回（表数据预览；不受表/字段授权限制）。"""
+    root = workspace_manager.root
+    if root is None:
+        raise ApiError("E_NO_WORKSPACE", 409, "error.noWorkspace")
+    conn = db.get_connection(connection_id, scope, root)
+    if conn is None:
+        raise ApiError("E_NOT_FOUND", 404, "error.notFound", {"id": connection_id})
+    password = db.get_secret(conn.get("credRef") or connection_id)
+    try:
+        limit = int(body.limit or db_engine.DEFAULT_LIMIT)
+    except (TypeError, ValueError):
+        limit = db_engine.DEFAULT_LIMIT
+    limit = max(1, min(limit, db_engine.MAX_LIMIT))
+    try:
+        offset = int(body.offset or 0)
+    except (TypeError, ValueError):
+        offset = 0
+    offset = max(0, offset)
+
+    result = db_engine.run_query(
+        conn, body.sql, password, limit=limit, offset=offset
+    )
+    total = db_engine.count_query(conn, body.sql, password) if body.includeTotal else None
+    return {
+        "columns": result["columns"],
+        "rows": result["rows"],
+        "rowCount": result["rowCount"],
+        "hasMore": result["hasMore"],
+        "paginated": result["paginated"],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "sql": result["sql"],
+    }

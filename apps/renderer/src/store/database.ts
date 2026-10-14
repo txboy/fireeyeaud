@@ -25,7 +25,7 @@ interface DatabaseState {
   remove: (id: string, scope: DbConnection['scope']) => Promise<void>;
   test: (id: string, scope: DbConnection['scope']) => Promise<boolean>;
   testParams: (input: DbTestInput) => Promise<boolean>;
-  reflect: (id: string, scope: DbConnection['scope']) => Promise<void>;
+  reflect: (id: string, scope: DbConnection['scope']) => Promise<boolean>;
   setAuthDraft: (id: string, tables: Record<string, string[]>) => void;
   saveAuthorization: (
     id: string,
@@ -113,8 +113,10 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
         reflectByConn: { ...s.reflectByConn, [id]: res.schema ?? [] },
         authByConn: { ...s.authByConn, [id]: res.authorization ?? {} },
       }));
+      return true;
     } catch (err) {
       set({ errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal' });
+      return false;
     }
   },
 

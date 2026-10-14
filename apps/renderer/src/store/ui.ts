@@ -1,5 +1,10 @@
 import { create } from 'zustand';
-import type { ActivityView, ConfigScope } from '@fireeyeaud/shared';
+import type {
+  ActivityView,
+  ConfigScope,
+  DbDriver,
+  DbTableSchema,
+} from '@fireeyeaud/shared';
 
 export type ResultsTab = 'findings' | 'graph' | 'working-paper' | 'evidence';
 
@@ -48,7 +53,37 @@ export interface RuleRunTab {
   name: string;
 }
 
-export type RightTab = SessionTab | PreviewTab | FormTab | SettingsTab | RuleRunTab;
+/** 右侧区「表授权」tab（每个数据库连接一个，表 / 字段结构 + 授权）。 */
+export interface DbSchemaTab {
+  id: string;
+  kind: 'dbSchema';
+  connectionId: string;
+  scope: ConfigScope;
+  name: string;
+}
+
+/** 右侧区「数据预览」tab（每个数据库连接的一张表一个，SQL 查询 + 分页结果）。 */
+export interface DbDataTab {
+  id: string;
+  kind: 'dbData';
+  connectionId: string;
+  scope: ConfigScope;
+  /** 连接名，tab 标题展示用。 */
+  name: string;
+  /** 驱动，用于默认 SQL 的标识符转义。 */
+  driver: DbDriver;
+  /** 表结构，用于默认 SQL 的主键排序与标识符转义。 */
+  table: DbTableSchema;
+}
+
+export type RightTab =
+  | SessionTab
+  | PreviewTab
+  | FormTab
+  | SettingsTab
+  | RuleRunTab
+  | DbSchemaTab
+  | DbDataTab;
 
 /**
  * 离开当前右侧 tab 前的守卫（用于未保存确认）。
@@ -82,6 +117,18 @@ interface UiState {
   openSession: (sessionId: string) => Promise<void>;
   openSettings: () => Promise<void>;
   openRuleRun: (ruleId: string, name: string) => Promise<void>;
+  openDbSchema: (input: {
+    id: string;
+    scope: ConfigScope;
+    name: string;
+  }) => Promise<void>;
+  openDbData: (input: {
+    id: string;
+    scope: ConfigScope;
+    name: string;
+    driver: DbDriver;
+    table: DbTableSchema;
+  }) => Promise<void>;
   closeRightTab: (id: string) => Promise<void>;
   activateRightTab: (id: string) => Promise<void>;
   resetRightTabs: () => void;
@@ -170,6 +217,46 @@ export const useUiStore = create<UiState>((set, get) => {
       const id = `ruleRun:${ruleId}`;
       if (!(await allowLeave(id))) return;
       const tab: RuleRunTab = { id, kind: 'ruleRun', ruleId, name };
+      set((state) => {
+        const exists = state.rightTabs.some((t) => t.id === id);
+        const rightTabs = exists
+          ? state.rightTabs.map((t) => (t.id === id ? tab : t))
+          : [...state.rightTabs, tab];
+        return { rightTabs, activeRightTabId: id };
+      });
+    },
+
+    openDbSchema: async ({ id: connId, scope, name }) => {
+      const id = `dbSchema:${connId}`;
+      if (!(await allowLeave(id))) return;
+      const tab: DbSchemaTab = {
+        id,
+        kind: 'dbSchema',
+        connectionId: connId,
+        scope,
+        name,
+      };
+      set((state) => {
+        const exists = state.rightTabs.some((t) => t.id === id);
+        const rightTabs = exists
+          ? state.rightTabs.map((t) => (t.id === id ? tab : t))
+          : [...state.rightTabs, tab];
+        return { rightTabs, activeRightTabId: id };
+      });
+    },
+
+    openDbData: async ({ id: connId, scope, name, driver, table }) => {
+      const id = `dbData:${connId}:${table.table}`;
+      if (!(await allowLeave(id))) return;
+      const tab: DbDataTab = {
+        id,
+        kind: 'dbData',
+        connectionId: connId,
+        scope,
+        name,
+        driver,
+        table,
+      };
       set((state) => {
         const exists = state.rightTabs.some((t) => t.id === id);
         const rightTabs = exists

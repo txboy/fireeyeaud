@@ -9,6 +9,7 @@ hiddenimports = (
     + collect_submodules("sqlalchemy.dialects")
     + collect_submodules("sqlglot")
     + collect_submodules("pydantic")
+    + collect_submodules("oracledb")
 )
 
 a = Analysis(

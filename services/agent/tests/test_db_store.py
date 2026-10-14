@@ -96,3 +96,29 @@ def test_url_builders():
     assert db.build_url({"driver": "access", "path": "C:/data/a.accdb"}).startswith(
         "access+pyodbc://"
     )
+    # Oracle 默认按服务名；connectBy=sid 时走 SID。
+    assert (
+        db.build_url(
+            {
+                "driver": "oracle",
+                "host": "h",
+                "port": 1521,
+                "database": "ORCLPDB1",
+                "username": "u",
+            }
+        )
+        == "oracle+oracledb://u@h:1521/?service_name=ORCLPDB1"
+    )
+    assert (
+        db.build_url(
+            {
+                "driver": "oracle",
+                "host": "h",
+                "port": 1521,
+                "database": "XE",
+                "username": "u",
+                "connectBy": "sid",
+            }
+        )
+        == "oracle+oracledb://u@h:1521/XE"
+    )

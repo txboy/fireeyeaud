@@ -14,7 +14,7 @@ from ..config import store
 from . import secrets
 
 KIND = "db"
-_DRIVERS = {"sqlite", "postgresql", "mysql", "mssql", "access"}
+_DRIVERS = {"sqlite", "postgresql", "mysql", "mssql", "access", "oracle"}
 
 
 def set_secret(ref: str, password: str | None) -> None:
@@ -120,6 +120,12 @@ def build_url(conn: dict[str, Any], password: str | None = None) -> str:
             f"mssql+pyodbc://{user}{secret}@{host}:{port or 1433}/{database}"
             f"?driver={quote(driver_name)}"
         )
+    if driver == "oracle":
+        # 默认按服务名（Service Name）；connectBy="sid" 时走 SID。
+        if str(conn.get("connectBy") or "service").lower() == "sid":
+            return f"oracle+oracledb://{user}{secret}@{host}:{port or 1521}/{database}"
+        service = quote(str(database), safe="")
+        return f"oracle+oracledb://{user}{secret}@{host}:{port or 1521}/?service_name={service}"
     raise ApiError("E_DB_DRIVER", 400, "error.dbDriver", {"driver": driver})
 
 

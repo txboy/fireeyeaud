@@ -323,7 +323,13 @@ export interface WorkingPaperManifest {
   files: string[];
 }
 
-export type DbDriver = 'sqlite' | 'postgresql' | 'mysql' | 'mssql' | 'access';
+export type DbDriver =
+  | 'sqlite'
+  | 'postgresql'
+  | 'mysql'
+  | 'mssql'
+  | 'access'
+  | 'oracle';
 
 export interface DbConnection {
   id: string;
@@ -336,6 +342,8 @@ export interface DbConnection {
   username?: string | null;
   path?: string | null;
   credRef?: string;
+  /** Oracle：连接方式（'service' 服务名，'sid'）；其它驱动忽略。 */
+  connectBy?: 'service' | 'sid' | null;
   /** 默认自动提供给模型（无需在对话上下文栏勾选）。 */
   isDefault?: boolean;
 }
@@ -343,11 +351,30 @@ export interface DbConnection {
 export interface DbColumn {
   name: string;
   type: string;
+  comment?: string | null;
+  nullable?: boolean;
+  primaryKey?: boolean;
 }
 
 export interface DbTableSchema {
   table: string;
+  comment?: string | null;
   columns: DbColumn[];
+}
+
+/** 表数据预览的一次分页查询结果。total 为 null 表示未统计（COUNT 失败或未请求）。 */
+export interface DbQueryResult {
+  columns: string[];
+  rows: unknown[][];
+  rowCount: number;
+  total: number | null;
+  hasMore: boolean;
+  /** 是否可分页；用户 SQL 自带 LIMIT 或 EXPLAIN/DESCRIBE 时为 false。 */
+  paginated: boolean;
+  limit: number;
+  offset: number;
+  /** 实际执行的完整 SQL（含分页包装）。 */
+  sql: string;
 }
 
 export type KbProviderType = 'dify' | 'ragflow';

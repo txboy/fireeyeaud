@@ -322,6 +322,243 @@ body {
   flex: 0 0 auto;
 }
 
+/* ---- 表授权（DbSchemaView） ---- */
+.dbschema {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dbschema__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.dbschema__name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.dbschema__search {
+  width: 220px;
+  flex: 0 0 auto;
+}
+
+.dbschema__saved {
+  padding: 4px 12px;
+  font-size: 11.5px;
+  color: var(--success);
+}
+
+.dbschema__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dbschema__table {
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--editor-bg);
+}
+
+.dbschema__table-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--titlebar);
+  border-bottom: 1px solid var(--border);
+}
+
+.dbschema__table-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.dbschema__allow {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--text-2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dbschema__grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.dbschema__grid th,
+.dbschema__grid td {
+  text-align: left;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dbschema__grid tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.dbschema__grid th {
+  position: sticky;
+  top: 0;
+  background: var(--editor-bg);
+  color: var(--text-2);
+  font-weight: 500;
+  z-index: 1;
+}
+
+.dbschema__col-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-1);
+}
+
+.dbschema__pk {
+  color: var(--accent);
+}
+
+.dbschema__col-type {
+  font-family: var(--mono, monospace);
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.dbschema__col-comment {
+  color: var(--text-2);
+}
+
+.dbschema__col-allow {
+  width: 64px;
+  text-align: center;
+}
+
+/* ---- 数据预览（DbDataView） ---- */
+.dbdata {
+  min-height: 0;
+}
+
+.dbdata__editor {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dbdata__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.dbdata__pagesize {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dbdata__pagesize .searchbox {
+  width: 72px;
+}
+
+.dbdata__execsql {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--hover);
+}
+
+.dbdata__execsql-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dbdata__sqltag {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-1);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 140px;
+  overflow: auto;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.dbdata__pager {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--titlebar);
+}
+
+.dbdata__pager--bottom {
+  border-bottom: none;
+  border-top: 1px solid var(--border);
+}
+
+.dbdata__result {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 16px 16px;
+}
+
+.dbdata__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.dbdata__table th,
+.dbdata__table td {
+  text-align: left;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.dbdata__table th {
+  position: sticky;
+  top: 0;
+  background: var(--editor-bg);
+  color: var(--text-2);
+  font-weight: 500;
+  z-index: 1;
+}
+
 .titlebar__btn {
   display: inline-flex;
   align-items: center;
@@ -1223,6 +1460,11 @@ textarea.searchbox {
 .icon-btn:hover {
   background: var(--hover);
   color: var(--text-1);
+}
+
+.icon-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .model-form {
