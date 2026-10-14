@@ -2,6 +2,7 @@
 
 - SQLAlchemy 统一层（sqlite/postgresql/mysql/mssql/access/oracle）。
 - 只读：仅 SELECT/WITH/EXPLAIN/DESCRIBE（复用 sandbox）；SQLite 以 mode=ro 打开。
+- access：首选 sqlalchemy-access(ODBC)，失败回退 access_source 纯 Python 解析（见 store/access_source.py）。
 - 连接 / 反射 / 查询失败统一转 E_DB_CONN。
 """
 
@@ -146,11 +147,11 @@ def reflect(conn: dict[str, Any], password: str | None) -> list[dict[str, Any]]:
                 )
         return result
     except ApiError:
-        if str(conn.get("driver") or "").lower() == "access":
+        if driver == "access":
             return _access_reflect(conn)
         raise
     except Exception as exc:  # noqa: BLE001
-        if str(conn.get("driver") or "").lower() == "access":
+        if driver == "access":
             return _access_reflect(conn)
         raise ApiError("E_DB_CONN", 502, "error.dbConn", {"reason": str(exc)}) from exc
 
@@ -271,6 +272,7 @@ def run_query(
     except (TypeError, ValueError):
         offset = 0
     offset = max(0, offset)
+    driver = str(conn.get("driver") or "").lower()
     first = text_sql.split()[0].lower()
     executed = text_sql
     drop_tail = 0
@@ -287,7 +289,6 @@ def run_query(
                 has_more = False
                 rows = [list(r) for r in fetched]
             else:
-                driver = str(conn.get("driver") or "").lower()
                 server_version = getattr(con.dialect, "server_version_info", None)
                 executed, drop_lead, drop_tail = _page_sql(
                     driver, text_sql, limit, offset, server_version
@@ -303,11 +304,11 @@ def run_query(
             if drop_tail:
                 columns = columns[:-drop_tail]
     except ApiError:
-        if str(conn.get("driver") or "").lower() == "access":
+        if driver == "access":
             return _access_query(conn, text_sql, limit, offset)
         raise
     except Exception as exc:  # noqa: BLE001
-        if str(conn.get("driver") or "").lower() == "access":
+        if driver == "access":
             return _access_query(conn, text_sql, limit, offset)
         raise ApiError("E_DB_CONN", 502, "error.dbConn", {"reason": str(exc)}) from exc
     return {

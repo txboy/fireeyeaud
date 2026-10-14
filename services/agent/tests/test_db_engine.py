@@ -321,3 +321,43 @@ def test_access_reflect_via_parser(monkeypatch):
     assert {"id", "name", "email", "age", "created"} <= {
         c["name"] for c in users["columns"]
     }
+
+
+def test_access_api_error_preserved(monkeypatch):
+    conn = _fake_access_conn()
+    monkeypatch.setattr(
+        db_engine, "_engine", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("odbc down"))
+    )
+
+    def fail(*_a, **_k):
+        raise ApiError("E_SQL_REJECTED", 400, "error.sqlRejected", {"reason": "x"})
+
+    # reflect 回退里抛出的 ApiError 必须原样透传（不被包装成 E_DB_CONN）
+    monkeypatch.setattr(db_engine.access_source, "list_tables", fail)
+    with pytest.raises(ApiError) as ei:
+        db_engine.reflect(conn, None)
+    assert ei.value.code == "E_SQL_REJECTED"
+
+    # probe 同理
+    monkeypatch.setattr(db_engine.access_source, "probe", fail)
+    with pytest.raises(ApiError) as ei2:
+        db_engine.test_connection(conn, None)
+    assert ei2.value.code == "E_SQL_REJECTED"
+
+
+def test_access_fallback_failure_raises_db_conn(monkeypatch):
+    conn = {"id": "c", "driver": "access", "path": "Z:/nope/missing.mdb"}
+    monkeypatch.setattr(
+        db_engine, "_engine", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("odbc down"))
+    )
+    with pytest.raises(ApiError) as ei:
+        db_engine.test_connection(conn, None)
+    assert ei.value.code == "E_DB_CONN"
+
+
+def test_count_access_fallback_failure_returns_none(monkeypatch):
+    conn = {"id": "c", "driver": "access", "path": "Z:/nope/missing.mdb"}
+    monkeypatch.setattr(
+        db_engine, "_engine", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("odbc down"))
+    )
+    assert db_engine.count_query(conn, "SELECT 1", None) is None
