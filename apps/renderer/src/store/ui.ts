@@ -22,6 +22,10 @@ export interface PreviewTab {
   root: string;
   path: string;
   name: string;
+  /** 打开时定位到的目标行（1 基）；来自搜索结果点击。 */
+  line?: number;
+  /** 目标列（1 基）；越界会钳制到行内。 */
+  column?: number;
 }
 
 /** 配置表单所属域。 */
@@ -108,7 +112,12 @@ interface UiState {
   setActiveView: (view: ActivityView) => void;
   setResultsTab: (tab: ResultsTab) => void;
   setSelectedFindingId: (id: string | null) => void;
-  openPreview: (root: string, absPath: string, name: string) => Promise<void>;
+  openPreview: (
+    root: string,
+    absPath: string,
+    name: string,
+    target?: { line?: number; column?: number },
+  ) => Promise<void>;
   openForm: (
     domain: FormDomain,
     mode: 'create' | 'edit',
@@ -157,14 +166,23 @@ export const useUiStore = create<UiState>((set, get) => {
     setResultsTab: (tab) => set({ resultsTab: tab }),
     setSelectedFindingId: (id) => set({ selectedFindingId: id }),
 
-    openPreview: async (root, absPath, name) => {
+    openPreview: async (root, absPath, name, target) => {
       const id = `preview:${absPath}`;
       if (!(await allowLeave(id))) return;
+      const tab: PreviewTab = {
+        id,
+        kind: 'preview',
+        root,
+        path: absPath,
+        name,
+        line: target?.line,
+        column: target?.column,
+      };
       set((state) => {
-        const exists = state.rightTabs.some((tab) => tab.id === id);
+        const exists = state.rightTabs.some((t) => t.id === id);
         const rightTabs = exists
-          ? state.rightTabs
-          : [...state.rightTabs, { id, kind: 'preview' as const, root, path: absPath, name }];
+          ? state.rightTabs.map((t) => (t.id === id ? tab : t))
+          : [...state.rightTabs, tab];
         return { rightTabs, activeRightTabId: id };
       });
     },

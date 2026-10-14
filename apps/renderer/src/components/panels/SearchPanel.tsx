@@ -137,14 +137,14 @@ export function SearchPanel() {
         const Icon = iconFor(group.path);
         const absPath = root ? joinPath(root, group.path) : group.path;
         const name = group.path.split('/').pop() ?? group.path;
-        const open = () => {
-          if (root) openPreview(root, absPath, name);
+        const open = (target?: { line?: number; column?: number }) => {
+          if (root) openPreview(root, absPath, name, target);
         };
         return (
           <div key={group.path} className="tree">
             <div
               className="tree__row tree__row--folder"
-              onClick={open}
+              onClick={() => open()}
               title={group.path}
             >
               <Icon size={14} strokeWidth={1.75} />
@@ -156,7 +156,7 @@ export function SearchPanel() {
                 className="tree__row"
                 style={{ paddingLeft: 22 }}
                 title={hit.text}
-                onClick={open}
+                onClick={() => open({ line: hit.line, column: hit.column })}
               >
                 <span
                   className="mono"

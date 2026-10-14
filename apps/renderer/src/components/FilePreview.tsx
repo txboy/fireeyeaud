@@ -196,6 +196,8 @@ export function FilePreview({ target }: { target: PreviewTab }) {
             name={name}
             readOnly={false}
             dark={dark}
+            line={target.line}
+            column={target.column}
             onChange={changeText}
             onSave={() => void save()}
           />

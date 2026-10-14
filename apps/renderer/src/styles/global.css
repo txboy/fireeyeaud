@@ -2146,6 +2146,12 @@ textarea.searchbox {
   outline: none;
 }
 
+/* 搜索结果定位行高亮 */
+.textpreview .cm-targetLine {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
 .imgpreview {
   display: flex;
   flex-direction: column;
