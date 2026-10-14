@@ -19,6 +19,7 @@ const { createSecretsStore } = require('./secrets.cjs');
 const { loadWindowState, saveWindowState } = require('./window-state.cjs');
 const { readFileContent, writeTextFile, deletePath } = require('./file-preview.cjs');
 const { copyInto, move, createDir, createFile, rename } = require('./file-ops.cjs');
+const { parseTokens, isExcluded, isIncluded } = require('./search-tokens.cjs');
 
 app.setName('fireeyeaud');
 
@@ -381,28 +382,6 @@ function buildSearchRegex(query, options) {
   let pattern = options.regex ? query : escapeRegExp(query);
   if (options.wholeWord) pattern = `\\b${pattern}\\b`;
   return new RegExp(pattern, options.caseSensitive ? 'g' : 'gi');
-}
-
-function parseTokens(value) {
-  return String(value ?? '')
-    .split(/[,\s]+/)
-    .map((token) => token.trim())
-    .filter(Boolean);
-}
-
-function tokenMatches(relPath, token) {
-  const clean = token.replace(/\*\*/g, '').replace(/\*/g, '').replace(/^[\\/]+/, '');
-  if (!clean) return false;
-  return relPath.toLowerCase().includes(clean.toLowerCase());
-}
-
-function isExcluded(relPath, tokens) {
-  return tokens.some((token) => tokenMatches(relPath, token));
-}
-
-function isIncluded(relPath, tokens) {
-  if (tokens.length === 0) return true;
-  return tokens.some((token) => tokenMatches(relPath, token));
 }
 
 function searchFile(absPath, relPath, regex) {

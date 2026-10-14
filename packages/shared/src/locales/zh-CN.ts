@@ -127,6 +127,10 @@ export default {
     caseSensitive: '区分大小写',
     wholeWord: '全词匹配',
     regex: '正则表达式',
+    addScope: '添加',
+    removeScope: '移除',
+    clearScope: '清空',
+    scopeEmpty: '工作区为空',
   },
   database: {
     title: '数据库连接',

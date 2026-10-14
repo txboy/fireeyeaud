@@ -129,6 +129,10 @@ export default {
     caseSensitive: 'Match case',
     wholeWord: 'Match whole word',
     regex: 'Use regular expression',
+    addScope: 'Add',
+    removeScope: 'Remove',
+    clearScope: 'Clear',
+    scopeEmpty: 'Workspace is empty',
   },
   database: {
     title: 'Database connections',

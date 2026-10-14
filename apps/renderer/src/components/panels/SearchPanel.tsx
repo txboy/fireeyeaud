@@ -4,6 +4,8 @@ import { FileSpreadsheet, FileText, Loader2, SearchX } from 'lucide-react';
 import type { SearchResult } from '@fireeyeaud/shared';
 import { useWorkspaceStore } from '../../store/workspace';
 import { useUiStore } from '../../store/ui';
+import { loadSearchScope, saveSearchScope } from '../../lib/search-scope';
+import { SearchScopePicker } from '../SearchScopePicker';
 
 const SPREADSHEET_EXT = new Set(['.xlsx', '.xlsm', '.xls', '.csv']);
 
@@ -26,14 +28,30 @@ export function SearchPanel() {
   const openPreview = useUiStore((s) => s.openPreview);
 
   const [query, setQuery] = useState('');
-  const [include, setInclude] = useState('');
-  const [exclude, setExclude] = useState('');
+  const [include, setInclude] = useState<string[]>([]);
+  const [exclude, setExclude] = useState<string[]>([]);
   const [regex, setRegex] = useState(false);
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [result, setResult] = useState<SearchResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 切换工作区时载入该工作区记忆的范围。
+  useEffect(() => {
+    const scope = loadSearchScope(root);
+    setInclude(scope.include);
+    setExclude(scope.exclude);
+  }, [root]);
+
+  const updateInclude = (next: string[]) => {
+    setInclude(next);
+    if (root) saveSearchScope(root, { include: next, exclude });
+  };
+  const updateExclude = (next: string[]) => {
+    setExclude(next);
+    if (root) saveSearchScope(root, { include, exclude: next });
+  };
 
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current);
@@ -77,19 +95,11 @@ export function SearchPanel() {
       />
       <div className="field">
         <span className="field__label">{t('include')}</span>
-        <input
-          className="searchbox"
-          value={include}
-          onChange={(e) => setInclude(e.target.value)}
-        />
+        <SearchScopePicker root={root} value={include} onChange={updateInclude} />
       </div>
       <div className="field">
         <span className="field__label">{t('exclude')}</span>
-        <input
-          className="searchbox"
-          value={exclude}
-          onChange={(e) => setExclude(e.target.value)}
-        />
+        <SearchScopePicker root={root} value={exclude} onChange={updateExclude} />
       </div>
       <div className="search-opts">
         <label className="search-opt">

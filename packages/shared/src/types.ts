@@ -186,8 +186,10 @@ export interface SearchOptions {
   caseSensitive?: boolean;
   wholeWord?: boolean;
   regex?: boolean;
-  include?: string;
-  exclude?: string;
+  /** 包含范围：目录 token 以 `/` 结尾（子树），其它为精确文件相对路径；空 = 不限制。 */
+  include?: string[];
+  /** 排除范围：同 include 的 token 约定。 */
+  exclude?: string[];
 }
 
 /** 文件树节点条目（主进程 fs:read-dir 返回）。 */
