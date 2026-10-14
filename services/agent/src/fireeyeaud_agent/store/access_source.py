@@ -138,9 +138,7 @@ def open_db(path) -> Iterator[sqlite3.Connection]:
     with load_lock:
         with _lock:
             entry = _cache.get(key)
-            if entry is None:
-                entry = None
-            else:
+            if entry is not None:
                 _cache.move_to_end(key)
                 entry.refs += 1
         if entry is None:
