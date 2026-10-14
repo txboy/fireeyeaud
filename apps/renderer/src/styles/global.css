@@ -1037,6 +1037,9 @@ textarea.searchbox {
   flex-direction: column;
   gap: 1px;
   font-size: 12.5px;
+  /* 作为滚动容器（sidebar__body / explorer__files-body）内的列表项时不参与收缩，
+     否则内容超高时行会被压缩、溢出并相互重叠。 */
+  flex: 0 0 auto;
 }
 
 .tree__row {
