@@ -12,6 +12,7 @@ import warnings
 from typing import Any
 
 from ..errors import ApiError
+from . import access_source
 from .db import build_url
 from .sandbox import validate_sql
 
@@ -72,14 +73,19 @@ def _probe_query(driver: str) -> str:
 def test_connection(conn: dict[str, Any], password: str | None) -> bool:
     from sqlalchemy import text
 
+    driver = str(conn.get("driver") or "").lower()
     try:
         engine = _engine(conn, password)
         with engine.connect() as con:
-            con.execute(text(_probe_query(str(conn.get("driver") or "").lower())))
+            con.execute(text(_probe_query(driver)))
         return True
     except ApiError:
+        if driver == "access":
+            return _access_probe(conn)
         raise
     except Exception as exc:  # noqa: BLE001
+        if driver == "access":
+            return _access_probe(conn)
         raise ApiError("E_DB_CONN", 502, "error.dbConn", {"reason": str(exc)}) from exc
 
 
@@ -140,8 +146,12 @@ def reflect(conn: dict[str, Any], password: str | None) -> list[dict[str, Any]]:
                 )
         return result
     except ApiError:
+        if str(conn.get("driver") or "").lower() == "access":
+            return _access_reflect(conn)
         raise
     except Exception as exc:  # noqa: BLE001
+        if str(conn.get("driver") or "").lower() == "access":
+            return _access_reflect(conn)
         raise ApiError("E_DB_CONN", 502, "error.dbConn", {"reason": str(exc)}) from exc
 
 
@@ -293,8 +303,12 @@ def run_query(
             if drop_tail:
                 columns = columns[:-drop_tail]
     except ApiError:
+        if str(conn.get("driver") or "").lower() == "access":
+            return _access_query(conn, text_sql, limit, offset)
         raise
     except Exception as exc:  # noqa: BLE001
+        if str(conn.get("driver") or "").lower() == "access":
+            return _access_query(conn, text_sql, limit, offset)
         raise ApiError("E_DB_CONN", 502, "error.dbConn", {"reason": str(exc)}) from exc
     return {
         "columns": columns,
@@ -335,10 +349,44 @@ def count_query(
                 text(f"SELECT COUNT(*) FROM {_wrap_subquery(driver, count_inner)}")
             ).scalar()
     except Exception:  # noqa: BLE001 - 计数失败不阻断预览
+        if driver == "access":
+            return _access_count(conn, text_sql)
         return None
     try:
         return int(value)
     except (TypeError, ValueError):
+        return None
+
+
+def _access_probe(conn: dict[str, Any]) -> bool:
+    try:
+        return access_source.probe(conn.get("path"))
+    except Exception as exc:  # noqa: BLE001
+        raise ApiError("E_DB_CONN", 502, "error.dbConn", {"reason": str(exc)}) from exc
+
+
+def _access_reflect(conn: dict[str, Any]) -> list[dict[str, Any]]:
+    try:
+        return access_source.list_tables(conn.get("path"))
+    except Exception as exc:  # noqa: BLE001
+        raise ApiError("E_DB_CONN", 502, "error.dbConn", {"reason": str(exc)}) from exc
+
+
+def _access_query(
+    conn: dict[str, Any], sql: str, limit: int, offset: int
+) -> dict[str, Any]:
+    try:
+        return access_source.query(conn.get("path"), sql, limit, offset)
+    except ApiError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise ApiError("E_DB_CONN", 502, "error.dbConn", {"reason": str(exc)}) from exc
+
+
+def _access_count(conn: dict[str, Any], sql: str) -> int | None:
+    try:
+        return access_source.count(conn.get("path"), sql)
+    except Exception:  # noqa: BLE001
         return None
 
 

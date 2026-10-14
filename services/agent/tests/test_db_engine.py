@@ -277,3 +277,47 @@ def test_count_query(tmp_path):
 def test_count_query_failure_returns_none(tmp_path):
     conn = {"id": "conn_1", "driver": "sqlite", "path": str(tmp_path / "missing.db")}
     assert db_engine.count_query(conn, "SELECT 1", None) is None
+
+
+def _fake_access_conn():
+    from pathlib import Path
+
+    fixture = Path(__file__).parent / "fixtures" / "access_sample.mdb"
+    if not fixture.exists():
+        pytest.skip("access fixture missing")
+    return {"id": "conn_acc", "driver": "access", "path": str(fixture)}
+
+
+def test_access_falls_back_to_parser_on_odbc_failure(monkeypatch):
+    conn = _fake_access_conn()
+
+    def boom(*_a, **_k):
+        raise RuntimeError("ODBC 不可用")
+
+    # 让首选 ODBC 路径必然失败，验证回退
+    monkeypatch.setattr(db_engine, "_engine", boom)
+
+    assert db_engine.test_connection(conn, None) is True
+
+    schema = db_engine.reflect(conn, None)
+    assert "users" in {t["table"] for t in schema}
+
+    result = db_engine.run_query(
+        conn, "SELECT id, name FROM users ORDER BY id", None, limit=2
+    )
+    assert result["rows"] == [[1, "Alice"], [2, "Bob"]]
+    assert result["hasMore"] is True
+
+    assert db_engine.count_query(conn, "SELECT id FROM users", None) == 5
+
+
+def test_access_reflect_via_parser(monkeypatch):
+    conn = _fake_access_conn()
+    monkeypatch.setattr(
+        db_engine, "_engine", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("x"))
+    )
+    schema = db_engine.reflect(conn, None)
+    users = next(t for t in schema if t["table"] == "users")
+    assert {"id", "name", "email", "age", "created"} <= {
+        c["name"] for c in users["columns"]
+    }
