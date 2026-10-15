@@ -73,4 +73,7 @@ def build_chat_model(
         model=model,
         api_key=api_key,
         temperature=temperature,
+        # 单次请求超时：服务端挂起时尽快失败，而不是无限等待。
+        timeout=settings.turn_timeout_seconds,
+        max_retries=1,
     )

@@ -146,6 +146,37 @@ export function AgentColumn({ sessionId }: { sessionId: string }) {
                 {m.content}
                 {m.streaming && <span className="msg__caret" />}
               </div>
+              {m.role === 'user' && m.attachments.length > 0 && (
+                <div className="msg__files">
+                  {m.attachments.map((a) => (
+                    <span key={a.path} className="msg-file" title={a.path}>
+                      <FileText size={11} strokeWidth={1.75} />
+                      <span className="msg-file__name">{a.name}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+              {m.role === 'user' && m.attachmentTexts.length > 0 && (
+                <details className="msg__attach-text">
+                  <summary>{t('attachmentText')}</summary>
+                  {m.attachmentTexts.map((at) => (
+                    <div key={at.name} className="msg__attach-text-item">
+                      <div className="msg__attach-text-name">{at.name}</div>
+                      <pre className="msg__attach-text-body">{at.text}</pre>
+                    </div>
+                  ))}
+                </details>
+              )}
+              {m.role === 'user' && m.noticeKey && (
+                <div className="msg__notice">
+                  <AlertTriangle size={13} strokeWidth={1.75} />
+                  <span>
+                    {t(m.noticeKey, {
+                      files: String(m.noticeParams?.files ?? ''),
+                    })}
+                  </span>
+                </div>
+              )}
               {m.role === 'user' && m.options && (
                 <MessageOptions snapshot={m.options} />
               )}

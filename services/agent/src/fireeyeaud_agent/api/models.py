@@ -23,6 +23,7 @@ class ModelBody(BaseModel):
     temperature: float = 0.2
     apiKeyRef: str | None = None
     isDefault: bool = False
+    vision: bool = False
     scope: str = "global"
 
 
@@ -34,6 +35,7 @@ class ModelPatch(BaseModel):
     temperature: float | None = None
     apiKeyRef: str | None = None
     isDefault: bool | None = None
+    vision: bool | None = None
 
 
 def _root():

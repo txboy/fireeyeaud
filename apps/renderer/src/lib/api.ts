@@ -148,12 +148,27 @@ export interface ContextSnapshot {
   rules: ContextOptionItem[];
 }
 
+export interface AttachmentText {
+  name: string;
+  text: string;
+  source?: 'local' | 'vision';
+  truncated?: boolean;
+}
+
 export interface SessionMessage {
   id: string;
   sessionId: string;
   seq: number;
   role: string;
-  content: { text?: string; options?: ContextSnapshot | null } | string | null;
+  content:
+    | {
+        text?: string;
+        options?: ContextSnapshot | null;
+        attachments?: AttachmentRef[];
+        attachmentTexts?: AttachmentText[];
+      }
+    | string
+    | null;
   ts: string;
 }
 
@@ -267,7 +282,14 @@ export async function streamChat(
   const res = await safeFetch(`${baseUrl()}/sessions/${sessionId}/chat`, {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ message, locale, modelId, context, attachments }),
+    body: JSON.stringify({
+      message,
+      locale,
+      modelId,
+      // 后端 ChatBody 期望扁平字段（与「保存会话上下文」接口不同）。
+      ...(context ?? EMPTY_CONTEXT),
+      attachments,
+    }),
     signal,
   });
   await consumeSse(res, onEvent);
@@ -436,6 +458,7 @@ export interface ModelInput {
   temperature?: number;
   apiKeyRef?: string | null;
   isDefault?: boolean;
+  vision?: boolean;
   scope: ConfigScope;
 }
 

@@ -2122,6 +2122,33 @@ textarea.searchbox {
   color: var(--text-1);
 }
 
+.msg__files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  margin-top: 6px;
+}
+
+.msg-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  font-size: 11px;
+  color: var(--text-2);
+  background: var(--hover);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.msg-file__name {
+  color: var(--text-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .msg__caret {
   display: inline-block;
   width: 7px;
@@ -2148,6 +2175,49 @@ textarea.searchbox {
   background: var(--danger-weak);
   border-radius: 6px;
   padding: 6px 10px;
+}
+
+.msg__notice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--warning);
+  background: var(--warning-weak);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+.msg__attach-text {
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+
+.msg__attach-text summary {
+  cursor: pointer;
+}
+
+.msg__attach-text-item {
+  margin-top: 6px;
+}
+
+.msg__attach-text-name {
+  color: var(--text-1);
+  margin-bottom: 2px;
+}
+
+.msg__attach-text-body {
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--hover);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin: 0;
+  font-size: 11px;
 }
 
 .msg__tools {

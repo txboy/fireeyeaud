@@ -11,6 +11,7 @@ import {
   streamChat,
   updateSessionContextApi,
   type AttachmentRef,
+  type AttachmentText,
   type ChatContext,
   type ContextSnapshot,
   type SessionMessage,
@@ -40,6 +41,13 @@ export interface ChatMessage {
   findingIds: string[];
   /** 该条用户消息发送时带给模型的勾选项（默认项不含），助手消息为 null。 */
   options: ContextSnapshot | null;
+  /** 该条用户消息随带的附件（助手消息为空）。 */
+  attachments: AttachmentRef[];
+  /** 附件的文本内容（本地抽取 / 模型转写），跨轮次可回放。 */
+  attachmentTexts: AttachmentText[];
+  /** 提示（如当前模型不支持图片/扫描版 PDF），仅用户消息可能非空。 */
+  noticeKey: string | null;
+  noticeParams: Record<string, unknown> | null;
 }
 
 /**
@@ -145,19 +153,20 @@ function assistantError(messageKey: string): ChatMessage {
     tools: [],
     findingIds: [],
     options: null,
+    attachments: [],
+    attachmentTexts: [],
+    noticeKey: null,
+    noticeParams: null,
   };
 }
 
 /** 后端存储的消息投影 → 前端 ChatMessage。 */
 function toChatMessage(message: SessionMessage): ChatMessage {
-  const text =
-    typeof message.content === 'string'
-      ? message.content
-      : (message.content?.text ?? '');
-  const options =
+  const content =
     typeof message.content === 'string' || !message.content
       ? null
-      : (message.content.options ?? null);
+      : message.content;
+  const text = typeof message.content === 'string' ? message.content : (content?.text ?? '');
   return {
     id: message.id,
     role: message.role === 'user' ? 'user' : 'assistant',
@@ -168,7 +177,11 @@ function toChatMessage(message: SessionMessage): ChatMessage {
     errorKey: null,
     tools: [],
     findingIds: [],
-    options,
+    options: content?.options ?? null,
+    attachments: content?.attachments ?? [],
+    attachmentTexts: content?.attachmentTexts ?? [],
+    noticeKey: null,
+    noticeParams: null,
   };
 }
 
@@ -216,6 +229,12 @@ function applyEvent(message: ChatMessage, event: SseEvent): ChatMessage {
         ...message,
         streaming: false,
         errorKey: String(data.messageKey ?? 'error.internal'),
+      };
+    case 'notice':
+      return {
+        ...message,
+        noticeKey: String(data.messageKey ?? ''),
+        noticeParams: (data.params as Record<string, unknown>) ?? {},
       };
     case 'done':
       return { ...message, streaming: false, thinking: '' };
@@ -302,6 +321,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const current = get().chats[sessionId];
     if (!trimmed || current?.streaming) return;
 
+    // 先固化为本轮的附件，随后清空输入区附件，避免「读后被清空」导致没传给模型。
+    const attachments = [...(current?.attachments ?? [])];
+
     // 若该会话还没有标题，用首条消息补上。
     const meta = get().sessions.find((s) => s.id === sessionId);
     if (meta && !meta.title) {
@@ -327,6 +349,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       tools: [],
       findingIds: [],
       options: null,
+      attachments,
+      attachmentTexts: [],
+      noticeKey: null,
+      noticeParams: null,
     };
     const assistantMessage: ChatMessage = {
       id: nextId(),
@@ -339,6 +365,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       tools: [],
       findingIds: [],
       options: null,
+      attachments: [],
+      attachmentTexts: [],
+      noticeKey: null,
+      noticeParams: null,
     };
     set((s) => ({
       chats: withChat(s.chats, sessionId, (chat) => ({
@@ -346,6 +376,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         messages: [...chat.messages, userMessage, assistantMessage],
         streaming: true,
         draft: '',
+        // 发送后清空附件，避免下次误发。
+        attachments: [],
       })),
     }));
 
@@ -363,6 +395,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
             ...c,
             messages: c.messages.map((m) =>
               m.id === userMessage.id ? { ...m, options: snapshot } : m,
+            ),
+          })),
+        }));
+        return;
+      }
+      // 附件提示（如当前模型不支持图片/扫描版 PDF）也挂在用户消息上。
+      if (event.type === 'notice') {
+        set((s) => ({
+          chats: withChat(s.chats, sessionId, (c) => ({
+            ...c,
+            messages: c.messages.map((m) =>
+              m.id === userMessage.id ? applyEvent(m, event) : m,
             ),
           })),
         }));
@@ -394,7 +438,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         locale,
         chat.modelId ?? undefined,
         chat.context,
-        chat.attachments,
+        attachments,
       );
     } catch (err) {
       const aborted = controller.signal.aborted;

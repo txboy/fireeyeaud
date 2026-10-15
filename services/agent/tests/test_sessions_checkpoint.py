@@ -1,5 +1,5 @@
 import httpx
-from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+from fake_model import FakeChatModel
 from langchain_core.messages import AIMessage
 
 from fireeyeaud_agent.agent import graph as graph_mod
@@ -17,7 +17,7 @@ async def test_session_messages_persisted(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(
         graph_mod,
         "build_chat_model",
-        lambda *_a, **_k: GenericFakeChatModel(messages=answers),
+        lambda *_a, **_k: FakeChatModel(messages=answers),
     )
 
     async with _client() as client:

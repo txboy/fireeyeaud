@@ -20,3 +20,11 @@ def test_build_chat_model_requires_base_url(tmp_path, monkeypatch):
     with pytest.raises(ApiError) as exc:
         build_chat_model()
     assert exc.value.code == "E_LLM_UNAVAILABLE"
+
+
+def test_build_chat_model_sets_timeout(tmp_path, monkeypatch):
+    monkeypatch.setenv("FIREYEAUD_GLOBAL_DIR", str(tmp_path / "global"))
+    monkeypatch.setattr(settings, "model_base_url", "http://127.0.0.1:11434/v1")
+    monkeypatch.setattr(settings, "turn_timeout_seconds", 42)
+    model = build_chat_model()
+    assert model.request_timeout == 42

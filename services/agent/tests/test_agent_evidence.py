@@ -1,5 +1,5 @@
 import pytest
-from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+from fake_model import FakeChatModel
 from langchain_core.messages import AIMessage
 
 from fireeyeaud_agent.agent.graph import run_agent
@@ -23,7 +23,7 @@ async def test_agent_writes_tool_evidence(tmp_path):
         tool_calls=[{"name": "describe_source", "args": {}, "id": "call_1"}],
     )
     final = AIMessage(content="完成")
-    model = GenericFakeChatModel(messages=iter([tool_msg, final]))
+    model = FakeChatModel(messages=iter([tool_msg, final]))
     async for _ in run_agent(tmp_path, "s_1", "看看", "zh-CN", model=model):
         pass
 

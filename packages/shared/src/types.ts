@@ -163,6 +163,7 @@ export interface ModelProfile {
   temperature?: number;
   apiKeyRef?: string | null;
   isDefault?: boolean;
+  vision?: boolean;
   scope: ConfigScope;
   createdAt?: string;
   updatedAt?: string;

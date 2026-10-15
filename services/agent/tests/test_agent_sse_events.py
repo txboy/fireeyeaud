@@ -1,5 +1,5 @@
 import pytest
-from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+from fake_model import FakeChatModel
 from langchain_core.messages import AIMessage
 
 from fireeyeaud_agent.agent.graph import run_agent
@@ -22,7 +22,7 @@ async def test_sse_event_mapping_tool_cycle(tmp_path):
         tool_calls=[{"name": "describe_source", "args": {}, "id": "call_1"}],
     )
     final = AIMessage(content="分析完成")
-    model = GenericFakeChatModel(messages=iter([tool_msg, final]))
+    model = FakeChatModel(messages=iter([tool_msg, final]))
     events = [
         e async for e in run_agent(tmp_path, "s_1", "看看表结构", "zh-CN", model=model)
     ]
@@ -56,7 +56,7 @@ async def test_sse_event_mapping_tool_cycle(tmp_path):
 @pytest.mark.asyncio
 async def test_sse_token_events_without_tools(tmp_path):
     _seed(tmp_path)
-    model = GenericFakeChatModel(messages=iter([AIMessage(content="回答内容")]))
+    model = FakeChatModel(messages=iter([AIMessage(content="回答内容")]))
     events = [e async for e in run_agent(tmp_path, "s_1", "问题", "zh-CN", model=model)]
     types = [e["type"] for e in events]
     assert "tool_call" not in types

@@ -15,6 +15,7 @@ interface FormState {
   temperature: string;
   apiKey: string;
   isDefault: boolean;
+  vision: boolean;
   scope: ConfigScope;
 }
 
@@ -26,6 +27,7 @@ const EMPTY: FormState = {
   temperature: '0.2',
   apiKey: '',
   isDefault: false,
+  vision: false,
   scope: 'global',
 };
 
@@ -40,6 +42,7 @@ function init(entity?: ModelProfile): FormState {
     // 密钥只写不读：编辑时不回填，留空表示保持原密钥。
     apiKey: '',
     isDefault: Boolean(entity.isDefault),
+    vision: Boolean(entity.vision),
     scope: entity.scope,
   };
 }
@@ -94,6 +97,7 @@ export function ModelForm({
         temperature: Number(form.temperature) || 0.2,
         apiKeyRef,
         isDefault: form.isDefault,
+        vision: form.vision,
         scope: form.scope,
       };
       if (entity) await edit(entity.id, entity.scope, payload);
@@ -195,6 +199,14 @@ export function ModelForm({
               onChange={(e) => setForm((f) => ({ ...f, isDefault: e.target.checked }))}
             />
             <span>{t('isDefault')}</span>
+          </label>
+          <label className="search-opt">
+            <input
+              type="checkbox"
+              checked={form.vision}
+              onChange={(e) => setForm((f) => ({ ...f, vision: e.target.checked }))}
+            />
+            <span>{t('vision')}</span>
           </label>
         </div>
       </div>

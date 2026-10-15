@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -28,6 +30,13 @@ from .config.settings import settings
 from .errors import ApiError
 
 API_PREFIX = "/api/v1"
+
+# 确保日志（含中文）以 UTF-8 输出，避免被管道按本地代码页编码成乱码。
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
+    except (AttributeError, ValueError):
+        pass
 
 
 def create_app() -> FastAPI:

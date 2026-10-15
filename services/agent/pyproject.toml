@@ -18,6 +18,8 @@ dependencies = [
   "pandas",
   "openpyxl",
   "pypdf>=5.0.0",
+  "pymupdf>=1.24.0",
+  "Pillow>=10.0.0",
   "openai",
   "python-docx>=1.2.0",
   "reportlab>=5.0.1",
