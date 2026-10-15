@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -6,17 +6,18 @@ import {
   BookOpen,
   Database,
   FileText,
+  Folder,
   Paperclip,
   Plug,
   Send,
   ShieldCheck,
   Sparkles,
   Wrench,
-  X,
 } from 'lucide-react';
-import type { ContextSnapshot } from '../lib/api';
-import { useChatStore } from '../store/chat';
+import type { ContextSnapshot, WorkspaceRef } from '../lib/api';
+import { draftHasContent, useChatStore } from '../store/chat';
 import { ContextBar } from './ContextBar';
+import { MentionInput, type MentionInputHandle } from './MentionInput';
 
 const OPT_GROUPS: {
   key: Exclude<keyof ContextSnapshot, 'model'>;
@@ -50,6 +51,25 @@ function MessageOptions({ snapshot }: { snapshot: ContextSnapshot }) {
   );
 }
 
+/** 用户消息下方：@ 引用的工作区条目。 */
+function MessageMentions({ mentions }: { mentions: WorkspaceRef[] }) {
+  if (mentions.length === 0) return null;
+  return (
+    <div className="msg__files">
+      {mentions.map((m) => (
+        <span key={m.path} className="msg-file" title={m.path}>
+          {m.isDir ? (
+            <Folder size={11} strokeWidth={1.75} />
+          ) : (
+            <FileText size={11} strokeWidth={1.75} />
+          )}
+          <span className="msg-file__name">@{m.name}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export function AgentColumn({ sessionId }: { sessionId: string }) {
   const { t, i18n } = useTranslation('agent');
   const { t: te } = useTranslation('error');
@@ -58,13 +78,13 @@ export function AgentColumn({ sessionId }: { sessionId: string }) {
   const loadMessages = useChatStore((s) => s.loadMessages);
   const send = useChatStore((s) => s.send);
   const setDraft = useChatStore((s) => s.setDraft);
-  const addAttachments = useChatStore((s) => s.addAttachments);
-  const removeAttachment = useChatStore((s) => s.removeAttachment);
+
+  const editorRef = useRef<MentionInputHandle>(null);
 
   const messages = chat?.messages ?? [];
   const streaming = chat?.streaming ?? false;
-  const attachments = chat?.attachments ?? [];
-  const text = chat?.draft ?? '';
+  const draft = chat?.draft ?? [];
+  const canSend = draftHasContent(draft) && !streaming;
 
   useEffect(() => {
     void loadMessages(sessionId);
@@ -72,19 +92,17 @@ export function AgentColumn({ sessionId }: { sessionId: string }) {
 
   const pickFiles = async () => {
     const files = (await window.fireeyeaud?.openFiles('attachments')) ?? [];
-    if (files.length === 0) return;
-    addAttachments(
-      sessionId,
-      files.map((path) => ({
+    for (const path of files) {
+      editorRef.current?.insertAttachment({
         path,
         name: path.split(/[\\/]/).pop() || path,
-      })),
-    );
+      });
+    }
   };
 
   const submit = () => {
-    if (!text.trim() || streaming) return;
-    void send(sessionId, text, i18n.language);
+    if (!canSend) return;
+    void send(sessionId, i18n.language);
   };
 
   const errorText = (key: string) => te(key.replace(/^error\./, ''));
@@ -146,6 +164,9 @@ export function AgentColumn({ sessionId }: { sessionId: string }) {
                 {m.content}
                 {m.streaming && <span className="msg__caret" />}
               </div>
+              {m.role === 'user' && m.mentions.length > 0 && (
+                <MessageMentions mentions={m.mentions} />
+              )}
               {m.role === 'user' && m.attachments.length > 0 && (
                 <div className="msg__files">
                   {m.attachments.map((a) => (
@@ -193,25 +214,6 @@ export function AgentColumn({ sessionId }: { sessionId: string }) {
 
       <ContextBar sessionId={sessionId} />
 
-      {attachments.length > 0 && (
-        <div className="agent__attachments">
-          {attachments.map((a) => (
-            <span key={a.path} className="attach-chip" title={a.path}>
-              <FileText size={12} strokeWidth={1.75} />
-              <span className="attach-chip__name">{a.name}</span>
-              <button
-                type="button"
-                className="attach-chip__remove"
-                title={t('removeAttachment')}
-                onClick={() => removeAttachment(sessionId, a.path)}
-              >
-                <X size={11} strokeWidth={2} />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-
       <div className="agent__input">
         <button
           type="button"
@@ -221,21 +223,21 @@ export function AgentColumn({ sessionId }: { sessionId: string }) {
         >
           <Paperclip size={16} strokeWidth={1.75} />
         </button>
-        <input
-          className="searchbox"
-          value={text}
-          onChange={(e) => setDraft(sessionId, e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.nativeEvent.isComposing) submit();
-          }}
+        <MentionInput
+          key={`${sessionId}:${chat?.draftEpoch ?? 0}`}
+          ref={editorRef}
+          initialSegments={draft}
           placeholder={t('inputPlaceholder')}
+          disabled={streaming}
+          onChange={(segments) => setDraft(sessionId, segments)}
+          onSubmit={submit}
         />
         <button
           type="button"
           className="button"
           title={t('send')}
           onClick={submit}
-          disabled={!text.trim() || streaming}
+          disabled={!canSend}
         >
           <Send size={15} strokeWidth={1.9} />
         </button>

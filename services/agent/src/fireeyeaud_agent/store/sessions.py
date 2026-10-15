@@ -12,11 +12,28 @@ from pathlib import Path
 from typing import Any
 
 from ..util import now_iso
-from .project import next_counter
 
 
 def _db_path(fe: Path) -> Path:
     return Path(fe) / "checkpoints.sqlite"
+
+
+def _next_seq(con: sqlite3.Connection, table: str, prefix: str) -> int:
+    """按已有 id 的最大数字后缀 +1 生成序号。
+
+    id 的唯一性以 sqlite 投影为准，而非 project.json 的计数器：后者会随工作区
+    元数据重建/丢失而被重置，若照旧使用会复用已占用的 id（IntegrityError）。
+    """
+    marker = f"{prefix}_"
+    highest = 0
+    for row in con.execute(f'SELECT id FROM "{table}"'):
+        raw = str(row[0])
+        if not raw.startswith(marker):
+            continue
+        suffix = raw[len(marker) :]
+        if suffix.isdigit():
+            highest = max(highest, int(suffix))
+    return highest + 1
 
 
 def _connect(fe: Path) -> sqlite3.Connection:
@@ -41,11 +58,10 @@ def _connect(fe: Path) -> sqlite3.Connection:
 
 
 def create_session(fe: Path, root: Path, title: str | None) -> dict[str, Any]:
-    seq = next_counter(fe, "session", root)
-    session_id = f"s_{seq}"
     ts = now_iso()
     con = _connect(fe)
     try:
+        session_id = f"s_{_next_seq(con, 'sessions', 's')}"
         con.execute(
             "INSERT INTO sessions (id, title, createdAt, lastMessageAt) VALUES (?,?,?,?)",
             (session_id, title, ts, ts),
@@ -122,9 +138,9 @@ def update_session_title(fe: Path, session_id: str, title: str) -> None:
 def add_message(
     fe: Path, root: Path, session_id: str, role: str, content: Any
 ) -> dict[str, Any]:
-    seq = next_counter(fe, "message", root)
     con = _connect(fe)
     try:
+        seq = _next_seq(con, "messages", "m")
         count = con.execute(
             "SELECT COUNT(*) FROM messages WHERE sessionId=?", (session_id,)
         ).fetchone()[0]

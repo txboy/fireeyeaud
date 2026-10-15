@@ -12,12 +12,17 @@ from .aggregate_subject import aggregate_subject
 from .check_tie import check_tie
 from .describe_source import describe_source
 from .kb_search import kb_search
+from .list_files import list_files
 from .parse_ledger import parse_ledger
+from .read_file import read_file
 from .run_rule import run_rule
+from .search_files import search_files
 from .sql_query import sql_query
 from .web_search import web_search
 
 ToolFn = Callable[[Path, dict[str, Any]], dict[str, Any]]
+# 特殊文件工具：read_file 需要注入模型访问且为协程。
+FileToolFn = Callable[..., Any]
 
 
 class DescribeSourceArgs(BaseModel):
@@ -74,6 +79,28 @@ class RunRuleArgs(BaseModel):
     )
 
 
+class ListFilesArgs(BaseModel):
+    path: str | None = Field(default=None, description="工作区相对目录，缺省为根目录")
+    depth: int | None = Field(
+        default=2, description="向下展开的目录层级数（1=仅直接子项）"
+    )
+    limit: int | None = Field(default=200, description="最多返回的条目数")
+
+
+class ReadFileArgs(BaseModel):
+    path: str = Field(description="工作区相对文件路径（如 数据/序时账.xlsx）")
+
+
+class SearchFilesArgs(BaseModel):
+    glob: str | None = Field(
+        default=None, description="文件名模式，支持 ** 多级，如 **/*.xlsx"
+    )
+    query: str | None = Field(default=None, description="文件内容关键词（默认忽略大小写）")
+    path: str | None = Field(default=None, description="限定检索的子目录")
+    caseSensitive: bool | None = Field(default=False, description="内容检索是否区分大小写")
+    limit: int | None = Field(default=50, description="最多返回条数")
+
+
 _SPECS: list[tuple[str, str, ToolFn, type[BaseModel]]] = [
     (
         "describe_source",
@@ -119,6 +146,31 @@ _SPECS: list[tuple[str, str, ToolFn, type[BaseModel]]] = [
     ),
 ]
 
+# 工作区文件工具（无需会话上下文；read_file 需要模型访问且为协程）。
+_FILE_SPECS: list[tuple[str, str, FileToolFn, type[BaseModel], str]] = [
+    (
+        "list_files",
+        "列出工作区目录树（名称/类型/大小），用于了解工作区里有哪些文件。",
+        list_files,
+        ListFilesArgs,
+        "sync",
+    ),
+    (
+        "search_files",
+        "按文件名模式（glob）或内容关键词检索工作区文件。",
+        search_files,
+        SearchFilesArgs,
+        "sync",
+    ),
+    (
+        "read_file",
+        "读取工作区文件：文本/表格/docx/有文字层 PDF 直接抽取；图片与扫描版 PDF 用视觉模型转写。",
+        read_file,
+        ReadFileArgs,
+        "async",
+    ),
+]
+
 
 def _context_wrapper(fn: ToolFn, context: dict[str, Any] | None) -> ToolFn:
     """把会话上下文（允许的连接 / 知识库 Provider）注入工具参数。
@@ -142,10 +194,31 @@ def _context_wrapper(fn: ToolFn, context: dict[str, Any] | None) -> ToolFn:
     return wrapped
 
 
+def _file_wrapper(
+    fn: FileToolFn, model_id: str | None, build_model: Any
+) -> Any:
+    """把模型访问注入 read_file，并保持其为协程。"""
+
+    async def wrapped(root: Path, params: dict[str, Any]) -> dict[str, Any]:
+        return await fn(root, params, model_id=model_id, build_model=build_model)
+
+    return wrapped
+
+
 def build_tool_dict(
-    root: Path | None = None, context: dict[str, Any] | None = None
-) -> dict[str, ToolFn]:
-    return {name: _context_wrapper(fn, context) for name, _desc, fn, _schema in _specs()}
+    root: Path | None = None,
+    context: dict[str, Any] | None = None,
+    *,
+    model_id: str | None = None,
+    build_model: Any = None,
+) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for name, _desc, fn, _schema, kind in _specs():
+        if kind == "async":
+            out[name] = _file_wrapper(fn, model_id, build_model)
+        else:
+            out[name] = _context_wrapper(fn, context)
+    return out
 
 
 def _web_enabled() -> bool:
@@ -154,8 +227,11 @@ def _web_enabled() -> bool:
     return bool((app_settings.load().get("webSearch") or {}).get("enabled"))
 
 
-def _specs() -> list[tuple[str, str, ToolFn, type[BaseModel]]]:
-    specs = list(_SPECS)
+def _specs() -> list[tuple[str, str, Any, type[BaseModel], str]]:
+    specs: list[tuple[str, str, Any, type[BaseModel], str]] = [
+        (name, desc, fn, schema, "sync") for name, desc, fn, schema in _SPECS
+    ]
+    specs.extend(_FILE_SPECS)
     if _web_enabled():
         specs.append(
             (
@@ -163,19 +239,38 @@ def _specs() -> list[tuple[str, str, ToolFn, type[BaseModel]]]:
                 "联网搜索（需在设置页开启）。",
                 web_search,
                 WebSearchArgs,
+                "sync",
             )
         )
     return specs
 
 
 def build_langchain_tools(
-    root: Path, context: dict[str, Any] | None = None
+    root: Path,
+    context: dict[str, Any] | None = None,
+    *,
+    model_id: str | None = None,
+    build_model: Any = None,
 ) -> list[StructuredTool]:
     tools: list[StructuredTool] = []
-    for name, desc, fn, schema in _specs():
+    for name, desc, fn, schema, kind in _specs():
+        if kind == "async":
+            wrapped_async = _file_wrapper(fn, model_id, build_model)
+            tools.append(
+                StructuredTool.from_function(
+                    coroutine=wrapped_async,
+                    name=name,
+                    description=desc,
+                    args_schema=schema,
+                )
+            )
+            continue
+
         wrapped = _context_wrapper(fn, context)
 
-        def _run(_fn: ToolFn = wrapped, _root: Path = root, **kwargs: Any) -> dict[str, Any]:
+        def _run(
+            _fn: ToolFn = wrapped, _root: Path = root, **kwargs: Any
+        ) -> dict[str, Any]:
             return _fn(_root, kwargs)
 
         tools.append(

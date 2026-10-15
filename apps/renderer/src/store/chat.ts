@@ -16,6 +16,7 @@ import {
   type ContextSnapshot,
   type SessionMessage,
   type SessionSummary,
+  type WorkspaceRef,
 } from '../lib/api';
 import { useFindingsStore } from './findings';
 
@@ -27,6 +28,53 @@ export interface ToolCall {
   params: Record<string, unknown>;
   summary?: string;
   ok?: boolean;
+}
+
+/**
+ * 输入框草稿：文本与内联 @ 标记（工作区引用 / 临时附件）的有序分段。
+ * 由 MentionInput 编辑器序列化而来。
+ */
+export type DraftSegment =
+  | { type: 'text'; text: string }
+  | { type: 'mention'; ref: WorkspaceRef }
+  | { type: 'attach'; ref: AttachmentRef };
+
+/** 草稿中的纯文本（去空白）。 */
+export function draftText(segments: DraftSegment[]): string {
+  return segments
+    .filter((s): s is { type: 'text'; text: string } => s.type === 'text')
+    .map((s) => s.text)
+    .join('')
+    .trim();
+}
+
+/** 草稿中的工作区引用（按 path 去重，保序）。 */
+export function draftMentions(segments: DraftSegment[]): WorkspaceRef[] {
+  const seen = new Set<string>();
+  const out: WorkspaceRef[] = [];
+  for (const s of segments) {
+    if (s.type !== 'mention' || seen.has(s.ref.path)) continue;
+    seen.add(s.ref.path);
+    out.push(s.ref);
+  }
+  return out;
+}
+
+/** 草稿中的临时附件（按 path 去重，保序）。 */
+export function draftAttachments(segments: DraftSegment[]): AttachmentRef[] {
+  const seen = new Set<string>();
+  const out: AttachmentRef[] = [];
+  for (const s of segments) {
+    if (s.type !== 'attach' || seen.has(s.ref.path)) continue;
+    seen.add(s.ref.path);
+    out.push(s.ref);
+  }
+  return out;
+}
+
+/** 草稿是否有可发送内容（非空文本或任一标记）。 */
+export function draftHasContent(segments: DraftSegment[]): boolean {
+  return segments.some((s) => s.type !== 'text' || s.text.trim().length > 0);
 }
 
 export interface ChatMessage {
@@ -43,6 +91,8 @@ export interface ChatMessage {
   options: ContextSnapshot | null;
   /** 该条用户消息随带的附件（助手消息为空）。 */
   attachments: AttachmentRef[];
+  /** 该条用户消息 @ 引用的工作区条目（助手消息为空）。 */
+  mentions: WorkspaceRef[];
   /** 附件的文本内容（本地抽取 / 模型转写），跨轮次可回放。 */
   attachmentTexts: AttachmentText[];
   /** 提示（如当前模型不支持图片/扫描版 PDF），仅用户消息可能非空。 */
@@ -59,9 +109,10 @@ export interface SessionChat {
   streaming: boolean;
   modelId: string | null;
   context: ChatContext;
-  attachments: AttachmentRef[];
-  /** 输入框草稿（随会话保留）。 */
-  draft: string;
+  /** 输入框草稿（文本 + 内联 @ 标记，随会话保留）。 */
+  draft: DraftSegment[];
+  /** 每次发送/清空后自增，用于强制重挂载编辑器以清空其 DOM。 */
+  draftEpoch: number;
   /** 是否已从后端加载过消息，避免重复拉取并覆盖进行中的流。 */
   loaded: boolean;
 }
@@ -75,7 +126,7 @@ interface ChatState {
   /** 新建一条空会话，返回其 id（失败返回 null）。 */
   createSession: () => Promise<string | null>;
   deleteSession: (sessionId: string) => Promise<void>;
-  send: (sessionId: string, text: string, locale: string) => Promise<void>;
+  send: (sessionId: string, locale: string) => Promise<void>;
   /** 中止单个会话的后台生成（保留已生成部分）。 */
   abortSession: (sessionId: string) => void;
   /** 中止所有会话的后台生成。 */
@@ -83,9 +134,7 @@ interface ChatState {
   hasStreaming: () => boolean;
   setModel: (sessionId: string, modelId: string | null) => void;
   setContext: (sessionId: string, patch: Partial<ChatContext>) => void;
-  addAttachments: (sessionId: string, items: AttachmentRef[]) => void;
-  removeAttachment: (sessionId: string, path: string) => void;
-  setDraft: (sessionId: string, text: string) => void;
+  setDraft: (sessionId: string, segments: DraftSegment[]) => void;
   /** 清空所有聊天分片（切换工作区时）。 */
   clearAllChats: () => void;
 }
@@ -126,8 +175,8 @@ function newChat(): SessionChat {
     streaming: false,
     modelId: null,
     context: { ...EMPTY_CONTEXT },
-    attachments: [],
-    draft: '',
+    draft: [],
+    draftEpoch: 0,
     loaded: false,
   };
 }
@@ -154,6 +203,7 @@ function assistantError(messageKey: string): ChatMessage {
     findingIds: [],
     options: null,
     attachments: [],
+    mentions: [],
     attachmentTexts: [],
     noticeKey: null,
     noticeParams: null,
@@ -179,6 +229,7 @@ function toChatMessage(message: SessionMessage): ChatMessage {
     findingIds: [],
     options: content?.options ?? null,
     attachments: content?.attachments ?? [],
+    mentions: content?.mentions ?? [],
     attachmentTexts: content?.attachmentTexts ?? [],
     noticeKey: null,
     noticeParams: null,
@@ -316,18 +367,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
   },
 
-  send: async (sessionId, text, locale) => {
-    const trimmed = text.trim();
+  send: async (sessionId, locale) => {
     const current = get().chats[sessionId];
-    if (!trimmed || current?.streaming) return;
+    if (current?.streaming) return;
 
-    // 先固化为本轮的附件，随后清空输入区附件，避免「读后被清空」导致没传给模型。
-    const attachments = [...(current?.attachments ?? [])];
+    const segments = current?.draft ?? [];
+    const text = draftText(segments);
+    const mentions = draftMentions(segments);
+    const attachments = draftAttachments(segments);
+    if (!text && mentions.length === 0 && attachments.length === 0) return;
 
     // 若该会话还没有标题，用首条消息补上。
     const meta = get().sessions.find((s) => s.id === sessionId);
     if (meta && !meta.title) {
-      const title = trimmed.slice(0, 40);
+      const seed =
+        text || mentions.map((m) => m.name).join('、') || attachments[0]?.name || '';
+      const title = seed.slice(0, 40);
       set((s) => ({
         sessions: s.sessions.map((it) =>
           it.id === sessionId ? { ...it, title } : it,
@@ -341,7 +396,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const userMessage: ChatMessage = {
       id: nextId(),
       role: 'user',
-      content: trimmed,
+      content: text,
       thinking: '',
       phase: null,
       streaming: false,
@@ -350,6 +405,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       findingIds: [],
       options: null,
       attachments,
+      mentions,
       attachmentTexts: [],
       noticeKey: null,
       noticeParams: null,
@@ -366,6 +422,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       findingIds: [],
       options: null,
       attachments: [],
+      mentions: [],
       attachmentTexts: [],
       noticeKey: null,
       noticeParams: null,
@@ -375,9 +432,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
         ...chat,
         messages: [...chat.messages, userMessage, assistantMessage],
         streaming: true,
-        draft: '',
-        // 发送后清空附件，避免下次误发。
-        attachments: [],
+        // 清空草稿并强制重挂载编辑器，避免下次误发。
+        draft: [],
+        draftEpoch: chat.draftEpoch + 1,
       })),
     }));
 
@@ -433,12 +490,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       await streamChat(
         sessionId,
-        trimmed,
+        text,
         { onEvent: update, signal: controller.signal },
         locale,
         chat.modelId ?? undefined,
         chat.context,
         attachments,
+        mentions,
       );
     } catch (err) {
       const aborted = controller.signal.aborted;
@@ -513,28 +571,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
     persistSessionContext(sessionId);
   },
 
-  addAttachments: (sessionId, items) =>
+  setDraft: (sessionId, segments) =>
     set((s) => ({
-      chats: withChat(s.chats, sessionId, (chat) => {
-        const known = new Set(chat.attachments.map((a) => a.path));
-        const added = items.filter((a) => !known.has(a.path));
-        return added.length
-          ? { ...chat, attachments: [...chat.attachments, ...added] }
-          : chat;
-      }),
-    })),
-
-  removeAttachment: (sessionId, path) =>
-    set((s) => ({
-      chats: withChat(s.chats, sessionId, (chat) => ({
-        ...chat,
-        attachments: chat.attachments.filter((a) => a.path !== path),
-      })),
-    })),
-
-  setDraft: (sessionId, text) =>
-    set((s) => ({
-      chats: withChat(s.chats, sessionId, (chat) => ({ ...chat, draft: text })),
+      chats: withChat(s.chats, sessionId, (chat) => ({ ...chat, draft: segments })),
     })),
 
   clearAllChats: () => {

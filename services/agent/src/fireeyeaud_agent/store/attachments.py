@@ -238,10 +238,12 @@ def _pdf_page_images(path: Path) -> list[bytes]:
         return []
 
 
-# 供 attachment_reader 复用的底层原语（公开别名，避免跨模块引用私有名）。
+# 供 attachment_reader / 文件工具复用的底层原语（公开别名，避免跨模块引用私有名）。
 IMAGE_SUFFIXES = _IMAGE_SUFFIXES
 PDF_SUFFIXES = _PDF_SUFFIXES
 TEXT_SUFFIXES = _TEXT_SUFFIXES
+TABLE_SUFFIXES = _TABLE_SUFFIXES
+DOCX_SUFFIXES = _DOCX_SUFFIXES
 encode_image_file = _encode_image_file
 encode_image_bytes = _encode_image_bytes
 pdf_page_images = _pdf_page_images

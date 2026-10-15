@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 from fake_model import FakeChatModel
-from langchain_core.messages import AIMessage, AIMessageChunk
+from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
 from fireeyeaud_agent.agent.graph import run_agent
 from fireeyeaud_agent.config.settings import settings
@@ -145,6 +145,44 @@ async def test_attachment_first_step_image_then_text(tmp_path):
         isinstance(m.content, str) and "发票金额 1000" in m.content
         for m in model.calls[1]
     )
+
+
+class _FileReadingModel:
+    def __init__(self, path: str) -> None:
+        self.path = path
+        self.calls: list = []
+
+    def bind_tools(self, _tools):
+        return self
+
+    async def astream(self, messages):
+        self.calls.append(list(messages))
+        if len(self.calls) == 1:
+            yield AIMessageChunk(
+                content="",
+                tool_calls=[
+                    {"name": "read_file", "args": {"path": self.path}, "id": "call_1"}
+                ],
+            )
+        else:
+            yield AIMessageChunk(content="完成")
+
+
+@pytest.mark.asyncio
+async def test_agent_reads_workspace_file(tmp_path):
+    _seed(tmp_path)
+    (tmp_path / "说明.md").write_text("hello workspace file", encoding="utf-8")
+    model = _FileReadingModel("说明.md")
+
+    events = [
+        e async for e in run_agent(tmp_path, "s_1", "读取说明.md", "zh-CN", model=model)
+    ]
+    assert events[-1]["type"] == "done"
+    tool_result = next(e for e in events if e["type"] == "tool_result")
+    assert tool_result["data"]["ok"] is True
+
+    tool_msgs = [m for m in model.calls[1] if isinstance(m, ToolMessage)]
+    assert tool_msgs and "hello workspace file" in tool_msgs[0].content
 
 
 class _HangingModel:

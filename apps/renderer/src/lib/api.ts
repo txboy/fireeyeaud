@@ -166,6 +166,7 @@ export interface SessionMessage {
         options?: ContextSnapshot | null;
         attachments?: AttachmentRef[];
         attachmentTexts?: AttachmentText[];
+        mentions?: WorkspaceRef[];
       }
     | string
     | null;
@@ -261,6 +262,13 @@ export interface AttachmentRef {
   size?: number;
 }
 
+/** @ 引用的工作区条目（path 为工作区相对 POSIX 路径）。 */
+export interface WorkspaceRef {
+  path: string;
+  name: string;
+  isDir: boolean;
+}
+
 export const EMPTY_CONTEXT: ChatContext = {
   skillIds: [],
   kbProviderIds: [],
@@ -278,6 +286,7 @@ export async function streamChat(
   modelId?: string,
   context?: ChatContext,
   attachments?: AttachmentRef[],
+  mentions?: WorkspaceRef[],
 ): Promise<void> {
   const res = await safeFetch(`${baseUrl()}/sessions/${sessionId}/chat`, {
     method: 'POST',
@@ -289,6 +298,7 @@ export async function streamChat(
       // 后端 ChatBody 期望扁平字段（与「保存会话上下文」接口不同）。
       ...(context ?? EMPTY_CONTEXT),
       attachments,
+      mentions,
     }),
     signal,
   });

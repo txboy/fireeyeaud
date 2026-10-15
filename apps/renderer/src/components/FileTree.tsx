@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import type { FsEntry } from '@fireeyeaud/shared';
 import { dbDriverFor } from '../lib/db-file';
+import { WORKSPACE_DRAG_ENTRY, WORKSPACE_DRAG_PATH } from '../lib/dnd';
 import { useUiStore } from '../store/ui';
 import { useConfirmStore } from '../store/confirm';
 import { usePromptStore } from '../store/prompt';
@@ -18,7 +19,7 @@ import { ContextMenu, type ContextMenuItem } from './ContextMenu';
 /** 可「导入数据」的表格文件后缀。 */
 const TABLE_EXT = new Set(['.csv', '.txt', '.xlsx', '.xlsm']);
 /** 树内拖拽的自定义 MIME。 */
-const DRAG_TYPE = 'application/x-fireeye-path';
+const DRAG_TYPE = WORKSPACE_DRAG_PATH;
 
 /** 文件操作错误码 → i18n key（error 命名空间）。 */
 const OP_ERROR_KEYS: Record<string, string> = {
@@ -133,7 +134,12 @@ function TreeNode({ entry, depth, isRoot, protectedPath, api }: TreeNodeProps) {
   const onDragStart = (event: DragEvent) => {
     event.stopPropagation();
     event.dataTransfer.setData(DRAG_TYPE, entry.path);
-    event.dataTransfer.effectAllowed = 'move';
+    // 额外携带元数据，供聊天输入框判断文件 / 目录。
+    event.dataTransfer.setData(
+      WORKSPACE_DRAG_ENTRY,
+      JSON.stringify({ path: entry.path, name: entry.name, isDir: entry.isDir }),
+    );
+    event.dataTransfer.effectAllowed = 'copyMove';
   };
 
   const onDragOver = (event: DragEvent) => {

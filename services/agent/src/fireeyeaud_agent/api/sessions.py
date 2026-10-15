@@ -25,7 +25,7 @@ class UpdateSessionBody(BaseModel):
 
 
 class ChatBody(BaseModel):
-    message: str = Field(min_length=1)
+    message: str = ""
     locale: str | None = None
     modelId: str | None = None
     skillIds: list[str] = []
@@ -35,6 +35,7 @@ class ChatBody(BaseModel):
     ruleIds: list[str] = []
     dataSourceIds: list[str] | None = None
     attachments: list[dict] | None = None
+    mentions: list[dict] | None = None
 
 
 class SessionContextBody(BaseModel):
@@ -106,6 +107,7 @@ async def chat(session_id: str, body: ChatBody) -> EventSourceResponse:
                 "ruleIds": body.ruleIds,
             },
             body.attachments,
+            body.mentions,
         ),
         media_type="text/event-stream",
     )

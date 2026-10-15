@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import time
 from collections.abc import AsyncIterator
@@ -166,6 +167,14 @@ def _summarize(result: Any) -> str:
                 if result["balanced"]
                 else f"{len(result.get('diffs', []))} 处差异"
             )
+        if "entries" in result:
+            return f"{len(result['entries'])} 项"
+        if "matches" in result:
+            return f"{len(result['matches'])} 处命中"
+        if "text" in result:
+            if result.get("error"):
+                return str(result.get("message") or result["error"])
+            return f"{result.get('kind', 'file')} · {len(result['text'])} 字"
         if "id" in result:
             return str(result["id"])
     return json.dumps(result, ensure_ascii=False, default=str)[:200]
@@ -228,9 +237,20 @@ async def run_agent(
     event = event_factory or _event_factory(session_id)
     active_model = model or build_chat_model(root, model_id)
     registry_ctx = _registry_context(root, context)
-    tools = [*build_langchain_tools(root, registry_ctx), _report_finding_tool()]
+    build_file_model = lambda: build_chat_model(root, model_id)  # noqa: E731
+    tools = [
+        *build_langchain_tools(
+            root,
+            registry_ctx,
+            model_id=model_id,
+            build_model=build_file_model,
+        ),
+        _report_finding_tool(),
+    ]
     bound = _maybe_bind(active_model, tools)
-    tool_dict = build_tool_dict(root, registry_ctx)
+    tool_dict = build_tool_dict(
+        root, registry_ctx, model_id=model_id, build_model=build_file_model
+    )
 
     from ..store.rules import list_rules
     from ..store.skills import prompts_for
@@ -267,7 +287,7 @@ async def run_agent(
 
     evidence_ids: list[str] = []
 
-    def execute_tool(name: str, args: dict[str, Any]) -> Any:
+    async def execute_tool(name: str, args: dict[str, Any]) -> Any:
         if name == "report_finding":
             record = create_finding(
                 root,
@@ -286,7 +306,8 @@ async def run_agent(
             return {"id": record["id"], "status": record["status"]}
         if name not in tool_dict:
             raise ValueError(f"unknown tool: {name}")
-        return tool_dict[name](root, args)
+        value = tool_dict[name](root, args)
+        return await value if inspect.isawaitable(value) else value
 
     yield event("status", {"phase": "planning"})
     if options is not None:
@@ -396,7 +417,7 @@ async def run_agent(
             )
             yield event("tool_call", {"callId": call_id, "tool": name, "params": args})
             try:
-                result = execute_tool(name, args)
+                result = await execute_tool(name, args)
                 ok = True
                 summary = _summarize(result)
                 if name == "report_finding":
@@ -438,6 +459,7 @@ def _load_history(fe: Path, session_id: str) -> list[BaseMessage]:
         text = content.get("text", "") if isinstance(content, dict) else str(content)
         if item.get("role") == "user":
             if isinstance(content, dict):
+                text = _compose_user_message(text, content.get("mentions") or [])
                 block = render_attachment_texts(content.get("attachmentTexts") or [])
                 if block:
                     text = f"{text}\n\n{block}"
@@ -460,6 +482,35 @@ def _normalize_attachments(attachments: list[dict] | None) -> list[dict[str, str
     return out
 
 
+def _normalize_mentions(mentions: list[dict] | None) -> list[dict[str, Any]]:
+    """把 @ 引用的工作区条目归一化为 [{path, name, isDir}]（path 恒为工作区相对 POSIX）。"""
+    out: list[dict[str, Any]] = []
+    for item in mentions or []:
+        if not isinstance(item, dict):
+            continue
+        path = str(item.get("path") or "").strip().replace("\\", "/")
+        if not path:
+            continue
+        name = str(item.get("name") or path.rsplit("/", 1)[-1])
+        out.append({"path": path, "name": name, "isDir": bool(item.get("isDir"))})
+    return out
+
+
+def _compose_user_message(message: str, mentions: list[dict[str, Any]]) -> str:
+    """把 @ 引用注记并入用户消息正文（仅在喂给模型时合成；持久化保留原文）。"""
+    text = (message or "").strip()
+    if not mentions:
+        return text
+    lines = ["（用户用 @ 引用了以下工作区条目："]
+    for item in mentions:
+        kind = "目录" if item.get("isDir") else "文件"
+        lines.append(f"- @{item.get('path')}（{kind}）")
+    lines.append("需要时用 list_files / read_file 读取。）")
+    note = "\n".join(lines)
+    return f"{text}\n\n{note}" if text else note
+
+
+
 async def stream_chat(
     session_id: str,
     message: str,
@@ -467,6 +518,7 @@ async def stream_chat(
     model_id: str | None = None,
     context: dict[str, Any] | None = None,
     attachments: list[dict] | None = None,
+    mentions: list[dict] | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
     from ..store.sessions import add_message
     from ..store.workspace import workspace_manager
@@ -519,6 +571,8 @@ async def stream_chat(
             )
 
     attachment_texts = [t.as_dict() for t in read.texts]
+    mention_list = _normalize_mentions(mentions)
+    agent_message = _compose_user_message(message, mention_list)
     add_message(
         fe,
         root,
@@ -529,6 +583,7 @@ async def stream_chat(
             "options": snapshot,
             "attachments": _normalize_attachments(attachments),
             "attachmentTexts": attachment_texts,
+            "mentions": mention_list,
         },
     )
 
@@ -536,7 +591,7 @@ async def stream_chat(
     async for ev in run_agent(
         root,
         session_id,
-        message,
+        agent_message,
         locale,
         model_id=model_id,
         history=history,
