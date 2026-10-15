@@ -14,6 +14,7 @@ interface FormState {
   databaseId: string;
   scope: ConfigScope;
   enabled: boolean;
+  isDefault: boolean;
 }
 
 const EMPTY: FormState = {
@@ -23,6 +24,7 @@ const EMPTY: FormState = {
   databaseId: '',
   scope: 'project',
   enabled: true,
+  isDefault: false,
 };
 
 function init(entity?: AuditRule): FormState {
@@ -34,6 +36,7 @@ function init(entity?: AuditRule): FormState {
     databaseId: entity.databaseId ?? '',
     scope: entity.scope,
     enabled: entity.enabled,
+    isDefault: Boolean(entity.isDefault),
   };
 }
 
@@ -73,6 +76,7 @@ export function RuleForm({
       sql: form.sql,
       databaseId: form.databaseId || null,
       enabled: form.enabled,
+      isDefault: form.isDefault,
     };
     const ok = entity
       ? await edit(entity.id, entity.scope, payload)
@@ -151,6 +155,14 @@ export function RuleForm({
               onChange={() => setForm({ ...form, scope: 'project' })}
             />
             <span>{te('configScope.project')}</span>
+          </label>
+          <label className="search-opt">
+            <input
+              type="checkbox"
+              checked={form.isDefault}
+              onChange={(e) => setForm({ ...form, isDefault: e.target.checked })}
+            />
+            <span>{t('isDefault')}</span>
           </label>
         </div>
       </div>

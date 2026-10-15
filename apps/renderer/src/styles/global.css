@@ -452,6 +452,201 @@ body {
   text-align: center;
 }
 
+/* ---- 知识库浏览（KbBrowseView） ---- */
+.kbbrowse {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.kbbrowse__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.kbbrowse__name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.kbbrowse__msg {
+  margin: 8px 12px 0;
+}
+
+.kbbrowse__saved {
+  padding: 6px 12px 0;
+  font-size: 11.5px;
+  color: var(--success);
+}
+
+.kbbrowse__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kbbrowse__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kbbrowse__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--editor-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.kbbrowse__item-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.kbbrowse__item-name {
+  font-size: 12.5px;
+  color: var(--text-1);
+}
+
+.kbbrowse__note {
+  padding: 0 12px 12px;
+}
+
+/* ---- 知识库检索测试（KbQueryView） ---- */
+.kbquery {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.kbquery__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.kbquery__name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.kbquery__target {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.kbquery__select {
+  max-width: 260px;
+}
+
+.kbquery__input {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.kbquery__text {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.kbquery__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kbquery__msg {
+  margin: 8px 12px 0;
+}
+
+.kbquery__reason {
+  margin-top: 4px;
+  font-family: var(--mono, monospace);
+  font-size: 11px;
+  color: var(--text-3, inherit);
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+.kbquery__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kbquery__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+
+.kbquery__hits {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kbquery__hit {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--editor-bg);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kbquery__hit-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kbquery__hit-doc {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.kbquery__hit-body {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* ---- 数据预览（DbDataView） ---- */
 .dbdata {
   min-height: 0;
@@ -641,8 +836,7 @@ body {
   gap: 8px 12px;
   padding: 8px 16px;
   border-top: 1px solid var(--border);
-  max-height: 96px;
-  overflow: auto;
+  overflow: visible;
 }
 
 .ctx-model {
@@ -662,36 +856,121 @@ body {
   max-width: 200px;
 }
 
-.ctx-group {
+.ctx-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.ctx-btn {
   display: inline-flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.ctx-group__icon {
-  color: var(--text-2);
-}
-
-.ctx-chip {
-  font-size: 11px;
+  gap: 5px;
+  font-size: 11.5px;
   color: var(--text-2);
   background: transparent;
   border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 2px 9px;
+  padding: 3px 10px;
   cursor: pointer;
 }
 
-.ctx-chip:hover:not(:disabled) {
+.ctx-btn:hover:not(:disabled) {
   color: var(--text-1);
   border-color: var(--text-2);
 }
 
-.ctx-chip--on {
+.ctx-btn--on {
   color: var(--accent);
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.ctx-btn__count {
+  font-size: 10px;
+  line-height: 1;
+  min-width: 15px;
+  padding: 2px 4px;
+  text-align: center;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+}
+
+.ctx-pop {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 40;
+  min-width: 180px;
+  max-width: 280px;
+  background: var(--editor-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ctx-pop__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ctx-pop__count {
+  color: var(--accent);
+}
+
+.ctx-pop__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.ctx-pop__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-1);
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.ctx-pop__item:hover {
+  background: var(--hover);
+}
+
+.ctx-pop__empty {
+  font-size: 12px;
+  color: var(--text-3);
+  padding: 4px 6px;
+}
+
+.ctx-pop__clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  font-size: 11px;
+  color: var(--text-2);
+  background: transparent;
+  border: none;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+
+.ctx-pop__clear:hover:not(:disabled) {
+  color: var(--text-1);
 }
 
 .ctx-empty {
@@ -1704,11 +1983,12 @@ textarea.searchbox {
   color: var(--text-2);
 }
 
-/* 表单内的作用域等选项竖排成一列，每项一行。 */
+/* 表单内的作用域等选项横排成一行（窄侧栏放不下时自动换行）。 */
 .field .search-opts {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 7px;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
 }
 
 .search-opt {
@@ -1813,6 +2093,33 @@ textarea.searchbox {
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 8px 12px;
+}
+
+.msg__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  margin-top: 6px;
+}
+
+.msg-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-2);
+  background: var(--hover);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.msg-opt__group {
+  color: var(--text-3);
+}
+
+.msg-opt__name {
+  color: var(--text-1);
 }
 
 .msg__caret {

@@ -80,6 +80,28 @@ export interface DbDataTab {
   table: DbTableSchema;
 }
 
+/** 右侧区「知识库浏览」tab（每个 Provider 一个，远端知识库列表 + 勾选启用）。 */
+export interface KbBrowseTab {
+  id: string;
+  kind: 'kbBrowse';
+  providerId: string;
+  scope: ConfigScope;
+  name: string;
+}
+
+/** 右侧区「知识库检索测试」tab（指定 Provider 下的某个库，输入文本试检索）。 */
+export interface KbQueryTab {
+  id: string;
+  kind: 'kbQuery';
+  providerId: string;
+  scope: ConfigScope;
+  name: string;
+  /** 预选的知识库 id；缺省时在 tab 内选择。 */
+  knowledgeId?: string;
+  /** 预选知识库的展示名。 */
+  knowledgeName?: string;
+}
+
 export type RightTab =
   | SessionTab
   | PreviewTab
@@ -87,7 +109,9 @@ export type RightTab =
   | SettingsTab
   | RuleRunTab
   | DbSchemaTab
-  | DbDataTab;
+  | DbDataTab
+  | KbBrowseTab
+  | KbQueryTab;
 
 /**
  * 离开当前右侧 tab 前的守卫（用于未保存确认）。
@@ -137,6 +161,18 @@ interface UiState {
     name: string;
     driver: DbDriver;
     table: DbTableSchema;
+  }) => Promise<void>;
+  openKbBrowse: (input: {
+    id: string;
+    scope: ConfigScope;
+    name: string;
+  }) => Promise<void>;
+  openKbQuery: (input: {
+    id: string;
+    scope: ConfigScope;
+    name: string;
+    knowledgeId?: string;
+    knowledgeName?: string;
   }) => Promise<void>;
   closeRightTab: (id: string) => Promise<void>;
   activateRightTab: (id: string) => Promise<void>;
@@ -274,6 +310,54 @@ export const useUiStore = create<UiState>((set, get) => {
         name,
         driver,
         table,
+      };
+      set((state) => {
+        const exists = state.rightTabs.some((t) => t.id === id);
+        const rightTabs = exists
+          ? state.rightTabs.map((t) => (t.id === id ? tab : t))
+          : [...state.rightTabs, tab];
+        return { rightTabs, activeRightTabId: id };
+      });
+    },
+
+    openKbBrowse: async ({ id: providerId, scope, name }) => {
+      const id = `kbBrowse:${providerId}`;
+      if (!(await allowLeave(id))) return;
+      const tab: KbBrowseTab = {
+        id,
+        kind: 'kbBrowse',
+        providerId,
+        scope,
+        name,
+      };
+      set((state) => {
+        const exists = state.rightTabs.some((t) => t.id === id);
+        const rightTabs = exists
+          ? state.rightTabs.map((t) => (t.id === id ? tab : t))
+          : [...state.rightTabs, tab];
+        return { rightTabs, activeRightTabId: id };
+      });
+    },
+
+    openKbQuery: async ({
+      id: providerId,
+      scope,
+      name,
+      knowledgeId,
+      knowledgeName,
+    }) => {
+      const id = knowledgeId
+        ? `kbQuery:${providerId}:${knowledgeId}`
+        : `kbQuery:${providerId}`;
+      if (!(await allowLeave(id))) return;
+      const tab: KbQueryTab = {
+        id,
+        kind: 'kbQuery',
+        providerId,
+        scope,
+        name,
+        knowledgeId,
+        knowledgeName,
       };
       set((state) => {
         const exists = state.rightTabs.some((t) => t.id === id);

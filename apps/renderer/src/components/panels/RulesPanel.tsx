@@ -60,6 +60,7 @@ export function RulesPanel() {
             <div className="card__head">
               <ShieldCheck size={14} strokeWidth={1.75} />
               <span className="card__name">{rule.name || rule.id}</span>
+              {rule.isDefault && <span className="scope-badge">{t('isDefault')}</span>}
               <span className="spacer" />
               <ScopeBadge scope={rule.scope} />
               <StateChip enabled={rule.enabled} />

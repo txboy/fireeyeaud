@@ -138,6 +138,8 @@ export interface AuditRule {
   enabled: boolean;
   /** 默认数据库连接 id；缺省在工作区 DuckDB 上运行。 */
   databaseId?: string | null;
+  /** 默认自动提供给模型（无需在对话上下文栏勾选）。 */
+  isDefault?: boolean;
   /** 作用域：全局（跨工作区共享）或本项目。 */
   scope: ConfigScope;
 }
@@ -405,6 +407,24 @@ export interface KbKnowledge {
   id: string;
   name: string;
   documentCount?: number;
+}
+
+/** 知识库试检索命中片段。 */
+export interface KbQueryHit {
+  knowledgeId: string;
+  knowledgeName?: string;
+  docId?: string;
+  docName?: string;
+  content: string;
+  score?: number;
+  url?: string;
+}
+
+export interface KbQueryResult {
+  ok: boolean;
+  elapsedMs: number;
+  knowledgeCount: number;
+  hits: KbQueryHit[];
 }
 
 export interface KbEnabledEntry {

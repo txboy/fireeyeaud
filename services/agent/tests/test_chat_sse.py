@@ -34,16 +34,29 @@ async def test_chat_streams_sse_envelope(tmp_path, monkeypatch) -> None:
         ) as resp:
             assert resp.status_code == 200
             text = "".join([chunk async for chunk in resp.aiter_text()])
+
+        msgs = (await client.get(f"/api/v1/sessions/{session_id}/messages")).json()[
+            "items"
+        ]
         await client.post("/api/v1/workspaces/close")
+
+    user_msg = next(m for m in msgs if m["role"] == "user")
+    assert user_msg["content"]["text"] == "你好"
+    assert user_msg["content"]["options"]["rules"] == []
 
     events = _parse_sse(text)
     types = [e["type"] for e in events]
 
     assert types[0] == "status"
+    assert "context" in types
     assert "token" in types
     assert types[-1] == "done"
     assert all(e["sessionId"] == session_id for e in events)
     assert [e["seq"] for e in events] == list(range(1, len(events) + 1))
+
+    ctx = next(e for e in events if e["type"] == "context")
+    assert ctx["data"]["options"]["rules"] == []
+    assert ctx["data"]["options"]["model"] is None
 
     streamed = "".join(e["data"]["delta"] for e in events if e["type"] == "token")
     assert "你好" in streamed

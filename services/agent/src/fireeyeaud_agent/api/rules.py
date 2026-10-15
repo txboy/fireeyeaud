@@ -22,6 +22,8 @@ class RuleBody(BaseModel):
     sql: str = ""
     databaseId: str | None = None
     enabled: bool = True
+    # 默认自动提供给模型（无需在对话上下文栏勾选）。
+    isDefault: bool = False
     scope: str = "global"
 
 
@@ -31,6 +33,7 @@ class RulePatch(BaseModel):
     sql: str | None = None
     databaseId: str | None = None
     enabled: bool | None = None
+    isDefault: bool | None = None
 
 
 class RunBody(BaseModel):

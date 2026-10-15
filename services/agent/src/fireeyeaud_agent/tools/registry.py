@@ -130,8 +130,11 @@ def _context_wrapper(fn: ToolFn, context: dict[str, Any] | None) -> ToolFn:
 
     def wrapped(root: Path, params: dict[str, Any]) -> dict[str, Any]:
         merged = dict(params)
-        if fn in (sql_query, run_rule) and "allowedConnectionIds" in context:
-            merged["allowedConnectionIds"] = context["allowedConnectionIds"]
+        if fn in (sql_query, run_rule):
+            if "allowedConnectionIds" in context:
+                merged["allowedConnectionIds"] = context["allowedConnectionIds"]
+            if fn is run_rule and "allowedRuleIds" in context:
+                merged["allowedRuleIds"] = context["allowedRuleIds"]
         elif fn is kb_search and "allowedProviderIds" in context:
             merged["allowedProviderIds"] = context["allowedProviderIds"]
         return fn(root, merged)

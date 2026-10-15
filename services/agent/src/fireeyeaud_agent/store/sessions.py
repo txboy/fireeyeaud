@@ -30,6 +30,12 @@ def _connect(fe: Path) -> sqlite3.Connection:
         "CREATE TABLE IF NOT EXISTS messages ("
         "id TEXT PRIMARY KEY, sessionId TEXT, seq INTEGER, role TEXT, content TEXT, ts TEXT)"
     )
+    # 会话级上下文（勾选资源 + 模型）落库，重开应用/切换会话后仍可恢复。
+    existing = {row[1] for row in con.execute("PRAGMA table_info(sessions)").fetchall()}
+    if "context" not in existing:
+        con.execute("ALTER TABLE sessions ADD COLUMN context TEXT")
+    if "modelId" not in existing:
+        con.execute("ALTER TABLE sessions ADD COLUMN modelId TEXT")
     con.commit()
     return con
 
@@ -54,9 +60,42 @@ def list_sessions(fe: Path) -> list[dict[str, Any]]:
     con = _connect(fe)
     try:
         rows = con.execute(
-            "SELECT id, title, createdAt, lastMessageAt FROM sessions ORDER BY createdAt"
+            "SELECT id, title, createdAt, lastMessageAt, context, modelId "
+            "FROM sessions ORDER BY createdAt"
         ).fetchall()
-        return [dict(r) for r in rows]
+    finally:
+        con.close()
+    items = []
+    for row in rows:
+        item = dict(row)
+        raw = item.get("context")
+        try:
+            item["context"] = json.loads(raw) if raw else None
+        except (json.JSONDecodeError, TypeError):
+            item["context"] = None
+        items.append(item)
+    return items
+
+
+def update_session_context(
+    fe: Path,
+    session_id: str,
+    context: dict[str, Any] | None,
+    model_id: str | None,
+) -> bool:
+    """保存会话级上下文（勾选资源）与模型选择。"""
+    con = _connect(fe)
+    try:
+        cur = con.execute(
+            "UPDATE sessions SET context=?, modelId=? WHERE id=?",
+            (
+                json.dumps(context, ensure_ascii=False) if context is not None else None,
+                model_id,
+                session_id,
+            ),
+        )
+        con.commit()
+        return cur.rowcount > 0
     finally:
         con.close()
 

@@ -32,8 +32,14 @@ class ChatBody(BaseModel):
     kbProviderIds: list[str] = []
     dbConnectionIds: list[str] = []
     mcpServerIds: list[str] = []
+    ruleIds: list[str] = []
     dataSourceIds: list[str] | None = None
     attachments: list[dict] | None = None
+
+
+class SessionContextBody(BaseModel):
+    context: dict | None = None
+    modelId: str | None = None
 
 
 def _root():
@@ -68,6 +74,15 @@ def update_session(session_id: str, body: UpdateSessionBody) -> dict[str, object
     return {"ok": True}
 
 
+@router.patch("/sessions/{session_id}/context")
+def update_session_context(session_id: str, body: SessionContextBody) -> dict[str, object]:
+    root = _root()
+    ok = sessions_store.update_session_context(
+        root / ".fireeye", session_id, body.context, body.modelId
+    )
+    return {"ok": ok}
+
+
 @router.delete("/sessions/{session_id}")
 def delete_session(session_id: str) -> dict[str, object]:
     root = _root()
@@ -88,6 +103,7 @@ async def chat(session_id: str, body: ChatBody) -> EventSourceResponse:
                 "kbProviderIds": body.kbProviderIds,
                 "dbConnectionIds": body.dbConnectionIds,
                 "mcpServerIds": body.mcpServerIds,
+                "ruleIds": body.ruleIds,
             },
             body.attachments,
         ),

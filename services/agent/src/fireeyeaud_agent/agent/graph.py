@@ -31,6 +31,7 @@ from ..store.findings import create_finding
 from ..tools.registry import build_langchain_tools, build_tool_dict
 from ..util import now_iso
 from .prompts import system_prompt
+from .context_snapshot import build_snapshot
 
 
 class ReportFindingArgs(BaseModel):
@@ -132,6 +133,7 @@ def _registry_context(
         return None
     from ..store import db as db_store
     from ..store import knowledge as kb_store
+    from ..store import rules as rules_store
 
     return {
         "allowedConnectionIds": _allowed_ids(
@@ -139,6 +141,10 @@ def _registry_context(
         ),
         "allowedProviderIds": _allowed_ids(
             kb_store.list_providers(root), context.get("kbProviderIds")
+        ),
+        "allowedRuleIds": _allowed_ids(
+            [r for r in rules_store.list_rules(root) if r.get("enabled") and r.get("sql")],
+            context.get("ruleIds"),
         ),
     }
 
@@ -154,6 +160,7 @@ async def run_agent(
     history: list[BaseMessage] | None = None,
     context: dict[str, Any] | None = None,
     attachments: list[dict] | None = None,
+    options: dict[str, Any] | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
     root = Path(root)
     event = _event_factory(session_id)
@@ -166,7 +173,12 @@ async def run_agent(
     from ..store.rules import list_rules
     from ..store.skills import prompts_for
 
-    rules = [r for r in list_rules(root) if r.get("enabled") and r.get("sql")]
+    enabled_rules = [r for r in list_rules(root) if r.get("enabled") and r.get("sql")]
+    if registry_ctx is not None:
+        allowed_rules = registry_ctx.get("allowedRuleIds") or set()
+        rules = [r for r in enabled_rules if str(r.get("id")) in allowed_rules]
+    else:
+        rules = enabled_rules
     skill_prompts = prompts_for(root, (context or {}).get("skillIds"))
     custom_prompt = (app_settings.load().get("systemPrompt") or "").strip() or None
     messages: list[BaseMessage] = [
@@ -206,6 +218,8 @@ async def run_agent(
         return tool_dict[name](root, args)
 
     yield event("status", {"phase": "planning"})
+    if options is not None:
+        yield event("context", {"options": options})
 
     step = 0
     while True:
@@ -331,7 +345,8 @@ async def stream_chat(
 
     fe = root / ".fireeye"
     history = _load_history(fe, session_id)
-    add_message(fe, root, session_id, "user", {"text": message})
+    snapshot = build_snapshot(root, context, model_id)
+    add_message(fe, root, session_id, "user", {"text": message, "options": snapshot})
 
     answer_parts: list[str] = []
     async for ev in run_agent(
@@ -343,6 +358,7 @@ async def stream_chat(
         history=history,
         context=context,
         attachments=attachments,
+        options=snapshot,
     ):
         if ev.get("type") == "token":
             answer_parts.append(str(ev.get("data", {}).get("delta", "")))

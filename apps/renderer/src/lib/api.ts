@@ -16,6 +16,7 @@ import type {
   KbProvider,
   KbProviderDefaults,
   KbProviderType,
+  KbQueryResult,
   McpServer,
   McpTransport,
   ModelProfile,
@@ -126,6 +127,25 @@ export interface SessionSummary {
   title: string | null;
   createdAt: string;
   lastMessageAt?: string;
+  /** 会话级勾选资源（重开会话后恢复）。 */
+  context?: ChatContext | null;
+  modelId?: string | null;
+}
+
+/** 上下文快照里的一项（id + 展示名）。 */
+export interface ContextOptionItem {
+  id: string;
+  name: string;
+}
+
+/** 某条用户消息实际带给模型的勾选项（按模块分组；默认项不在此列）。 */
+export interface ContextSnapshot {
+  model: ContextOptionItem | null;
+  database: ContextOptionItem[];
+  knowledge: ContextOptionItem[];
+  mcp: ContextOptionItem[];
+  skills: ContextOptionItem[];
+  rules: ContextOptionItem[];
 }
 
 export interface SessionMessage {
@@ -133,7 +153,7 @@ export interface SessionMessage {
   sessionId: string;
   seq: number;
   role: string;
-  content: { text?: string } | string | null;
+  content: { text?: string; options?: ContextSnapshot | null } | string | null;
   ts: string;
 }
 
@@ -153,6 +173,17 @@ export function renameSessionApi(id: string, title: string): Promise<{ ok: boole
   return request<{ ok: boolean }>(`/sessions/${id}`, {
     method: 'PATCH',
     body: JSON.stringify({ title }),
+  });
+}
+
+/** 保存会话级上下文（勾选资源 + 模型），供重开会话后恢复。 */
+export function updateSessionContextApi(
+  id: string,
+  input: { context: ChatContext; modelId: string | null },
+): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/sessions/${id}/context`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
   });
 }
 
@@ -205,6 +236,7 @@ export interface ChatContext {
   kbProviderIds: string[];
   dbConnectionIds: string[];
   mcpServerIds: string[];
+  ruleIds: string[];
 }
 
 /** 临时附件（不写工作区，仅随消息提供给模型参考）。 */
@@ -219,6 +251,7 @@ export const EMPTY_CONTEXT: ChatContext = {
   kbProviderIds: [],
   dbConnectionIds: [],
   mcpServerIds: [],
+  ruleIds: [],
 };
 
 /** 发送一条消息并逐条回调 SSE 事件（POST + ReadableStream 解析）。 */
@@ -348,6 +381,7 @@ export interface RuleInput {
   sql?: string;
   databaseId?: string | null;
   enabled?: boolean;
+  isDefault?: boolean;
   scope?: ConfigScope;
 }
 
@@ -653,6 +687,23 @@ export function setKbEnabled(
   return request('/kb/enabled', {
     method: 'PATCH',
     body: JSON.stringify({ scope, items }),
+  });
+}
+
+export interface KbQueryInput {
+  query: string;
+  scope?: ConfigScope;
+  knowledgeIds?: string[];
+  topK?: number;
+}
+
+export function queryKbProvider(
+  id: string,
+  input: KbQueryInput,
+): Promise<KbQueryResult> {
+  return request<KbQueryResult>(`/kb/providers/${id}/query`, {
+    method: 'POST',
+    body: JSON.stringify(input),
   });
 }
 

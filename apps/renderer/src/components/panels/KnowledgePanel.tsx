@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Info, Pencil, Plus, Trash2, Zap } from 'lucide-react';
+import { BookOpen, Info, Pencil, Plus, Trash2, X, Zap } from 'lucide-react';
 import { ScopeBadge } from '../ScopeBadge';
 import { useKnowledgeStore } from '../../store/knowledge';
 import { useUiStore } from '../../store/ui';
@@ -19,13 +19,27 @@ export function KnowledgePanel() {
   const remove = useKnowledgeStore((s) => s.remove);
   const test = useKnowledgeStore((s) => s.test);
   const openForm = useUiStore((s) => s.openForm);
+  const openKbBrowse = useUiStore((s) => s.openKbBrowse);
   const path = useWorkspaceStore((s) => s.path);
 
-  const [testOk, setTestOk] = useState<Record<string, boolean>>({});
+  const [testResult, setTestResult] = useState<
+    Record<string, { ok: boolean; knowledgeCount: number }>
+  >({});
+  const [testing, setTesting] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (path) void load();
   }, [load, path]);
+
+  const runTest = async (provider: (typeof items)[number]) => {
+    setTesting((s) => ({ ...s, [provider.id]: true }));
+    try {
+      const res = await test(provider.id, provider.scope);
+      setTestResult((s) => ({ ...s, [provider.id]: res }));
+    } finally {
+      setTesting((s) => ({ ...s, [provider.id]: false }));
+    }
+  };
 
   if (!path) {
     return (
@@ -65,9 +79,9 @@ export function KnowledgePanel() {
                 className="status-dot"
                 style={{
                   background:
-                    testOk[provider.id] === true
+                    testResult[provider.id]?.ok === true
                       ? 'var(--success)'
-                      : testOk[provider.id] === false
+                      : testResult[provider.id]?.ok === false
                         ? 'var(--danger, #d9480f)'
                         : 'var(--text-3)',
                 }}
@@ -78,8 +92,19 @@ export function KnowledgePanel() {
               <ScopeBadge scope={provider.scope} />
             </div>
             <span className="card__meta">{provider.baseUrl}</span>
-            {testOk[provider.id] === true && (
-              <span className="card__meta">{tc('connected')}</span>
+            {testing[provider.id] && (
+              <span className="model-status">{t('testing')}</span>
+            )}
+            {!testing[provider.id] && testResult[provider.id]?.ok === true && (
+              <span className="model-status model-status--ok">
+                <Zap size={11} strokeWidth={2} />{' '}
+                {t('testOk', { count: testResult[provider.id].knowledgeCount })}
+              </span>
+            )}
+            {!testing[provider.id] && testResult[provider.id]?.ok === false && (
+              <span className="model-status model-status--fail">
+                <X size={11} strokeWidth={2} /> {t('testFail')}
+              </span>
             )}
             <div className="card__foot">
               <span className="spacer" />
@@ -87,13 +112,24 @@ export function KnowledgePanel() {
                 type="button"
                 className="icon-btn"
                 title={t('test')}
-                onClick={() =>
-                  void test(provider.id, provider.scope).then((ok) =>
-                    setTestOk((prev) => ({ ...prev, [provider.id]: ok })),
-                  )
-                }
+                disabled={testing[provider.id]}
+                onClick={() => void runTest(provider)}
               >
                 <Zap size={13} strokeWidth={1.75} />
+              </button>
+              <button
+                type="button"
+                className="icon-btn"
+                title={t('browse')}
+                onClick={() =>
+                  void openKbBrowse({
+                    id: provider.id,
+                    scope: provider.scope,
+                    name: provider.name,
+                  })
+                }
+              >
+                <BookOpen size={13} strokeWidth={1.75} />
               </button>
               <button
                 type="button"

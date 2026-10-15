@@ -51,18 +51,20 @@ def retrieve(
     knowledge_id: str,
     query: str,
     *,
-    top_k: int = 5,
-    score_threshold: float = 0.3,
+    top_k: int | None = None,
+    score_threshold: float | None = None,
     search_method: str = "hybrid_search",
     client: httpx.Client | None = None,
 ) -> list[dict[str, Any]]:
     payload = {
         "query": query[:250],
+        # Dify 的 RetrievalModel 要求这些字段必填；缺省时回退到内置默认。
         "retrieval_model": {
             "search_method": search_method,
-            "top_k": top_k,
+            "reranking_enable": False,
+            "top_k": top_k if top_k is not None else 5,
             "score_threshold_enabled": True,
-            "score_threshold": score_threshold,
+            "score_threshold": score_threshold if score_threshold is not None else 0.3,
         },
     }
     c, owned = _get(client)

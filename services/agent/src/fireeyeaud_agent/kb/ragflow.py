@@ -19,6 +19,20 @@ def _get(client: httpx.Client | None) -> tuple[httpx.Client, bool]:
     return httpx.Client(timeout=_TIMEOUT), True
 
 
+def _data(res: httpx.Response) -> Any:
+    """解析 RAGFlow 响应体。
+
+    RAGFlow 很多错误以 HTTP 200 + 非 0 的 `code` 返回（例如鉴权、租户、
+    参数错误）。若只读 `data`，这些错误会被误当成"空结果"。这里统一把
+    非 0 code 抛成异常，交由上层包成 E_KB_CONN 并带出 message。
+    """
+    body = res.json()
+    code = body.get("code", 0)
+    if code != 0:
+        raise RuntimeError(f"RAGFlow error {code}: {body.get('message') or 'unknown'}")
+    return body.get("data")
+
+
 def list_knowledge(
     base_url: str, api_key: str, *, client: httpx.Client | None = None
 ) -> list[dict[str, Any]]:
@@ -29,7 +43,7 @@ def list_knowledge(
             headers={"Authorization": f"Bearer {api_key}"},
         )
         res.raise_for_status()
-        data = res.json().get("data", [])
+        data = _data(res) or []
     finally:
         if owned:
             c.close()
@@ -49,18 +63,25 @@ def retrieve(
     knowledge_id: str,
     query: str,
     *,
-    top_k: int = 5,
-    score_threshold: float = 0.3,
+    top_k: int | None = None,
+    score_threshold: float | None = None,
     search_method: str | None = None,
     client: httpx.Client | None = None,
 ) -> list[dict[str, Any]]:
-    payload = {
+    # 注意：
+    # - 不要发送 `keyword`：keyword=true 会让 RAGFlow 加载租户「默认对话模型」并跑一次
+    #   LLM 关键词抽取（见 api/apps/sdk/doc.py::retrieval_test），未授权即报
+    #   `Model(...) not authorized`。UI 的检索测试不开此项。
+    # - `top_k` / `similarity_threshold` 仅在显式配置时下发；缺省则交给 RAGFlow 服务端
+    #   默认（top_k=1024、similarity_threshold=0.2），与 UI 检索测试一致，避免把结果过滤光。
+    payload: dict[str, Any] = {
         "question": query,
         "dataset_ids": [knowledge_id],
-        "top_k": top_k,
-        "similarity_threshold": score_threshold,
-        "keyword": True,
     }
+    if top_k is not None:
+        payload["top_k"] = top_k
+    if score_threshold is not None:
+        payload["similarity_threshold"] = score_threshold
     c, owned = _get(client)
     try:
         res = c.post(
@@ -69,7 +90,7 @@ def retrieve(
             json=payload,
         )
         res.raise_for_status()
-        data = res.json().get("data") or {}
+        data = _data(res) or {}
         chunks = data.get("chunks", [])
     finally:
         if owned:

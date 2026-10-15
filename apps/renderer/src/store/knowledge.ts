@@ -1,16 +1,23 @@
 import { create } from 'zustand';
-import type { KbEnabledEntry, KbKnowledge, KbProvider } from '@fireeyeaud/shared';
+import type {
+  KbEnabledEntry,
+  KbKnowledge,
+  KbProvider,
+  KbQueryResult,
+} from '@fireeyeaud/shared';
 import {
   createKbProvider,
   deleteKbProvider,
   listKbEnabled,
   listKbKnowledge,
   listKbProviders,
+  queryKbProvider,
   setKbEnabled,
   testKbParams,
   testKbProvider,
   updateKbProvider,
   type KbProviderInput,
+  type KbQueryInput,
   type KbTestInput,
 } from '../lib/api';
 
@@ -18,6 +25,8 @@ interface KnowledgeState {
   items: KbProvider[];
   loading: boolean;
   errorKey: string | null;
+  /** 检索测试失败时的后端原始原因（用于诊断，非 i18n 键）。 */
+  queryError: string | null;
   knowledgeByProvider: Record<string, KbKnowledge[]>;
   enabled: KbEnabledEntry[];
   load: () => Promise<void>;
@@ -28,8 +37,12 @@ interface KnowledgeState {
     patch: Partial<KbProviderInput>,
   ) => Promise<boolean>;
   remove: (id: string, scope: KbProvider['scope']) => Promise<void>;
-  test: (id: string, scope: KbProvider['scope']) => Promise<boolean>;
+  test: (
+    id: string,
+    scope: KbProvider['scope'],
+  ) => Promise<{ ok: boolean; knowledgeCount: number }>;
   testParams: (input: KbTestInput) => Promise<boolean>;
+  query: (id: string, input: KbQueryInput) => Promise<KbQueryResult | null>;
   loadKnowledge: (id: string, scope: KbProvider['scope']) => Promise<void>;
   setEnabled: (scope: KbProvider['scope'], items: KbEnabledEntry[]) => Promise<void>;
   reset: () => void;
@@ -39,6 +52,7 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
   items: [],
   loading: false,
   errorKey: null,
+  queryError: null,
   knowledgeByProvider: {},
   enabled: [],
 
@@ -89,10 +103,10 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
     set({ errorKey: null });
     try {
       const res = await testKbProvider(id, scope);
-      return res.ok;
+      return { ok: res.ok, knowledgeCount: res.knowledgeCount ?? 0 };
     } catch (err) {
       set({ errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal' });
-      return false;
+      return { ok: false, knowledgeCount: 0 };
     }
   },
 
@@ -104,6 +118,20 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
     } catch (err) {
       set({ errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal' });
       return false;
+    }
+  },
+
+  query: async (id, input) => {
+    set({ errorKey: null, queryError: null });
+    try {
+      return await queryKbProvider(id, input);
+    } catch (err) {
+      const e = err as { messageKey?: string; params?: { reason?: string } };
+      set({
+        errorKey: e.messageKey ?? 'error.internal',
+        queryError: e.params?.reason ?? null,
+      });
+      return null;
     }
   },
 
@@ -130,6 +158,7 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
       items: [],
       loading: false,
       errorKey: null,
+      queryError: null,
       knowledgeByProvider: {},
       enabled: [],
     }),

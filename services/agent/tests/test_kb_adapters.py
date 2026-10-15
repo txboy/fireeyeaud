@@ -1,6 +1,7 @@
 import json
 
 import httpx
+import pytest
 
 from fireeyeaud_agent.kb import dify, ragflow
 
@@ -21,6 +22,7 @@ def test_dify_list_and_retrieve():
         body = json.loads(request.content)
         assert body["query"] == "收入确认"
         assert body["retrieval_model"]["top_k"] == 5
+        assert body["retrieval_model"]["reranking_enable"] is False
         assert body["retrieval_model"]["score_threshold_enabled"] is True
         assert body["retrieval_model"]["score_threshold"] == 0.3
         return httpx.Response(
@@ -74,7 +76,8 @@ def test_ragflow_list_and_retrieve():
         assert body["dataset_ids"] == ["ds1"]
         assert body["top_k"] == 4
         assert body["similarity_threshold"] == 0.2
-        assert body["keyword"] is True
+        # 不能发送 keyword：keyword=true 会让 RAGFlow 加载租户默认对话模型做 LLM 关键词抽取。
+        assert "keyword" not in body
         return httpx.Response(
             200,
             json={
@@ -107,3 +110,32 @@ def test_ragflow_list_and_retrieve():
     assert chunks == [
         {"content": "片段", "docId": "d1", "docName": "法.md", "score": 0.8}
     ]
+
+
+def test_ragflow_retrieve_omits_unset_params():
+    """未显式配置 top_k/similarity_threshold 时不应下发，交给 RAGFlow 服务端默认。"""
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(json.loads(request.content))
+        return httpx.Response(200, json={"code": 0, "data": {"chunks": []}})
+
+    ragflow.retrieve("http://kb", "k", "ds1", "q", client=_client(handler))
+    assert "top_k" not in seen
+    assert "similarity_threshold" not in seen
+    assert "keyword" not in seen
+
+
+def test_ragflow_surfaces_nonzero_code():
+    """RAGFlow 以 HTTP 200 + 非 0 code 报错时，必须抛出而非静默返回空。"""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, json={"code": 102, "message": "`dataset_ids` is required."}
+        )
+
+    with pytest.raises(RuntimeError, match="RAGFlow error 102"):
+        ragflow.list_knowledge("http://kb", "k", client=_client(handler))
+
+    with pytest.raises(RuntimeError, match="RAGFlow error 102"):
+        ragflow.retrieve("http://kb", "k", "ds1", "q", client=_client(handler))

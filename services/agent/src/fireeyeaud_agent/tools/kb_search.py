@@ -8,7 +8,6 @@ from typing import Any
 from ..errors import ApiError
 
 DEFAULT_TOPK = 5
-DEFAULT_THRESHOLD = 0.3
 
 
 def kb_search(root: Path, params: dict[str, Any]) -> dict[str, Any]:
@@ -43,10 +42,10 @@ def kb_search(root: Path, params: dict[str, Any]) -> dict[str, Any]:
         adapter = kb.adapter_for(provider["type"])
         key = knowledge.get_secret(provider.get("apiKeyRef") or provider_id) or ""
         defaults = provider.get("defaults") or {}
-        top_k = int(params.get("topK") or defaults.get("topK") or DEFAULT_TOPK)
+        top_k = params.get("topK") or defaults.get("topK")
         threshold = params.get("scoreThreshold")
         if threshold is None:
-            threshold = defaults.get("scoreThreshold", DEFAULT_THRESHOLD)
+            threshold = defaults.get("scoreThreshold")
         for entry in entries:
             try:
                 hits = adapter.retrieve(

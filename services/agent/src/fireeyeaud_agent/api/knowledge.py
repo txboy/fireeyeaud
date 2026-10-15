@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import time
+
+import httpx
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
@@ -13,6 +16,14 @@ from ..store.workspace import workspace_manager
 from .deps import require_token
 
 router = APIRouter(tags=["knowledge"], dependencies=[Depends(require_token)])
+
+
+def _reason(exc: Exception) -> str:
+    """把适配器异常压缩成可读原因；HTTP 错误附带响应体片段，便于定位。"""
+    if isinstance(exc, httpx.HTTPStatusError):
+        body = (exc.response.text or "").strip().replace("\n", " ")
+        return f"{exc} | {body[:300]}" if body else str(exc)
+    return str(exc)
 
 
 class ProviderBody(BaseModel):
@@ -90,7 +101,7 @@ def test_provider(provider_id: str, scope: str = Query(default="global")) -> dic
     except ApiError:
         raise
     except Exception as exc:  # noqa: BLE001
-        raise ApiError("E_KB_CONN", 502, "error.kbConn", {"reason": str(exc)}) from exc
+        raise ApiError("E_KB_CONN", 502, "error.kbConn", {"reason": _reason(exc)}) from exc
     return {"ok": True, "knowledgeCount": len(items)}
 
 
@@ -116,7 +127,7 @@ def test_provider_params(body: KbTestBody) -> dict:
     except ApiError:
         raise
     except Exception as exc:  # noqa: BLE001
-        raise ApiError("E_KB_CONN", 502, "error.kbConn", {"reason": str(exc)}) from exc
+        raise ApiError("E_KB_CONN", 502, "error.kbConn", {"reason": _reason(exc)}) from exc
     return {"ok": True, "knowledgeCount": len(items)}
 
 
@@ -135,8 +146,100 @@ def list_remote_knowledge(
     except ApiError:
         raise
     except Exception as exc:  # noqa: BLE001
-        raise ApiError("E_KB_CONN", 502, "error.kbConn", {"reason": str(exc)}) from exc
+        raise ApiError("E_KB_CONN", 502, "error.kbConn", {"reason": _reason(exc)}) from exc
     return {"items": items, "nextCursor": None}
+
+
+class KbQueryBody(BaseModel):
+    query: str
+    scope: str = "global"
+    # 显式指定远端库；缺省则回退到该 Provider 已启用的库，仍为空则取全部远端库。
+    knowledgeIds: list[str] | None = None
+    topK: int | None = None
+
+
+@router.post("/kb/providers/{provider_id}/query")
+def query_provider(provider_id: str, body: KbQueryBody) -> dict:
+    """按文本试检索该 Provider 的远端知识库，返回命中片段与耗时（不落盘、不写证据）。"""
+    root = _root()
+    provider = knowledge.get_provider(provider_id, body.scope, root)
+    if provider is None:
+        raise ApiError("E_NOT_FOUND", 404, "error.notFound", {"id": provider_id})
+
+    query = (body.query or "").strip()
+    if not query:
+        raise ApiError("E_KB_QUERY", 400, "error.internal")
+
+    adapter = kb.adapter_for(provider["type"])
+    key = knowledge.get_secret(provider.get("apiKeyRef") or provider_id) or ""
+
+    ids = [str(i) for i in (body.knowledgeIds or []) if i]
+    names: dict[str, str] = {}
+    if not ids:
+        # 回退：该 Provider 在当前作用域下已启用的库。
+        for e in knowledge.list_enabled_effective(root):
+            if (
+                str(e.get("providerId")) == provider_id
+                and e.get("enabled")
+                and e.get("knowledgeId")
+            ):
+                kid = str(e.get("knowledgeId"))
+                ids.append(kid)
+                names[kid] = str(e.get("name") or "")
+    if not ids:
+        # 仍为空：取全部远端库，便于未启用时也能试检索。
+        try:
+            for item in adapter.list_knowledge(provider["baseUrl"], key):
+                if item.get("id"):
+                    kids = str(item["id"])
+                    ids.append(kids)
+                    names[kids] = str(item.get("name") or "")
+        except ApiError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise ApiError("E_KB_CONN", 502, "error.kbConn", {"reason": _reason(exc)}) from exc
+
+    defaults = provider.get("defaults") or {}
+    top_k = body.topK or defaults.get("topK")
+    threshold = defaults.get("scoreThreshold")
+
+    started = time.perf_counter()
+    hits: list[dict] = []
+    for kid in ids:
+        try:
+            found = adapter.retrieve(
+                provider["baseUrl"],
+                key,
+                kid,
+                query,
+                top_k=top_k,
+                score_threshold=threshold,
+                search_method=defaults.get("searchMethod", "hybrid_search"),
+            )
+        except ApiError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise ApiError("E_KB_CONN", 502, "error.kbConn", {"reason": _reason(exc)}) from exc
+        for h in found:
+            hits.append(
+                {
+                    "knowledgeId": kid,
+                    "knowledgeName": names.get(kid, ""),
+                    "docId": h.get("docId"),
+                    "docName": h.get("docName"),
+                    "content": h.get("content"),
+                    "score": h.get("score"),
+                    "url": h.get("url"),
+                }
+            )
+    elapsed_ms = int((time.perf_counter() - started) * 1000)
+    hits.sort(key=lambda c: c.get("score") or 0, reverse=True)
+    return {
+        "ok": True,
+        "elapsedMs": elapsed_ms,
+        "knowledgeCount": len(ids),
+        "hits": hits,
+    }
 
 
 @router.get("/kb/enabled")

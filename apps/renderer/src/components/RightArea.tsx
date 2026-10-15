@@ -1,9 +1,11 @@
 import { useTranslation } from 'react-i18next';
 import {
+  BookOpen,
   Database,
   File as FileIcon,
   MessageSquare,
   Play,
+  Search,
   Settings,
   Table2,
   X,
@@ -13,6 +15,8 @@ import {
   type DbDataTab,
   type DbSchemaTab,
   type FormTab,
+  type KbBrowseTab,
+  type KbQueryTab,
   type PreviewTab,
   type RightTab,
   type RuleRunTab,
@@ -27,6 +31,8 @@ import { FormTabView } from './FormTabView';
 import { RuleRunView } from './RuleRunView';
 import { DbSchemaView } from './DbSchemaView';
 import { DbDataView } from './DbDataView';
+import { KbBrowseView } from './KbBrowseView';
+import { KbQueryView } from './KbQueryView';
 import { SettingsPanel } from './panels/SettingsPanel';
 import { FORM_DOMAIN_ICON, useFormTitle } from './forms/meta';
 
@@ -72,7 +78,9 @@ export function RightArea() {
           ? ts('title')
           : tab.kind === 'dbData'
             ? `${tab.name} / ${tab.table.table}`
-            : tab.name;
+            : tab.kind === 'kbQuery' && tab.knowledgeName
+              ? `${tab.name} / ${tab.knowledgeName}`
+              : tab.name;
 
   const handleClose = async (tab: RightTab) => {
     // 关闭正在生成的会话 tab：先警告并中止生成（保留已生成部分）。
@@ -98,7 +106,11 @@ export function RightArea() {
                       ? Database
                       : tab.kind === 'dbData'
                         ? Table2
-                        : FileIcon;
+                        : tab.kind === 'kbBrowse'
+                          ? BookOpen
+                          : tab.kind === 'kbQuery'
+                            ? Search
+                            : FileIcon;
           const label = labelOf(tab);
           return (
             <div
@@ -144,6 +156,10 @@ export function RightArea() {
           <DbSchemaView key={active.id} tab={active as DbSchemaTab} />
         ) : active.kind === 'dbData' ? (
           <DbDataView key={active.id} tab={active as DbDataTab} />
+        ) : active.kind === 'kbBrowse' ? (
+          <KbBrowseView key={active.id} tab={active as KbBrowseTab} />
+        ) : active.kind === 'kbQuery' ? (
+          <KbQueryView key={active.id} tab={active as KbQueryTab} />
         ) : active.kind === 'settings' ? (
           <div className="formtab">
             <div className="formtab__head">

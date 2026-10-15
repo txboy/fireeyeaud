@@ -1,8 +1,54 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, FileText, Paperclip, Send, Sparkles, Wrench, X } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import {
+  AlertTriangle,
+  BookOpen,
+  Database,
+  FileText,
+  Paperclip,
+  Plug,
+  Send,
+  ShieldCheck,
+  Sparkles,
+  Wrench,
+  X,
+} from 'lucide-react';
+import type { ContextSnapshot } from '../lib/api';
 import { useChatStore } from '../store/chat';
 import { ContextBar } from './ContextBar';
+
+const OPT_GROUPS: {
+  key: Exclude<keyof ContextSnapshot, 'model'>;
+  labelKey: string;
+  icon: LucideIcon;
+}[] = [
+  { key: 'database', labelKey: 'resDatabase', icon: Database },
+  { key: 'knowledge', labelKey: 'resKnowledge', icon: BookOpen },
+  { key: 'rules', labelKey: 'resRules', icon: ShieldCheck },
+  { key: 'mcp', labelKey: 'resMcp', icon: Plug },
+  { key: 'skills', labelKey: 'resSkills', icon: Sparkles },
+];
+
+/** 用户消息下方：本次发送时勾选的非默认选项（后端快照）。 */
+function MessageOptions({ snapshot }: { snapshot: ContextSnapshot }) {
+  const { t } = useTranslation('agent');
+  const rows = OPT_GROUPS.flatMap((g) =>
+    snapshot[g.key].map((item) => ({ group: g, item })),
+  );
+  if (rows.length === 0) return null;
+  return (
+    <div className="msg__options" title={t('sentOptions')}>
+      {rows.map(({ group, item }) => (
+        <span key={`${group.key}:${item.id}`} className="msg-opt">
+          <group.icon size={11} strokeWidth={1.75} />
+          <span className="msg-opt__group">{t(group.labelKey)}</span>
+          <span className="msg-opt__name">{item.name}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
 
 export function AgentColumn({ sessionId }: { sessionId: string }) {
   const { t, i18n } = useTranslation('agent');
@@ -100,6 +146,9 @@ export function AgentColumn({ sessionId }: { sessionId: string }) {
                 {m.content}
                 {m.streaming && <span className="msg__caret" />}
               </div>
+              {m.role === 'user' && m.options && (
+                <MessageOptions snapshot={m.options} />
+              )}
               {m.errorKey && (
                 <div className="msg__error">
                   <AlertTriangle size={13} strokeWidth={1.75} />

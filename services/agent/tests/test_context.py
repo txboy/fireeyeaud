@@ -23,6 +23,90 @@ def test_registry_context_none_means_unrestricted(tmp_path, monkeypatch):
     assert _registry_context(root, None) is None
 
 
+def test_registry_context_includes_allowed_rules(tmp_path, monkeypatch):
+    root = _ws(tmp_path, monkeypatch)
+    from fireeyeaud_agent.store import rules as rules_store
+
+    default = rules_store.create_rule(
+        {"name": "D", "sql": "select 1", "enabled": True, "isDefault": True, "scope": "project"},
+        root=root,
+    )
+    other = rules_store.create_rule(
+        {"name": "O", "sql": "select 2", "enabled": True, "scope": "project"},
+        root=root,
+    )
+    disabled = rules_store.create_rule(
+        {
+            "name": "X",
+            "sql": "select 3",
+            "enabled": False,
+            "isDefault": True,
+            "scope": "project",
+        },
+        root=root,
+    )
+
+    ctx = _registry_context(root, {"ruleIds": [other["id"]]})
+    assert ctx is not None
+    assert ctx["allowedRuleIds"] == {default["id"], other["id"]}
+    assert disabled["id"] not in ctx["allowedRuleIds"]
+
+    assert _registry_context(root, {})["allowedRuleIds"] == {default["id"]}
+
+
+def test_run_rule_tool_gate(tmp_path, monkeypatch):
+    import pytest
+
+    from fireeyeaud_agent.errors import ApiError
+    from fireeyeaud_agent.store import rules as rules_store
+    from fireeyeaud_agent.tools import run_rule as rule_tool
+
+    root = _ws(tmp_path, monkeypatch)
+    saved = rules_store.create_rule(
+        {"name": "R", "sql": "select 1 as n", "scope": "project"}, root=root
+    )
+
+    with pytest.raises(ApiError) as exc:
+        rule_tool.run_rule(root, {"ruleId": saved["id"], "allowedRuleIds": ["rule_999"]})
+    assert exc.value.message_key == "error.ruleUnauthorized"
+
+    ok = rule_tool.run_rule(root, {"ruleId": saved["id"], "allowedRuleIds": [saved["id"]]})
+    assert ok["ruleId"] == saved["id"]
+
+
+def test_build_snapshot_only_selected_non_default(tmp_path, monkeypatch):
+    from fireeyeaud_agent.agent.context_snapshot import build_snapshot
+    from fireeyeaud_agent.store import rules as rules_store
+
+    root = _ws(tmp_path, monkeypatch)
+    default = rules_store.create_rule(
+        {"name": "D", "sql": "select 1", "enabled": True, "isDefault": True, "scope": "project"},
+        root=root,
+    )
+    picked = rules_store.create_rule(
+        {"name": "S", "sql": "select 2", "enabled": True, "scope": "project"},
+        root=root,
+    )
+
+    snap = build_snapshot(root, {"ruleIds": [default["id"], picked["id"]]}, None)
+    assert snap["model"] is None
+    assert snap["rules"] == [{"id": picked["id"], "name": "S"}]
+    assert snap["database"] == [] and snap["knowledge"] == []
+
+
+def test_build_snapshot_resolves_model_name(tmp_path, monkeypatch):
+    from fireeyeaud_agent.agent.context_snapshot import build_snapshot
+    from fireeyeaud_agent.config import store as config_store
+
+    root = _ws(tmp_path, monkeypatch)
+    model = config_store.create_item(
+        "models",
+        {"name": "本地模型", "provider": "openai", "baseUrl": "http://x", "model": "m", "scope": "global"},
+    )
+    snap = build_snapshot(root, {}, model["id"])
+    assert snap["model"] == {"id": model["id"], "name": "本地模型"}
+
+
 def test_prompts_for_default_union_selected(tmp_path, monkeypatch):
     root = _ws(tmp_path, monkeypatch)
     a = skills.create_skill(

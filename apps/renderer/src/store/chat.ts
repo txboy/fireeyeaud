@@ -9,8 +9,10 @@ import {
   listSessionsApi,
   renameSessionApi,
   streamChat,
+  updateSessionContextApi,
   type AttachmentRef,
   type ChatContext,
+  type ContextSnapshot,
   type SessionMessage,
   type SessionSummary,
 } from '../lib/api';
@@ -36,6 +38,8 @@ export interface ChatMessage {
   errorKey: string | null;
   tools: ToolCall[];
   findingIds: string[];
+  /** 该条用户消息发送时带给模型的勾选项（默认项不含），助手消息为 null。 */
+  options: ContextSnapshot | null;
 }
 
 /**
@@ -84,6 +88,30 @@ const nextId = () => `m_${Date.now().toString(36)}_${(counter += 1)}`;
 /** 每个进行中的会话对应一个 AbortController（模块级，不进 store state）。 */
 const controllers = new Map<string, AbortController>();
 
+/** 会话级上下文（勾选资源 + 模型）回写后端的去抖定时器。 */
+const persistTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+/** 去抖地把某会话的上下文与模型回写后端，重开会话后可恢复。 */
+function persistSessionContext(sessionId: string): void {
+  const existing = persistTimers.get(sessionId);
+  if (existing) clearTimeout(existing);
+  persistTimers.set(
+    sessionId,
+    setTimeout(() => {
+      persistTimers.delete(sessionId);
+      const chat = useChatStore.getState().chats[sessionId];
+      // 会话尚未加载（可能正在从后端恢复上下文）时不要回写，避免覆盖已存值。
+      if (!chat || !chat.loaded) return;
+      void updateSessionContextApi(sessionId, {
+        context: chat.context,
+        modelId: chat.modelId,
+      }).catch(() => {
+        /* sidecar 未就绪时忽略 */
+      });
+    }, 400),
+  );
+}
+
 function newChat(): SessionChat {
   return {
     messages: [],
@@ -116,6 +144,7 @@ function assistantError(messageKey: string): ChatMessage {
     errorKey: messageKey,
     tools: [],
     findingIds: [],
+    options: null,
   };
 }
 
@@ -125,6 +154,10 @@ function toChatMessage(message: SessionMessage): ChatMessage {
     typeof message.content === 'string'
       ? message.content
       : (message.content?.text ?? '');
+  const options =
+    typeof message.content === 'string' || !message.content
+      ? null
+      : (message.content.options ?? null);
   return {
     id: message.id,
     role: message.role === 'user' ? 'user' : 'assistant',
@@ -135,6 +168,7 @@ function toChatMessage(message: SessionMessage): ChatMessage {
     errorKey: null,
     tools: [],
     findingIds: [],
+    options,
   };
 }
 
@@ -205,6 +239,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   loadMessages: async (sessionId) => {
     if (get().chats[sessionId]?.loaded) return;
+    // 会话列表携带会话级上下文；若尚未加载则先拉取，重开会话时恢复勾选。
+    if (get().sessions.length === 0) await get().loadSessions();
+    const meta = get().sessions.find((s) => s.id === sessionId);
     try {
       const page = await getSessionMessagesApi(sessionId);
       set((s) => ({
@@ -212,9 +249,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
           ...chat,
           // 若加载期间已开始流式生成，则不覆盖进行中的内容。
           messages: chat.streaming ? chat.messages : page.items.map(toChatMessage),
+          modelId:
+            !chat.streaming && meta?.modelId ? meta.modelId : chat.modelId,
+          context:
+            !chat.streaming && meta?.context
+              ? { ...EMPTY_CONTEXT, ...meta.context }
+              : chat.context,
           loaded: true,
         })),
       }));
+      // 加载完成后回写一次：覆盖「加载前用户已改动」的窗口，且此时 hydrated 值已就位。
+      persistSessionContext(sessionId);
     } catch (err) {
       const e = err as ApiError;
       set((s) => ({
@@ -281,6 +326,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       errorKey: null,
       tools: [],
       findingIds: [],
+      options: null,
     };
     const assistantMessage: ChatMessage = {
       id: nextId(),
@@ -292,6 +338,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       errorKey: null,
       tools: [],
       findingIds: [],
+      options: null,
     };
     set((s) => ({
       chats: withChat(s.chats, sessionId, (chat) => ({
@@ -307,6 +354,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const chat = get().chats[sessionId];
 
     const update = (event: SseEvent) => {
+      // 上下文快照事件挂在刚发出的用户消息上（后端为唯一数据源）。
+      if (event.type === 'context') {
+        const snapshot = ((event.data ?? {}) as { options?: ContextSnapshot | null })
+          .options ?? null;
+        set((s) => ({
+          chats: withChat(s.chats, sessionId, (c) => ({
+            ...c,
+            messages: c.messages.map((m) =>
+              m.id === userMessage.id ? { ...m, options: snapshot } : m,
+            ),
+          })),
+        }));
+        return;
+      }
       set((s) => {
         if (!s.chats[sessionId]) return s;
         return {
@@ -391,18 +452,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   hasStreaming: () => Object.values(get().chats).some((c) => c.streaming),
 
-  setModel: (sessionId, modelId) =>
+  setModel: (sessionId, modelId) => {
     set((s) => ({
       chats: withChat(s.chats, sessionId, (chat) => ({ ...chat, modelId })),
-    })),
+    }));
+    persistSessionContext(sessionId);
+  },
 
-  setContext: (sessionId, patch) =>
+  setContext: (sessionId, patch) => {
     set((s) => ({
       chats: withChat(s.chats, sessionId, (chat) => ({
         ...chat,
         context: { ...chat.context, ...patch },
       })),
-    })),
+    }));
+    persistSessionContext(sessionId);
+  },
 
   addAttachments: (sessionId, items) =>
     set((s) => ({
