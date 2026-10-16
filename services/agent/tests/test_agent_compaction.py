@@ -143,6 +143,87 @@ async def test_run_agent_no_compaction_under_threshold(tmp_path, monkeypatch):
     assert "m1 " in joined
 
 
+class _OverflowModel:
+    """首次流式调用抛上下文超限，随后成功（always=True 则始终超限）。"""
+
+    def __init__(self, always: bool = False) -> None:
+        self.always = always
+        self.calls = 0
+        self.summary_calls = 0
+        self.streams: list[list] = []
+
+    def bind_tools(self, _tools):
+        return self
+
+    async def ainvoke(self, _messages):
+        self.summary_calls += 1
+        return AIMessage(content="摘要Y")
+
+    async def astream(self, messages):
+        self.calls += 1
+        if self.always or self.calls == 1:
+            raise Exception("This model's maximum context length is 8192 tokens")
+        self.streams.append(list(messages))
+        yield AIMessageChunk(content="完成")
+
+
+async def test_run_agent_overflow_forces_compaction_and_retries(tmp_path, monkeypatch):
+    root, fe, sid, model_id = _setup(
+        tmp_path, monkeypatch, n=6, window=131072, max_output=8192
+    )
+    model = _OverflowModel()
+    entries = _history_entries(fe, sid)
+
+    events = [
+        e
+        async for e in run_agent(
+            root,
+            sid,
+            "继续",
+            "zh-CN",
+            model=model,
+            model_id=model_id,
+            history_entries=entries,
+        )
+    ]
+    types = [e["type"] for e in events]
+    assert model.calls == 2
+    assert model.summary_calls == 1
+    assert "error" not in types
+    assert "compaction" in types
+    assert types[-1] == "done"
+    joined = _joined(model.streams[0])
+    assert "摘要Y" in joined
+    assert "m1 " not in joined
+    assert "m6 " in joined
+
+
+async def test_run_agent_overflow_retries_only_once(tmp_path, monkeypatch):
+    root, fe, sid, model_id = _setup(
+        tmp_path, monkeypatch, n=6, window=131072, max_output=8192
+    )
+    model = _OverflowModel(always=True)
+    entries = _history_entries(fe, sid)
+
+    events = [
+        e
+        async for e in run_agent(
+            root,
+            sid,
+            "继续",
+            "zh-CN",
+            model=model,
+            model_id=model_id,
+            history_entries=entries,
+        )
+    ]
+    types = [e["type"] for e in events]
+    assert model.calls == 2  # 初次 + 仅一次重试
+    errors = [e for e in events if e["type"] == "error"]
+    assert errors and errors[0]["data"]["code"] == "E_LLM_UNAVAILABLE"
+    assert types[-1] == "done"
+
+
 async def test_run_agent_injects_existing_summary_without_recompaction(
     tmp_path, monkeypatch
 ):

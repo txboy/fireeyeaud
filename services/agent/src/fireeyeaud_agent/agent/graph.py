@@ -31,7 +31,8 @@ from ..store.evidence import append_evidence
 from ..store.findings import create_finding
 from ..tools.registry import build_langchain_tools, build_tool_dict
 from ..util import now_iso
-from .compaction import prepare, summary_message
+from .compaction import is_context_overflow, prepare, summary_message
+from .token_budget import estimate_tokens
 from .prompts import system_prompt
 from .context_snapshot import build_snapshot
 
@@ -283,6 +284,18 @@ async def run_agent(
     )
     step1_text = message + (f"\n\n{local_block}" if local_block else "")
 
+    # 本轮用户消息（首步可能携带原图内容块）。
+    if blocks:
+        current_message = HumanMessage(
+            content=[{"type": "text", "text": step1_text}, *blocks]
+        )
+    else:
+        current_message = HumanMessage(content=step1_text)
+
+    app_compact: dict[str, Any] = {}
+    profile: dict[str, Any] | None = None
+    active_summary: dict[str, Any] | None = None
+
     # 上下文压缩（Phase 9）：按当前模型预算，必要时把较早对话并入摘要。
     if history_entries is not None:
         from ..store.sessions import get_summary
@@ -303,37 +316,13 @@ async def run_agent(
             app_compaction=app_compact,
         )
         if result.compacted:
-            yield event(
-                "compaction",
-                {
-                    "phase": "done",
-                    "summarizedUpTo": result.summarized_up_to,
-                    "tokensBefore": result.tokens_before,
-                    "tokensAfter": result.tokens_after,
-                    "modelId": model_id,
-                    "window": result.window,
-                },
-            )
+            yield event("compaction", _compaction_data(result, model_id))
         active_summary = result.summary or get_summary(fe, session_id)
-        if active_summary and active_summary.get("text"):
-            messages.append(summary_message(active_summary))
-        up_to = int((active_summary or {}).get("upTo") or 0)
-        for entry in history_entries:
-            if int(entry.get("seq") or 0) <= up_to:
-                continue
-            if entry.get("role") == "user":
-                messages.append(HumanMessage(content=str(entry.get("text") or "")))
-            elif entry.get("text"):
-                messages.append(AIMessage(content=str(entry["text"])))
+        messages.extend(_entries_to_messages(history_entries, active_summary))
     elif history:
         messages.extend(history)
 
-    if blocks:
-        messages.append(
-            HumanMessage(content=[{"type": "text", "text": step1_text}, *blocks])
-        )
-    else:
-        messages.append(HumanMessage(content=step1_text))
+    messages.append(current_message)
     human_index = len(messages) - 1
 
     evidence_ids: list[str] = []
@@ -361,6 +350,7 @@ async def run_agent(
         return await value if inspect.isawaitable(value) else value
 
     step = 0
+    overflow_retried = False
     while True:
         step += 1
         if step > settings.max_steps:
@@ -397,6 +387,44 @@ async def run_agent(
             yield event("done", {"usage": {}})
             return
         except Exception as exc:  # noqa: BLE001 - 模型不可达/鉴权失败/超时
+            # 溢出兜底：provider 报上下文超限 → 强制压缩一次并重试一次（§4.4/§6.2）。
+            if (
+                is_context_overflow(exc)
+                and history_entries is not None
+                and not overflow_retried
+            ):
+                overflow_retried = True
+                print(
+                    f"===== LLM context overflow (step {step}) — forcing "
+                    f"compaction and retrying =====\n{exc!r}",
+                    flush=True,
+                )
+                from ..store.sessions import get_summary
+
+                forced = await prepare(
+                    fe,
+                    session_id,
+                    entries=history_entries,
+                    system_text=system_text,
+                    new_turn_text=step1_text,
+                    model=active_model,
+                    model_id=model_id,
+                    profile=profile,
+                    locale=locale,
+                    app_compaction=app_compact,
+                    force=True,
+                )
+                active_summary = forced.summary or get_summary(fe, session_id)
+                rebuilt: list[BaseMessage] = [SystemMessage(content=system_text)]
+                rebuilt.extend(
+                    _entries_to_messages(history_entries, active_summary)
+                )
+                rebuilt.append(current_message)
+                messages[:] = rebuilt
+                human_index = len(messages) - 1
+                if forced.compacted:
+                    yield event("compaction", _compaction_data(forced, model_id))
+                continue
             print(
                 f"===== LLM error (step {step}) =====\n{exc!r}\n===== end LLM error =====",
                 flush=True,
@@ -406,7 +434,15 @@ async def run_agent(
                 {
                     "code": "E_LLM_UNAVAILABLE",
                     "messageKey": "error.llmUnavailable",
-                    "params": {"reason": str(exc)},
+                    "params": {
+                        "reason": str(exc),
+                        "tokensEstimated": estimate_tokens(system_text)
+                        + sum(
+                            estimate_tokens(str(e.get("text") or ""))
+                            for e in (history_entries or [])
+                        )
+                        + estimate_tokens(step1_text),
+                    },
                 },
             )
             yield event("done", {"usage": {}})
@@ -494,6 +530,35 @@ async def run_agent(
         yield event("status", {"phase": "reflecting"})
 
     yield event("done", {"usage": {}})
+
+
+def _entries_to_messages(
+    entries: list[dict[str, Any]], summary: dict[str, Any] | None
+) -> list[BaseMessage]:
+    """把历史条目渲染为 messages：摘要在前，`upTo` 之后的原始对话保留在后。"""
+    out: list[BaseMessage] = []
+    if summary and summary.get("text"):
+        out.append(summary_message(summary))
+    up_to = int((summary or {}).get("upTo") or 0)
+    for entry in entries:
+        if int(entry.get("seq") or 0) <= up_to:
+            continue
+        if entry.get("role") == "user":
+            out.append(HumanMessage(content=str(entry.get("text") or "")))
+        elif entry.get("text"):
+            out.append(AIMessage(content=str(entry["text"])))
+    return out
+
+
+def _compaction_data(result: Any, model_id: str | None) -> dict[str, Any]:
+    return {
+        "phase": "done",
+        "summarizedUpTo": result.summarized_up_to,
+        "tokensBefore": result.tokens_before,
+        "tokensAfter": result.tokens_after,
+        "modelId": model_id,
+        "window": result.window,
+    }
 
 
 def _history_entries(fe: Path, session_id: str) -> list[dict[str, Any]]:

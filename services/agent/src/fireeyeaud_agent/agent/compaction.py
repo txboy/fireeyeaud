@@ -270,6 +270,11 @@ async def prepare(
     new_up_to = plan_compaction(
         entries, keep_tokens=keep, previous_up_to=previous_up_to
     )
+    if (new_up_to is None or new_up_to <= previous_up_to) and force:
+        # 强制压缩（溢出兜底）：至少把最新一条之外的内容并入摘要（§6.2 第 7 条）。
+        fresh = [seq for seq, _role, _text in normalized if seq > previous_up_to]
+        if len(fresh) >= 2:
+            new_up_to = fresh[-2]
     if new_up_to is None or new_up_to <= previous_up_to:
         # 幂等：未越过边界则跳过（方案 §6.4）。
         return _result(
