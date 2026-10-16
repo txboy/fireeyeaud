@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import pytest
-from langchain_core.messages import AIMessage, AIMessageChunk
+from langchain_core.messages import AIMessage, AIMessageChunk, SystemMessage
 
 import fireeyeaud_agent.agent.compaction as compaction_mod
 from fireeyeaud_agent.agent.graph import _history_entries, run_agent
@@ -246,6 +246,34 @@ async def test_done_usage_has_estimate_and_window(tmp_path, monkeypatch):
     assert usage["tokensEstimated"] > 0
     listed = sessions.list_sessions(fe)
     assert listed[0]["tokensEstimate"] == usage["tokensEstimated"]
+
+
+async def test_run_agent_never_compacts_system_or_current_turn(tmp_path, monkeypatch):
+    root, fe, sid, model_id = _setup(
+        tmp_path, monkeypatch, n=20, window=200, max_output=50
+    )
+    model = _CompactModel()
+    entries = _history_entries(fe, sid)
+
+    events = [
+        e
+        async for e in run_agent(
+            root,
+            sid,
+            "本轮问题",
+            "zh-CN",
+            model=model,
+            model_id=model_id,
+            history_entries=entries,
+        )
+    ]
+    sent = model.streams[0]
+    # system prompt 恒在首位，且不被压缩。
+    assert isinstance(sent[0], SystemMessage)
+    comp = next(e for e in events if e["type"] == "compaction")
+    assert comp["data"]["summarizedUpTo"] <= max(int(e["seq"]) for e in entries)
+    # 本轮用户消息不在可压缩范围内，始终保留。
+    assert "本轮问题" in _joined(sent)
 
 
 async def test_run_agent_injects_existing_summary_without_recompaction(

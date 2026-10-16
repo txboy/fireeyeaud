@@ -1,11 +1,14 @@
 # Phase 9 · Agent 上下文压缩（Context Compaction）
 
 - 日期：2026-10-15
-- 状态：**未实现**（本文为设计方案；仓库中尚无对应代码，当前行为见「现状」）
+- 状态：**已实现**（2026-10-16 完成）。实现落点：`agent/token_budget.py`、`agent/compaction.py`、
+  `agent/graph.py`、`store/sessions.py`、`store/app_settings.py`、`config/models.py`、`config/settings.py`、
+  `api/models.py`、`api/settings.py`、`api/sessions.py`；前端 `apps/renderer`（`store/chat.ts`、
+  `components/AgentColumn.tsx`、`lib/api.ts`）与 `packages/shared`（types/locales）。
 - 关联模块：`agent/graph.py`、`agent/prompts.py`、`store/sessions.py`、`config/models.py`、`config/settings.py`、`store/app_settings.py`、`api/sessions.py`
 - 相关文档：[技能按需加载](./2026-10-15-skills-on-demand-loading.md)、[MCP 接入](./2026-10-15-mcp-tool-integration.md)
 
-> **本文实现的功能目前不存在。** 目前 Agent 每轮把整个会话历史原样重放给模型，没有任何 token 预算或摘要。本文描述拟引入的上下文压缩机制。
+> 实现要点与偏差见文末「实现说明」。摘要仅供模型短期记忆，**不承担取证职责**（§8）。
 
 ---
 
@@ -229,31 +232,45 @@ def prepare(root, session, model_id):
 
 ## 9. 测试
 
-- [ ] `estimate_tokens`：纯 CJK / 纯拉丁 / 混合 / 空串 / 超长附件文本。
-- [ ] 阈值触发：构造历史刚好超/未超阈值，断言是否调用压缩。
-- [ ] 增量更新：多次压缩只在 `compactedUpTo` 之后增量并入。
-- [ ] 幂等：同一 `compactedUpTo` 不重复压缩。
-- [ ] **模型切换**：小→大不回滚；大→小触发即时压缩。
-- [ ] 窗口未知：回退默认值。
-- [ ] 溢出兜底：fake 模型抛 context-length 错误 → 触发压缩并重试一次。
-- [ ] 持久化：`summary`/`compactedUpTo` 落库并在重开后可恢复。
-- [ ] 事件：`compaction` SSE 事件 `phase=done` 字段完整。
-- [ ] 不变量：system prompt 与本轮用户消息从不被压缩。
+- [x] `estimate_tokens`：纯 CJK / 纯拉丁 / 混合 / 空串 / 超长附件文本。
+- [x] 阈值触发：构造历史刚好超/未超阈值，断言是否调用压缩。
+- [x] 增量更新：多次压缩只在 `compactedUpTo` 之后增量并入。
+- [x] 幂等：同一 `compactedUpTo` 不重复压缩。
+- [x] **模型切换**：小→大不回滚；大→小触发即时压缩。
+- [x] 窗口未知：回退默认值。
+- [x] 溢出兜底：fake 模型抛 context-length 错误 → 触发压缩并重试一次。
+- [x] 持久化：`summary`/`compactedUpTo` 落库并在重开后可恢复。
+- [x] 事件：`compaction` SSE 事件 `phase=done` 字段完整。
+- [x] 不变量：system prompt 与本轮用户消息从不被压缩。
+
+> 覆盖于 `services/agent/tests/test_token_budget.py`、`test_compaction.py`、
+> `test_agent_compaction.py`、`test_sessions.py`、`test_settings_api.py`、`test_models_api.py`。
 
 ## 10. 任务拆解
 
-- [ ] T1 `config/models.py` + `api/models.py`：档案新增 `contextWindow` / `maxOutputTokens`。
-- [ ] T2 新增 `agent/token_budget.py`：估算器 + 预算计算。
-- [ ] T3 `store/sessions.py`：新增列与 `get/set_summary`、`update_summary`。
-- [ ] T4 新增 `agent/compaction.py`：压缩决策 + LLM 摘要（增量）。
-- [ ] T5 `agent/graph.py`：`run_agent` 发送前接入 `prepare()`；`_load_history` 注入摘要。
-- [ ] T6 溢出兜底重试逻辑。
-- [ ] T7 `api/sessions.py`：`POST /sessions/{id}/compact`；`done.usage` 填充。
-- [ ] T8 前端：`compaction` 事件渲染 + 可选手动按钮。
-- [ ] T9 测试 + 文档。
+- [x] T1 `config/models.py` + `api/models.py`：档案新增 `contextWindow` / `maxOutputTokens`。
+- [x] T2 新增 `agent/token_budget.py`：估算器 + 预算计算。
+- [x] T3 `store/sessions.py`：新增列与 `get/set_summary`、`update_summary`。
+- [x] T4 新增 `agent/compaction.py`：压缩决策 + LLM 摘要（增量）。
+- [x] T5 `agent/graph.py`：`run_agent` 发送前接入 `prepare()`；`_load_history` 注入摘要。
+- [x] T6 溢出兜底重试逻辑。
+- [x] T7 `api/sessions.py`：`POST /sessions/{id}/compact`；`done.usage` 填充。
+- [x] T8 前端：`compaction` 事件渲染 + 可选手动按钮。
+- [x] T9 测试 + 文档。
 
-## 11. 待决问题
+## 12. 实现说明（2026-10-16）
 
-1. 摘要用**同一模型**还是固定一个轻量模型？（倾向同一模型，避免额外配置）
-2. `keepTokens` 默认 15000 是否合适审计场景？（可能偏小，需实测）
-3. 是否要暴露「压缩前原文导出」以留证？
+- **估算器**：优先 `tiktoken`（若已安装，作为 langchain 传递依赖常见存在），否则启发式
+  CJK≈1 token/字、拉丁≈4 字符/token。测试对边界断言固定用启发式以与后端分词器解耦。
+- **摘要注入位置**：压缩在 `run_agent` 内、构建 messages 之前执行（`history_entries` 为本轮之前的
+  会话投影）；摘要以一条 `SystemMessage` 注入在 system prompt 之后、保留区之前。`_load_history`
+  保留为「条目 → BaseMessages」的辅助函数。
+- **强制压缩**：溢出兜底与手动压缩均以 `force=True` 调用 `prepare`；若常规边界未推进，则回退为
+  「保留最新一条、其余并入」，保证压缩有进展且**最新一条永不被压缩**。
+- **前端**：`renderer` 无测试框架，T8 的验证以 `tsc --noEmit` + `vite build` 为准。
+
+## 11. 待决问题（已定）
+
+1. 摘要用**同一模型**（当前会话所选模型）生成，避免额外配置。
+2. `keepTokens` 默认 15000，且再取 `min(keepTokens, window/2)`，小窗口下自动收缩。
+3. 暂不暴露「压缩前原文导出」；`evidence.jsonl` / `findings.jsonl` 已是权威留痕（§8）。
