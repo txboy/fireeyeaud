@@ -19,6 +19,7 @@ _DEFAULTS: dict[str, Any] = {
         "reserveOutputTokens": 4096,
         "threshold": 0.9,
     },
+    "skills": {"mode": "lazy"},
     "telemetry": False,
 }
 
@@ -42,6 +43,7 @@ def load() -> dict[str, Any]:
         **_DEFAULTS["compaction"],
         **(data.get("compaction") or {}),
     }
+    merged["skills"] = {**_DEFAULTS["skills"], **(data.get("skills") or {})}
     merged["systemPrompt"] = str(merged.get("systemPrompt") or "")
     merged["telemetry"] = False
     return merged
@@ -54,6 +56,8 @@ def patch(update: dict[str, Any]) -> dict[str, Any]:
         merged["webSearch"] = {**current["webSearch"], **update["webSearch"]}
     if isinstance(update.get("compaction"), dict):
         merged["compaction"] = {**current["compaction"], **update["compaction"]}
+    if isinstance(update.get("skills"), dict):
+        merged["skills"] = {**current["skills"], **update["skills"]}
     merged["telemetry"] = False
     path = _path()
     path.parent.mkdir(parents=True, exist_ok=True)

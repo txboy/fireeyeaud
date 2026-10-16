@@ -54,3 +54,22 @@ async def test_settings_compaction_defaults_and_merge(tmp_path, monkeypatch):
         # 未提供的键保留默认
         assert patched["compaction"]["auto"] is True
         assert patched["compaction"]["threshold"] == 0.9
+
+
+async def test_settings_skills_mode_default_and_patch(tmp_path, monkeypatch):
+    monkeypatch.setenv("FIREYEAUD_GLOBAL_DIR", str(tmp_path / "global"))
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        default = (await client.get("/api/v1/settings")).json()
+        assert default["skills"] == {"mode": "lazy"}
+
+        patched = (
+            await client.patch(
+                "/api/v1/settings", json={"skills": {"mode": "eager"}}
+            )
+        ).json()
+        assert patched["skills"]["mode"] == "eager"
+
+        again = (await client.get("/api/v1/settings")).json()
+        assert again["skills"]["mode"] == "eager"

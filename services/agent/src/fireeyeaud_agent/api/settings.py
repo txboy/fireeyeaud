@@ -25,12 +25,17 @@ class CompactionBody(BaseModel):
     threshold: float | None = None
 
 
+class SkillsBody(BaseModel):
+    mode: str | None = None
+
+
 class SettingsPatch(BaseModel):
     locale: str | None = None
     theme: str | None = None
     systemPrompt: str | None = None
     webSearch: WebSearchBody | None = None
     compaction: CompactionBody | None = None
+    skills: SkillsBody | None = None
 
 
 @router.get("/settings")
