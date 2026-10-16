@@ -11,6 +11,8 @@ hiddenimports = (
     + collect_submodules("pydantic")
     + collect_submodules("oracledb")
     + collect_submodules("access_parser")
+    # MCP 接入（Phase 9）：客户端与传输子模块按需导入，需显式收集。
+    + collect_submodules("mcp")
 )
 
 a = Analysis(
