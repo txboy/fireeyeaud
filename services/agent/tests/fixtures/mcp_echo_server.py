@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 
 from mcp.server.mcpserver import MCPServer
 
@@ -12,6 +13,11 @@ server = MCPServer("echo")
 @server.tool(description="回显文本")
 def echo(text: str) -> str:
     return "echo:" + text
+
+
+@server.tool(description="读取子进程环境变量")
+def show_env(name: str) -> str:
+    return os.environ.get(name, "")
 
 
 if __name__ == "__main__":

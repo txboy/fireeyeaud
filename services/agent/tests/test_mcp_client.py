@@ -1,11 +1,10 @@
-"""MCP 执行层客户端（T2）：三传输连接 + tools/list + tools/call。"""
+"""MCP 执行层客户端（T2）+ 凭据注入（T7）。"""
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
-
-import pytest
 
 from fireeyeaud_agent.mcp import client
 from fireeyeaud_agent.store import secrets
@@ -73,3 +72,54 @@ async def test_stdio_session_discovers_and_calls(tmp_path):
 
         result = await session.call_tool("echo", {"text": "hi"})
         assert "echo:hi" in client.result_text(result)
+
+
+async def test_stdio_secret_reaches_subprocess_env(tmp_path):
+    secrets.set_one("sec_9", "TOPSECRET-9")
+    try:
+        server = {
+            "transport": "stdio",
+            "command": sys.executable,
+            "args": [str(_SERVER)],
+            "apiKeyRef": "sec_9",
+            "apiKeyEnv": "MY_API_KEY",
+        }
+        async with client.open_session(server, workspace=tmp_path) as session:
+            result = await session.call_tool("show_env", {"name": "MY_API_KEY"})
+            assert "TOPSECRET-9" in client.result_text(result)
+    finally:
+        secrets.clear()
+
+
+def test_secret_value_not_persisted_to_config(tmp_path, monkeypatch):
+    monkeypatch.setenv("FIREYEAUD_GLOBAL_DIR", str(tmp_path / "global"))
+    (tmp_path / "ws" / ".fireeye").mkdir(parents=True)
+    root = tmp_path / "ws"
+    from fireeyeaud_agent.store import mcp as mcp_store
+
+    secrets.set_one("sec_store", "DO-NOT-PERSIST")
+    try:
+        server = mcp_store.create_server(
+            {
+                "name": "s",
+                "transport": "stdio",
+                "command": "x",
+                "apiKeyRef": "sec_store",
+                "apiKeyEnv": "K",
+                "scope": "project",
+            },
+            root=root,
+        )
+        assert server["apiKeyRef"] == "sec_store"
+        blob = "\n".join(
+            p.read_text("utf-8")
+            for p in root.rglob("*")
+            if p.is_file()
+        )
+        assert "DO-NOT-PERSIST" not in blob
+        saved = json.loads(
+            (root / ".fireeye" / "config" / "mcp.json").read_text("utf-8")
+        )
+        assert saved["items"][0]["apiKeyRef"] == "sec_store"
+    finally:
+        secrets.clear()
