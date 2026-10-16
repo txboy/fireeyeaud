@@ -39,5 +39,9 @@ class Settings(BaseSettings):
     compact_keep_tokens: int = 15000
     compact_reserve_output_tokens: int = 4096
 
+    # MCP 接入（Phase 9）：连接/调用超时与单次输出上限。
+    mcp_timeout_seconds: int = 30
+    mcp_max_output_chars: int = 20_000
+
 
 settings = Settings()
