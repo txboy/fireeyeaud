@@ -24,6 +24,10 @@ class ModelBody(BaseModel):
     apiKeyRef: str | None = None
     isDefault: bool = False
     vision: bool = False
+    # 上下文窗口（token）；None 表示未知，运行时回退 FIREYEAUD_DEFAULT_CONTEXT_WINDOW。
+    contextWindow: int | None = None
+    # 单次最大输出 token；None 表示未知，运行时回退 compact_reserve_output_tokens。
+    maxOutputTokens: int | None = None
     scope: str = "global"
 
 
@@ -36,6 +40,8 @@ class ModelPatch(BaseModel):
     apiKeyRef: str | None = None
     isDefault: bool | None = None
     vision: bool | None = None
+    contextWindow: int | None = None
+    maxOutputTokens: int | None = None
 
 
 def _root():

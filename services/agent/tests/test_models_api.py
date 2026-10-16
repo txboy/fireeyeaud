@@ -62,6 +62,34 @@ async def test_models_crud_scope(tmp_path, monkeypatch) -> None:
         assert (await client.get("/api/v1/models?scope=global")).json()["items"] == []
 
 
+async def test_model_context_window_roundtrip(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("FIREYEAUD_GLOBAL_DIR", str(tmp_path / "home"))
+    async with _client() as client:
+        created = (
+            await client.post(
+                "/api/v1/models",
+                json={
+                    "name": "大窗口",
+                    "baseUrl": "http://x/v1",
+                    "model": "m",
+                    "contextWindow": 131072,
+                    "maxOutputTokens": 8192,
+                    "scope": "global",
+                },
+            )
+        ).json()
+        assert created["contextWindow"] == 131072
+        assert created["maxOutputTokens"] == 8192
+
+        patched = (
+            await client.patch(
+                f"/api/v1/models/{created['id']}?scope=global",
+                json={"contextWindow": 32768},
+            )
+        ).json()
+        assert patched["contextWindow"] == 32768
+
+
 async def test_project_scope_overrides_global(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("FIREYEAUD_GLOBAL_DIR", str(tmp_path / "home"))
     ws = tmp_path / "ws"
