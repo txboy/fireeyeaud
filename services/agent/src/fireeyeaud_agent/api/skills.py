@@ -15,6 +15,9 @@ router = APIRouter(tags=["skills"], dependencies=[Depends(require_token)])
 class SkillBody(BaseModel):
     name: str
     prompt: str
+    description: str | None = None
+    whenToUse: str | None = None
+    eager: bool = False
     toolIds: list[str] | None = None
     params: dict | None = None
     enabled: bool = False
@@ -25,6 +28,9 @@ class SkillBody(BaseModel):
 class SkillPatch(BaseModel):
     name: str | None = None
     prompt: str | None = None
+    description: str | None = None
+    whenToUse: str | None = None
+    eager: bool | None = None
     toolIds: list[str] | None = None
     params: dict | None = None
     enabled: bool | None = None
