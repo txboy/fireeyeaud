@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -69,6 +70,12 @@ def result_text(result: Any) -> str:
         kind = getattr(block, "type", None) or "content"
         uri = getattr(block, "uri", None)
         parts.append(f"[{kind}{' ' + str(uri) if uri else ''}]")
+    if not parts:
+        structured = getattr(result, "structured_content", None)
+        if structured is None:
+            structured = getattr(result, "structuredContent", None)
+        if structured is not None:
+            parts.append(json.dumps(structured, ensure_ascii=False, default=str))
     if not parts and getattr(result, "is_error", False):
         parts.append("MCP tool error")
     return "\n".join(parts)

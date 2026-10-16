@@ -5,6 +5,8 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
+import pytest
+
 from fireeyeaud_agent.mcp import manager
 from fireeyeaud_agent.mcp.client import McpToolSpec
 
@@ -180,6 +182,53 @@ async def test_tool_call_returns_normalized_text(tmp_path, monkeypatch):
         assert out == "echo:hi"
     finally:
         await result.aclose()
+
+
+async def test_tool_error_result_raises(tmp_path, monkeypatch):
+    root = _workspace(tmp_path, monkeypatch)
+    _write_servers(root, [_server("mcp_1", permissions={"toolsAllow": ["echo"]})])
+
+    @asynccontextmanager
+    async def fake_open(server, *, workspace=None):
+        class _Session:
+            async def list_tools(self):
+                return [McpToolSpec(name="echo", description="d", input_schema={})]
+
+            async def call_tool(self, name, arguments):
+                return SimpleNamespace(
+                    content=[SimpleNamespace(type="text", text="boom")],
+                    is_error=True,
+                )
+
+        yield _Session()
+
+    result = await manager.build_mcp_tools(root, {"mcp_1"}, open_session=fake_open)
+    try:
+        with pytest.raises(manager.McpToolError):
+            await result.tool_dict["mcp__mcp_1__echo"](root, {})
+    finally:
+        await result.aclose()
+
+
+async def test_server_tools_denies_network_without_permission(tmp_path, monkeypatch):
+    root = _workspace(tmp_path, monkeypatch)
+    server = _server(
+        "mcp_1",
+        transport="http",
+        url="http://x",
+        permissions={"net": False, "toolsAllow": ["*"]},
+    )
+    _write_servers(root, [server])
+    with pytest.raises(manager.McpUnavailable):
+        await manager.server_tools(root, server, ttl_seconds=0)
+
+
+async def test_server_tools_denies_disabled(tmp_path, monkeypatch):
+    root = _workspace(tmp_path, monkeypatch)
+    server = _server("mcp_1", enabled=False)
+    _write_servers(root, [server])
+    with pytest.raises(manager.McpUnavailable):
+        await manager.server_tools(root, server, ttl_seconds=0)
 
 
 async def test_aclose_closes_sessions(tmp_path, monkeypatch):

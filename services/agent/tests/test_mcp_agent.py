@@ -9,6 +9,7 @@ from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
 from fireeyeaud_agent.agent.graph import run_agent
+from fireeyeaud_agent.agent import graph as graph_mod
 from fireeyeaud_agent.mcp import manager as manager_mod
 from fireeyeaud_agent.store import mcp as mcp_store
 
@@ -112,3 +113,66 @@ async def test_run_agent_no_context_skips_mcp(tmp_path, monkeypatch):
     events = [e async for e in run_agent(tmp_path, "s_1", "hi", "zh-CN", model=model)]
     assert events[-1]["type"] == "done"
     assert captured == {}
+
+
+async def test_run_agent_tolerates_mcp_cleanup_failure(tmp_path, monkeypatch):
+    (tmp_path / ".fireeye").mkdir(parents=True)
+
+    async def fake_build(root, ids):
+        class _M:
+            tools: list = []
+            tool_dict: dict = {}
+            servers: list = []
+
+            async def aclose(self):
+                raise RuntimeError("teardown boom")
+
+        return _M()
+
+    monkeypatch.setattr(manager_mod, "build_mcp_tools", fake_build)
+    model = FakeChatModel(messages=iter([AIMessage(content="ok")]))
+    events = [
+        e
+        async for e in run_agent(
+            tmp_path, "s_1", "hi", "zh-CN", model=model, context={}
+        )
+    ]
+    assert events[-1]["type"] == "done"
+
+
+async def test_stream_chat_closes_mcp_on_early_abandon(tmp_path, monkeypatch):
+    from fireeyeaud_agent.agent.graph import stream_chat
+    from fireeyeaud_agent.store.workspace import workspace_manager
+
+    (tmp_path / ".fireeye").mkdir(parents=True)
+    workspace_manager.open(str(tmp_path))
+    captured: dict = {}
+
+    async def fake_build(root, ids):
+        captured["opened"] = True
+
+        class _M:
+            tools: list = []
+            tool_dict: dict = {}
+            servers: list = []
+
+            async def aclose(self):
+                captured["closed"] = True
+
+        return _M()
+
+    monkeypatch.setattr(manager_mod, "build_mcp_tools", fake_build)
+    monkeypatch.setattr(
+        graph_mod,
+        "build_chat_model",
+        lambda *_a, **_k: FakeChatModel(messages=iter([AIMessage(content="hi")])),
+    )
+    try:
+        agen = stream_chat("s_early", "hi", "zh-CN", context={})
+        first = await agen.__anext__()
+        assert first["event"] == "message"
+        assert captured.get("opened") is True
+        await agen.aclose()
+        assert captured.get("closed") is True
+    finally:
+        workspace_manager.close()

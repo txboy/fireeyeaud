@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import re
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Literal, Optional
 
@@ -16,9 +18,18 @@ from pydantic import BaseModel, Field, create_model
 from ..config.settings import settings
 from .client import McpToolSpec, result_text
 
+# 工具名只允许 [A-Za-z0-9_-]，且多数 provider 限制 ≤64 字符。
+_INVALID_NAME_CHARS = re.compile(r"[^A-Za-z0-9_-]")
+_MAX_TOOL_NAME = 64
+
 
 def tool_name(server_id: str, name: str) -> str:
-    return f"mcp__{server_id}__{name}"
+    raw = f"mcp__{server_id}__{name}"
+    safe = _INVALID_NAME_CHARS.sub("_", raw)
+    if len(safe) > _MAX_TOOL_NAME:
+        digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:8]
+        safe = safe[: _MAX_TOOL_NAME - 9] + "_" + digest
+    return safe
 
 
 def tool_description(server_name: str, spec: McpToolSpec) -> str:

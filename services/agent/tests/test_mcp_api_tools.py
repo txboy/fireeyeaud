@@ -115,3 +115,41 @@ async def test_tools_route_uses_cache(tmp_path, monkeypatch):
     assert first.json()["tools"][0]["name"] == "echo"
     assert second.json()["tools"][0]["name"] == "echo"
     assert calls["n"] == 1
+
+
+async def test_test_route_denies_network_when_permission_off(tmp_path, monkeypatch):
+    monkeypatch.setenv("FIREYEAUD_GLOBAL_DIR", str(tmp_path / "global"))
+    (tmp_path / "ws").mkdir()
+    _patch_connector(monkeypatch)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        sid = await _open_and_create(
+            client,
+            tmp_path,
+            {
+                "transport": "http",
+                "url": "http://example.invalid",
+                "permissions": {"net": False, "toolsAllow": ["*"]},
+            },
+        )
+        res = await client.post(f"/api/v1/mcp/servers/{sid}/test")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["ok"] is False
+    assert "net" in body["error"].lower()
+
+
+async def test_test_route_denies_disabled_server(tmp_path, monkeypatch):
+    monkeypatch.setenv("FIREYEAUD_GLOBAL_DIR", str(tmp_path / "global"))
+    (tmp_path / "ws").mkdir()
+    _patch_connector(monkeypatch)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        sid = await _open_and_create(client, tmp_path, {"enabled": False})
+        res = await client.post(f"/api/v1/mcp/servers/{sid}/test")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["ok"] is False
+    assert "disabled" in body["error"].lower()

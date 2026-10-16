@@ -21,6 +21,26 @@ from . import adapters, client
 
 _ALL = object()
 
+
+class McpUnavailable(RuntimeError):
+    """连接前置校验未通过（禁用 / 未授权网络传输）。"""
+
+
+class McpToolError(RuntimeError):
+    """MCP 工具返回 `isError` 结果。"""
+
+
+def _connect_guard(server: dict[str, Any]) -> str | None:
+    """连接前置校验：禁用或未授权网络传输时返回原因，否则 None。"""
+    if not server.get("enabled", True):
+        return "server is disabled"
+    perms = server.get("permissions") or {}
+    transport = str(server.get("transport") or "stdio").lower()
+    if transport in {"sse", "http"} and not perms.get("net", False):
+        return "network transport disabled by permissions.net"
+    return None
+
+
 # `tools/list` 预览缓存：key = root|serverId|配置指纹，value = (过期时间, specs)。
 _TOOLS_CACHE: dict[str, tuple[float, list[client.McpToolSpec]]] = {}
 
@@ -51,6 +71,9 @@ async def server_tools(
     open_session: Callable[..., Any] | None = None,
 ) -> list[client.McpToolSpec]:
     """连接 server 并返回其工具列表（带短 TTL 缓存，供预览/测试）。"""
+    reason = _connect_guard(server)
+    if reason is not None:
+        raise McpUnavailable(reason)
     key = f"{Path(root)}|{server.get('id')}|{_fingerprint(server)}"
     now = time.monotonic()
     hit = _TOOLS_CACHE.get(key)
@@ -126,22 +149,25 @@ async def build_mcp_tools(
     tool_dict: dict[str, Any] = {}
     servers: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
+    used_names: set[str] = set()
     by_id = {str(s.get("id")): s for s in mcp_store.list_servers(root)}
 
     try:
         for sid in sorted({str(x) for x in (server_ids or [])}):
             server = by_id.get(sid)
-            if server is None or not server.get("enabled", True):
+            if server is None:
                 continue
             name = str(server.get("name") or sid)
             perms = server.get("permissions") or {}
-            transport = str(server.get("transport") or "stdio").lower()
-            if transport in {"sse", "http"} and not perms.get("net", False):
+            reason = _connect_guard(server)
+            if reason is not None:
                 errors.append(
                     {
                         "serverId": sid,
-                        "code": "E_MCP_NET_DENIED",
-                        "message": "network transport disabled by permissions.net",
+                        "code": "E_MCP_DISABLED"
+                        if not server.get("enabled", True)
+                        else "E_MCP_NET_DENIED",
+                        "message": reason,
                     }
                 )
                 continue
@@ -171,6 +197,18 @@ async def build_mcp_tools(
                 if allowed is not _ALL and spec.name not in allowed:  # type: ignore[operator]
                     continue
                 lname = adapters.tool_name(sid, spec.name)
+                if lname in used_names:
+                    lname = adapters.tool_name(
+                        sid, f"{spec.name}_{spec.name}"
+                    )  # 稳定去重后缀
+                    errors.append(
+                        {
+                            "serverId": sid,
+                            "tool": spec.name,
+                            "code": "E_MCP_NAME",
+                            "message": "tool name collision after sanitization",
+                        }
+                    )
                 try:
                     schema = adapters.schema_to_model(
                         f"MCPArgs_{sid}_{spec.name}", spec.input_schema
@@ -192,6 +230,10 @@ async def build_mcp_tools(
                     _tool: str = spec.name,
                 ) -> Any:
                     res = await _session.call_tool(_tool, args or {})
+                    if getattr(res, "is_error", False):
+                        raise McpToolError(
+                            client.result_text(res) or f"MCP tool {_tool} failed"
+                        )
                     return adapters.normalize_result(res)
 
                 tools.append(
@@ -203,6 +245,7 @@ async def build_mcp_tools(
                     )
                 )
                 tool_dict[lname] = adapters.dict_entry(_call)
+                used_names.add(lname)
                 exposed.append(spec.name)
 
             if exposed:

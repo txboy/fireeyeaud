@@ -14,6 +14,16 @@ def test_tool_name_prefixes_server_and_tool():
     assert adapters.tool_name("mcp_1", "read_file") == "mcp__mcp_1__read_file"
 
 
+def test_tool_name_sanitizes_invalid_chars():
+    assert adapters.tool_name("srv", "a.b c") == "mcp__srv__a_b_c"
+
+
+def test_tool_name_caps_length_with_hash():
+    name = adapters.tool_name("mcp_1", "x" * 200)
+    assert len(name) <= 64
+    assert name.startswith("mcp__mcp_1__")
+
+
 def test_tool_description_includes_server_name():
     spec = McpToolSpec(name="echo", description="回显", input_schema={})
     assert adapters.tool_description("echo-server", spec) == "[echo-server] 回显"
@@ -164,3 +174,13 @@ def test_normalize_result_truncates_to_cap(monkeypatch):
     out = adapters.normalize_result(_Result())
     assert out.startswith("x" * 10)
     assert "truncated" in out
+
+
+def test_normalize_result_falls_back_to_structured_content():
+    class _Result:
+        content = []
+        structured_content = {"answer": 42, "note": "ok"}
+        is_error = False
+
+    out = adapters.normalize_result(_Result())
+    assert "answer" in out and "42" in out

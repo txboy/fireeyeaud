@@ -11,6 +11,7 @@ import inspect
 import json
 import time
 from collections.abc import AsyncIterator
+from contextlib import aclosing
 from pathlib import Path
 from typing import Any
 
@@ -591,7 +592,10 @@ async def run_agent(
         yield event("done", {"usage": usage})
     finally:
         if mcp_tools is not None:
-            await mcp_tools.aclose()
+            try:
+                await mcp_tools.aclose()
+            except Exception as exc:  # noqa: BLE001 - 清理失败不应污染本轮结果
+                print(f"===== MCP cleanup failed =====\n{exc!r}", flush=True)
 
 
 async def compact_session_manual(
@@ -826,22 +830,27 @@ async def stream_chat(
     )
 
     answer_parts: list[str] = []
-    async for ev in run_agent(
-        root,
-        session_id,
-        agent_message,
-        locale,
-        model_id=model_id,
-        history_entries=history_entries,
-        context=context,
-        attachment_texts=attachment_texts,
-        image_blocks=read.image_blocks,
-        options=snapshot,
-        event_factory=event,
-    ):
-        if ev.get("type") == "token":
-            answer_parts.append(str(ev.get("data", {}).get("delta", "")))
-        yield _wrap(ev)
+    # `aclosing`：在消费任务内显式关闭 run_agent，确保 MCP 会话的 finally 在
+    # 同一任务中运行（客户端断开/取消时不会被 GC 跨任务终结）。
+    async with aclosing(
+        run_agent(
+            root,
+            session_id,
+            agent_message,
+            locale,
+            model_id=model_id,
+            history_entries=history_entries,
+            context=context,
+            attachment_texts=attachment_texts,
+            image_blocks=read.image_blocks,
+            options=snapshot,
+            event_factory=event,
+        )
+    ) as agent_stream:
+        async for ev in agent_stream:
+            if ev.get("type") == "token":
+                answer_parts.append(str(ev.get("data", {}).get("delta", "")))
+            yield _wrap(ev)
 
     answer = "".join(answer_parts).strip()
     if answer:
