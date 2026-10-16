@@ -17,6 +17,7 @@ from .check_tie import check_tie
 from .describe_source import describe_source
 from .kb_search import kb_search
 from .list_files import list_files
+from .load_skill import load_skill
 from .parse_ledger import parse_ledger
 from .read_file import read_file
 from .run_rule import run_rule
@@ -105,6 +106,10 @@ class SearchFilesArgs(BaseModel):
     limit: int | None = Field(default=50, description="最多返回条数")
 
 
+class LoadSkillArgs(BaseModel):
+    skillId: str = Field(description="技能 id，如 sk_3（见系统提示词中的可用技能列表）")
+
+
 _SPECS: list[tuple[str, str, ToolFn, type[BaseModel]]] = [
     (
         "describe_source",
@@ -147,6 +152,12 @@ _SPECS: list[tuple[str, str, ToolFn, type[BaseModel]]] = [
         "校验科目余额勾稽或表级借贷平衡，返回差异明细。",
         check_tie,
         CheckTieArgs,
+    ),
+    (
+        "load_skill",
+        "获取某个可用技能的完整方法/视角正文（技能 id 见系统提示词中的可用技能列表）。",
+        load_skill,
+        LoadSkillArgs,
     ),
 ]
 
@@ -193,6 +204,8 @@ def _context_wrapper(fn: ToolFn, context: dict[str, Any] | None) -> ToolFn:
                 merged["allowedRuleIds"] = context["allowedRuleIds"]
         elif fn is kb_search and "allowedProviderIds" in context:
             merged["allowedProviderIds"] = context["allowedProviderIds"]
+        elif fn is load_skill and "allowedSkillIds" in context:
+            merged["allowedSkillIds"] = context["allowedSkillIds"]
         return fn(root, merged)
 
     return wrapped
