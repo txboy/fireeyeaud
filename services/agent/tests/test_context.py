@@ -54,6 +54,43 @@ def test_registry_context_includes_allowed_rules(tmp_path, monkeypatch):
     assert _registry_context(root, {})["allowedRuleIds"] == {default["id"]}
 
 
+def test_registry_context_includes_allowed_mcp_ids(tmp_path, monkeypatch):
+    root = _ws(tmp_path, monkeypatch)
+    from fireeyeaud_agent.store import mcp as mcp_store
+
+    default = mcp_store.create_server(
+        {
+            "name": "D",
+            "transport": "stdio",
+            "command": "x",
+            "enabled": True,
+            "isDefault": True,
+            "scope": "project",
+        },
+        root=root,
+    )
+    other = mcp_store.create_server(
+        {"name": "O", "transport": "stdio", "command": "x", "enabled": True, "scope": "project"},
+        root=root,
+    )
+    disabled = mcp_store.create_server(
+        {
+            "name": "X",
+            "transport": "stdio",
+            "command": "x",
+            "enabled": False,
+            "isDefault": True,
+            "scope": "project",
+        },
+        root=root,
+    )
+
+    ctx = _registry_context(root, {"mcpServerIds": [other["id"]]})
+    assert ctx["allowedMcpServerIds"] == {default["id"], other["id"]}
+    assert disabled["id"] not in ctx["allowedMcpServerIds"]
+    assert _registry_context(root, {})["allowedMcpServerIds"] == {default["id"]}
+
+
 def test_run_rule_tool_gate(tmp_path, monkeypatch):
     import pytest
 

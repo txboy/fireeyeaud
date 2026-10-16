@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 
 from ..config.models import build_chat_model, select_profile
 from ..config.settings import settings
+from ..mcp import manager
 from ..store import app_settings
 from ..store.evidence import append_evidence
 from ..store.findings import create_finding
@@ -202,6 +203,7 @@ def _registry_context(
     """
     if context is None:
         return None
+    from ..mcp import manager as mcp_manager
     from ..store import db as db_store
     from ..store import knowledge as kb_store
     from ..store import rules as rules_store
@@ -216,6 +218,9 @@ def _registry_context(
         "allowedRuleIds": _allowed_ids(
             [r for r in rules_store.list_rules(root) if r.get("enabled") and r.get("sql")],
             context.get("ruleIds"),
+        ),
+        "allowedMcpServerIds": mcp_manager.effective_server_ids(
+            root, context.get("mcpServerIds")
         ),
     }
 
@@ -251,321 +256,336 @@ async def run_agent(
         ),
         _report_finding_tool(),
     ]
-    bound = _maybe_bind(active_model, tools)
     tool_dict = build_tool_dict(
         root, registry_ctx, model_id=model_id, build_model=build_file_model
     )
-
-    from ..store.rules import list_rules
-    from ..store.skills import prompts_for
-
-    enabled_rules = [r for r in list_rules(root) if r.get("enabled") and r.get("sql")]
-    if registry_ctx is not None:
-        allowed_rules = registry_ctx.get("allowedRuleIds") or set()
-        rules = [r for r in enabled_rules if str(r.get("id")) in allowed_rules]
-    else:
-        rules = enabled_rules
-    skill_prompts = prompts_for(root, (context or {}).get("skillIds"))
-    custom_prompt = (app_settings.load().get("systemPrompt") or "").strip() or None
-    system_text = system_prompt(locale, rules, skill_prompts, custom_prompt)
-    messages: list[BaseMessage] = [SystemMessage(content=system_text)]
-
-    yield event("status", {"phase": "planning"})
-    if options is not None:
-        yield event("context", {"options": options})
-
-    # 附件文本（本地抽取 + 视觉转写）并入用户消息正文；图片/扫描页在首步直传原图。
-    from ..store.attachments import render_attachment_texts
-
-    texts = list(attachment_texts or [])
-    blocks = list(image_blocks or [])
-    local_block = render_attachment_texts(
-        [t for t in texts if t.get("source") == "local"]
-    )
-    step1_text = message + (f"\n\n{local_block}" if local_block else "")
-
-    # 本轮用户消息（首步可能携带原图内容块）。
-    if blocks:
-        current_message = HumanMessage(
-            content=[{"type": "text", "text": step1_text}, *blocks]
-        )
-    else:
-        current_message = HumanMessage(content=step1_text)
-
-    app_compact: dict[str, Any] = {}
-    profile: dict[str, Any] | None = None
-    active_summary: dict[str, Any] | None = None
-
-    # 上下文压缩（Phase 9）：按当前模型预算，必要时把较早对话并入摘要。
-    if history_entries is not None:
-        from ..store.sessions import get_summary
-
-        app_compact = app_settings.load().get("compaction") or {}
-        profile = select_profile(root, model_id)
-        result = None
-        yield event("status", {"phase": "compacting"})
-        try:
-            result = await prepare(
-                fe,
-                session_id,
-                entries=history_entries,
-                system_text=system_text,
-                new_turn_text=step1_text,
-                model=active_model,
-                model_id=model_id,
-                profile=profile,
-                locale=locale,
-                app_compaction=app_compact,
+    mcp_tools = None
+    try:
+        mcp_tools = (
+            await manager.build_mcp_tools(
+                root, registry_ctx.get("allowedMcpServerIds")
             )
-        except Exception as exc:  # noqa: BLE001 - 摘要失败不应中断整轮
-            print(f"===== compaction failed =====\n{exc!r}", flush=True)
+            if registry_ctx is not None
+            else None
+        )
+        if mcp_tools is not None:
+            tools.extend(mcp_tools.tools)
+            tool_dict.update(mcp_tools.tool_dict)
+        bound = _maybe_bind(active_model, tools)
+
+        from ..store.rules import list_rules
+        from ..store.skills import prompts_for
+
+        enabled_rules = [r for r in list_rules(root) if r.get("enabled") and r.get("sql")]
+        if registry_ctx is not None:
+            allowed_rules = registry_ctx.get("allowedRuleIds") or set()
+            rules = [r for r in enabled_rules if str(r.get("id")) in allowed_rules]
+        else:
+            rules = enabled_rules
+        skill_prompts = prompts_for(root, (context or {}).get("skillIds"))
+        custom_prompt = (app_settings.load().get("systemPrompt") or "").strip() or None
+        system_text = system_prompt(locale, rules, skill_prompts, custom_prompt)
+        messages: list[BaseMessage] = [SystemMessage(content=system_text)]
+
+        yield event("status", {"phase": "planning"})
+        if options is not None:
+            yield event("context", {"options": options})
+
+        # 附件文本（本地抽取 + 视觉转写）并入用户消息正文；图片/扫描页在首步直传原图。
+        from ..store.attachments import render_attachment_texts
+
+        texts = list(attachment_texts or [])
+        blocks = list(image_blocks or [])
+        local_block = render_attachment_texts(
+            [t for t in texts if t.get("source") == "local"]
+        )
+        step1_text = message + (f"\n\n{local_block}" if local_block else "")
+
+        # 本轮用户消息（首步可能携带原图内容块）。
+        if blocks:
+            current_message = HumanMessage(
+                content=[{"type": "text", "text": step1_text}, *blocks]
+            )
+        else:
+            current_message = HumanMessage(content=step1_text)
+
+        app_compact: dict[str, Any] = {}
+        profile: dict[str, Any] | None = None
+        active_summary: dict[str, Any] | None = None
+
+        # 上下文压缩（Phase 9）：按当前模型预算，必要时把较早对话并入摘要。
+        if history_entries is not None:
+            from ..store.sessions import get_summary
+
+            app_compact = app_settings.load().get("compaction") or {}
+            profile = select_profile(root, model_id)
             result = None
-        if result is not None and result.compacted:
-            yield event("compaction", _compaction_data(result, model_id))
-        active_summary = (result.summary if result else None) or get_summary(
-            fe, session_id
-        )
-        messages.extend(_entries_to_messages(history_entries, active_summary))
-    elif history:
-        messages.extend(history)
-
-    messages.append(current_message)
-    human_index = len(messages) - 1
-
-    def _usage() -> dict[str, Any]:
-        """done 事件的用量：最近估算总 token 与当前模型窗口（方案 §4.5）。"""
-        return {
-            "tokensEstimated": estimate_messages_tokens(messages),
-            "contextWindow": resolve_context_window(
-                profile, default=settings.default_context_window
-            ),
-        }
-
-    evidence_ids: list[str] = []
-
-    async def execute_tool(name: str, args: dict[str, Any]) -> Any:
-        if name == "report_finding":
-            record = create_finding(
-                root,
-                title=args.get("title", ""),
-                description=args.get("description", ""),
-                severity=args.get("severity", "medium"),
-                dataRefs=args.get("dataRefs", []),
-                sessionId=session_id,
-                lang=locale or "zh-CN",
-                subjects=args.get("subjects"),
-                amount=args.get("amount"),
-                ruleKey=args.get("ruleKey"),
-                origin="agent",
-                evidenceRefs=list(evidence_ids),
+            yield event("status", {"phase": "compacting"})
+            try:
+                result = await prepare(
+                    fe,
+                    session_id,
+                    entries=history_entries,
+                    system_text=system_text,
+                    new_turn_text=step1_text,
+                    model=active_model,
+                    model_id=model_id,
+                    profile=profile,
+                    locale=locale,
+                    app_compaction=app_compact,
+                )
+            except Exception as exc:  # noqa: BLE001 - 摘要失败不应中断整轮
+                print(f"===== compaction failed =====\n{exc!r}", flush=True)
+                result = None
+            if result is not None and result.compacted:
+                yield event("compaction", _compaction_data(result, model_id))
+            active_summary = (result.summary if result else None) or get_summary(
+                fe, session_id
             )
-            return {"id": record["id"], "status": record["status"]}
-        if name not in tool_dict:
-            raise ValueError(f"unknown tool: {name}")
-        value = tool_dict[name](root, args)
-        return await value if inspect.isawaitable(value) else value
+            messages.extend(_entries_to_messages(history_entries, active_summary))
+        elif history:
+            messages.extend(history)
 
-    step = 0
-    overflow_retried = False
-    # 本轮已追加的 AI / 工具消息：溢出重试重建 messages 时保留，避免重复执行工具。
-    turn_extra: list[BaseMessage] = []
-    while True:
-        step += 1
-        if step > settings.max_steps:
-            yield event("done", {"usage": _usage(), "messageKey": "error.agentLimit"})
-            return
+        messages.append(current_message)
+        human_index = len(messages) - 1
 
-        yield event("status", {"phase": "executing"})
-        # 每次发给大模型的参数打印到 sidecar 控制台（Electron 主进程日志）。
-        print(format_llm_request(messages, step=step), flush=True)
-        ai: AIMessage | None = None
-        try:
-            # 流式调用：内容边生成边推送 token，避免长时间黑屏。
-            # 用整体超时兜底：服务端持续发送空块（推理阶段）时，HTTP 读超时不会触发。
-            async with asyncio.timeout(settings.turn_timeout_seconds):
-                async for chunk in bound.astream(messages):
-                    ai = chunk if ai is None else ai + chunk
-                    piece = chunk.content
-                    if isinstance(piece, str) and piece:
-                        yield event("token", {"delta": piece})
-        except TimeoutError:
-            print(
-                f"===== LLM timeout (step {step}) after "
-                f"{settings.turn_timeout_seconds}s =====",
-                flush=True,
-            )
-            yield event(
-                "error",
-                {
-                    "code": "E_LLM_TIMEOUT",
-                    "messageKey": "error.llmTimeout",
-                    "params": {},
-                },
-            )
-            yield event("done", {"usage": _usage()})
-            return
-        except Exception as exc:  # noqa: BLE001 - 模型不可达/鉴权失败/超时
-            # 溢出兜底：provider 报上下文超限 → 强制压缩一次并重试一次（§4.4/§6.2）。
-            if (
-                is_context_overflow(exc)
-                and history_entries is not None
-                and not overflow_retried
-            ):
-                overflow_retried = True
+        def _usage() -> dict[str, Any]:
+            """done 事件的用量：最近估算总 token 与当前模型窗口（方案 §4.5）。"""
+            return {
+                "tokensEstimated": estimate_messages_tokens(messages),
+                "contextWindow": resolve_context_window(
+                    profile, default=settings.default_context_window
+                ),
+            }
+
+        evidence_ids: list[str] = []
+
+        async def execute_tool(name: str, args: dict[str, Any]) -> Any:
+            if name == "report_finding":
+                record = create_finding(
+                    root,
+                    title=args.get("title", ""),
+                    description=args.get("description", ""),
+                    severity=args.get("severity", "medium"),
+                    dataRefs=args.get("dataRefs", []),
+                    sessionId=session_id,
+                    lang=locale or "zh-CN",
+                    subjects=args.get("subjects"),
+                    amount=args.get("amount"),
+                    ruleKey=args.get("ruleKey"),
+                    origin="agent",
+                    evidenceRefs=list(evidence_ids),
+                )
+                return {"id": record["id"], "status": record["status"]}
+            if name not in tool_dict:
+                raise ValueError(f"unknown tool: {name}")
+            value = tool_dict[name](root, args)
+            return await value if inspect.isawaitable(value) else value
+
+        step = 0
+        overflow_retried = False
+        # 本轮已追加的 AI / 工具消息：溢出重试重建 messages 时保留，避免重复执行工具。
+        turn_extra: list[BaseMessage] = []
+        while True:
+            step += 1
+            if step > settings.max_steps:
+                yield event("done", {"usage": _usage(), "messageKey": "error.agentLimit"})
+                return
+
+            yield event("status", {"phase": "executing"})
+            # 每次发给大模型的参数打印到 sidecar 控制台（Electron 主进程日志）。
+            print(format_llm_request(messages, step=step), flush=True)
+            ai: AIMessage | None = None
+            try:
+                # 流式调用：内容边生成边推送 token，避免长时间黑屏。
+                # 用整体超时兜底：服务端持续发送空块（推理阶段）时，HTTP 读超时不会触发。
+                async with asyncio.timeout(settings.turn_timeout_seconds):
+                    async for chunk in bound.astream(messages):
+                        ai = chunk if ai is None else ai + chunk
+                        piece = chunk.content
+                        if isinstance(piece, str) and piece:
+                            yield event("token", {"delta": piece})
+            except TimeoutError:
                 print(
-                    f"===== LLM context overflow (step {step}) — forcing "
-                    f"compaction and retrying =====\n{exc!r}",
+                    f"===== LLM timeout (step {step}) after "
+                    f"{settings.turn_timeout_seconds}s =====",
                     flush=True,
                 )
-                from ..store.sessions import get_summary
-
-                try:
-                    forced = await prepare(
-                        fe,
-                        session_id,
-                        entries=history_entries,
-                        system_text=system_text,
-                        new_turn_text=step1_text,
-                        model=active_model,
-                        model_id=model_id,
-                        profile=profile,
-                        locale=locale,
-                        app_compaction=app_compact,
-                        force=True,
-                    )
-                except Exception as force_exc:  # noqa: BLE001 - 压缩失败则走常规报错
-                    print(
-                        f"===== forced compaction failed =====\n{force_exc!r}",
-                        flush=True,
-                    )
-                    forced = None
-                if forced is not None:
-                    active_summary = forced.summary or get_summary(fe, session_id)
-                    # 保留本轮已执行的 AI / 工具消息，避免重试时重复执行工具。
-                    rebuilt: list[BaseMessage] = [SystemMessage(content=system_text)]
-                    rebuilt.extend(
-                        _entries_to_messages(history_entries, active_summary)
-                    )
-                    rebuilt.append(current_message)
-                    rebuilt.extend(turn_extra)
-                    messages[:] = rebuilt
-                    human_index = len(messages) - 1 - len(turn_extra)
-                    if forced.compacted:
-                        yield event(
-                            "compaction", _compaction_data(forced, model_id)
-                        )
-                    continue
-            print(
-                f"===== LLM error (step {step}) =====\n{exc!r}\n===== end LLM error =====",
-                flush=True,
-            )
-            yield event(
-                "error",
-                {
-                    "code": "E_LLM_UNAVAILABLE",
-                    "messageKey": "error.llmUnavailable",
-                    "params": {
-                        "reason": str(exc),
-                        "tokensEstimated": estimate_tokens(system_text)
-                        + sum(
-                            estimate_tokens(str(e.get("text") or ""))
-                            for e in (history_entries or [])
-                        )
-                        + estimate_tokens(step1_text),
-                    },
-                },
-            )
-            yield event("done", {"usage": _usage()})
-            return
-
-        if ai is None:
-            yield event(
-                "error",
-                {
-                    "code": "E_LLM_UNAVAILABLE",
-                    "messageKey": "error.llmUnavailable",
-                    "params": {},
-                },
-            )
-            yield event("done", {"usage": _usage()})
-            return
-
-        print(format_llm_response(ai, step=step), flush=True)
-
-        tool_calls = list(getattr(ai, "tool_calls", []) or [])
-        if not tool_calls:
-            text = ai.content if isinstance(ai.content, str) else str(ai.content)
-            if not text.strip():
-                # 模型只产出推理、没有正文：明确报错，避免静默无回复。
                 yield event(
                     "error",
                     {
-                        "code": "E_EMPTY_RESPONSE",
-                        "messageKey": "error.emptyResponse",
+                        "code": "E_LLM_TIMEOUT",
+                        "messageKey": "error.llmTimeout",
                         "params": {},
                     },
                 )
-            break
+                yield event("done", {"usage": _usage()})
+                return
+            except Exception as exc:  # noqa: BLE001 - 模型不可达/鉴权失败/超时
+                # 溢出兜底：provider 报上下文超限 → 强制压缩一次并重试一次（§4.4/§6.2）。
+                if (
+                    is_context_overflow(exc)
+                    and history_entries is not None
+                    and not overflow_retried
+                ):
+                    overflow_retried = True
+                    print(
+                        f"===== LLM context overflow (step {step}) — forcing "
+                        f"compaction and retrying =====\n{exc!r}",
+                        flush=True,
+                    )
+                    from ..store.sessions import get_summary
 
-        # 首步已把原图直传给模型；从第 2 步起改为文本（附件文本），避免重复上传图片。
-        if step == 1 and blocks:
-            full_block = render_attachment_texts(texts)
-            messages[human_index] = HumanMessage(
-                content=message + (f"\n\n{full_block}" if full_block else "")
-            )
+                    try:
+                        forced = await prepare(
+                            fe,
+                            session_id,
+                            entries=history_entries,
+                            system_text=system_text,
+                            new_turn_text=step1_text,
+                            model=active_model,
+                            model_id=model_id,
+                            profile=profile,
+                            locale=locale,
+                            app_compaction=app_compact,
+                            force=True,
+                        )
+                    except Exception as force_exc:  # noqa: BLE001 - 压缩失败则走常规报错
+                        print(
+                            f"===== forced compaction failed =====\n{force_exc!r}",
+                            flush=True,
+                        )
+                        forced = None
+                    if forced is not None:
+                        active_summary = forced.summary or get_summary(fe, session_id)
+                        # 保留本轮已执行的 AI / 工具消息，避免重试时重复执行工具。
+                        rebuilt: list[BaseMessage] = [SystemMessage(content=system_text)]
+                        rebuilt.extend(
+                            _entries_to_messages(history_entries, active_summary)
+                        )
+                        rebuilt.append(current_message)
+                        rebuilt.extend(turn_extra)
+                        messages[:] = rebuilt
+                        human_index = len(messages) - 1 - len(turn_extra)
+                        if forced.compacted:
+                            yield event(
+                                "compaction", _compaction_data(forced, model_id)
+                            )
+                        continue
+                print(
+                    f"===== LLM error (step {step}) =====\n{exc!r}\n===== end LLM error =====",
+                    flush=True,
+                )
+                yield event(
+                    "error",
+                    {
+                        "code": "E_LLM_UNAVAILABLE",
+                        "messageKey": "error.llmUnavailable",
+                        "params": {
+                            "reason": str(exc),
+                            "tokensEstimated": estimate_tokens(system_text)
+                            + sum(
+                                estimate_tokens(str(e.get("text") or ""))
+                                for e in (history_entries or [])
+                            )
+                            + estimate_tokens(step1_text),
+                        },
+                    },
+                )
+                yield event("done", {"usage": _usage()})
+                return
 
-        messages.append(ai)
-        turn_extra.append(ai)
-        for call in tool_calls:
-            call_id = call.get("id") or f"call_{step}"
-            name = call.get("name", "")
-            args = call.get("args") or {}
-            started = time.monotonic()
-            append_evidence(
-                root,
-                session_id=session_id,
-                step="tool_call",
-                tool=name,
-                params=args,
-                lang=locale or "zh-CN",
-            )
-            yield event("tool_call", {"callId": call_id, "tool": name, "params": args})
-            try:
-                result = await execute_tool(name, args)
-                ok = True
-                summary = _summarize(result)
-                if name == "report_finding":
-                    yield event("finding", {"id": result["id"], "event": "created"})
-            except Exception as exc:  # noqa: BLE001 - 工具失败回传摘要
-                ok = False
-                result = {"error": str(exc)}
-                summary = str(exc)
-            recorded = append_evidence(
-                root,
-                session_id=session_id,
-                step="tool_result",
-                tool=name,
-                params=args,
-                result_summary=summary,
-                result=result,
-                duration_ms=int((time.monotonic() - started) * 1000),
-                lang=locale or "zh-CN",
-            )
-            evidence_ids.append(recorded["id"])
-            yield event(
-                "tool_result", {"callId": call_id, "summary": summary, "ok": ok}
-            )
-            messages.append(
-                ToolMessage(content=_tool_message_content(result), tool_call_id=call_id)
-            )
-            turn_extra.append(messages[-1])
-        yield event("status", {"phase": "reflecting"})
+            if ai is None:
+                yield event(
+                    "error",
+                    {
+                        "code": "E_LLM_UNAVAILABLE",
+                        "messageKey": "error.llmUnavailable",
+                        "params": {},
+                    },
+                )
+                yield event("done", {"usage": _usage()})
+                return
 
-    usage = _usage()
-    from ..store.sessions import set_tokens_estimate
+            print(format_llm_response(ai, step=step), flush=True)
 
-    set_tokens_estimate(fe, session_id, usage["tokensEstimated"])
-    yield event("done", {"usage": usage})
+            tool_calls = list(getattr(ai, "tool_calls", []) or [])
+            if not tool_calls:
+                text = ai.content if isinstance(ai.content, str) else str(ai.content)
+                if not text.strip():
+                    # 模型只产出推理、没有正文：明确报错，避免静默无回复。
+                    yield event(
+                        "error",
+                        {
+                            "code": "E_EMPTY_RESPONSE",
+                            "messageKey": "error.emptyResponse",
+                            "params": {},
+                        },
+                    )
+                break
+
+            # 首步已把原图直传给模型；从第 2 步起改为文本（附件文本），避免重复上传图片。
+            if step == 1 and blocks:
+                full_block = render_attachment_texts(texts)
+                messages[human_index] = HumanMessage(
+                    content=message + (f"\n\n{full_block}" if full_block else "")
+                )
+
+            messages.append(ai)
+            turn_extra.append(ai)
+            for call in tool_calls:
+                call_id = call.get("id") or f"call_{step}"
+                name = call.get("name", "")
+                args = call.get("args") or {}
+                started = time.monotonic()
+                append_evidence(
+                    root,
+                    session_id=session_id,
+                    step="tool_call",
+                    tool=name,
+                    params=args,
+                    lang=locale or "zh-CN",
+                )
+                yield event("tool_call", {"callId": call_id, "tool": name, "params": args})
+                try:
+                    result = await execute_tool(name, args)
+                    ok = True
+                    summary = _summarize(result)
+                    if name == "report_finding":
+                        yield event("finding", {"id": result["id"], "event": "created"})
+                except Exception as exc:  # noqa: BLE001 - 工具失败回传摘要
+                    ok = False
+                    result = {"error": str(exc)}
+                    summary = str(exc)
+                recorded = append_evidence(
+                    root,
+                    session_id=session_id,
+                    step="tool_result",
+                    tool=name,
+                    params=args,
+                    result_summary=summary,
+                    result=result,
+                    duration_ms=int((time.monotonic() - started) * 1000),
+                    lang=locale or "zh-CN",
+                )
+                evidence_ids.append(recorded["id"])
+                yield event(
+                    "tool_result", {"callId": call_id, "summary": summary, "ok": ok}
+                )
+                messages.append(
+                    ToolMessage(content=_tool_message_content(result), tool_call_id=call_id)
+                )
+                turn_extra.append(messages[-1])
+            yield event("status", {"phase": "reflecting"})
+
+        usage = _usage()
+        from ..store.sessions import set_tokens_estimate
+
+        set_tokens_estimate(fe, session_id, usage["tokensEstimated"])
+        yield event("done", {"usage": usage})
+    finally:
+        if mcp_tools is not None:
+            await mcp_tools.aclose()
 
 
 async def compact_session_manual(
