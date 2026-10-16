@@ -289,6 +289,61 @@ async def test_model_switch_down_compacts_immediately(tmp_path, monkeypatch):
     assert small.summarized_up_to == 10
 
 
+async def test_prepare_prefers_profile_reserve_output(tmp_path, monkeypatch):
+    root = _ws(tmp_path, monkeypatch)
+    fe = root / ".fireeye"
+    sid = sessions.create_session(fe, root, None)["id"]
+    # 档案 maxOutputTokens=50 → reserve=50（可用 150、触发 108）；若误用 app 的 4096
+    # 则 available=0 → 触发 0，任何估算都会压缩。
+    result = await prepare(
+        fe,
+        sid,
+        entries=[_entry(1, 1)],
+        system_text="a" * 4,
+        new_turn_text="a" * 4,
+        model=_Summarizer(),
+        model_id="mdl_1",
+        profile={"contextWindow": 200, "maxOutputTokens": 50},
+        app_compaction={
+            "auto": True,
+            "keepTokens": 100,
+            "reserveOutputTokens": 4096,
+            "threshold": 0.9,
+        },
+    )
+    # 档案 maxOutputTokens=50 → reserve=50：available=150、safe=120、trigger=108。
+    # 若误用 app 的 reserveOutputTokens=4096 → available=0 → trigger=0。
+    assert result.trigger == 108
+
+
+class _BlankSummarizer(_Summarizer):
+    async def ainvoke(self, messages):
+        self.calls += 1
+        self.transcripts.append("\n".join(str(m.content) for m in messages))
+        return AIMessage(content="   ")
+
+
+async def test_prepare_skips_blank_summary(tmp_path, monkeypatch):
+    root = _ws(tmp_path, monkeypatch)
+    fe = root / ".fireeye"
+    sid = sessions.create_session(fe, root, None)["id"]
+    model = _BlankSummarizer()
+    result = await prepare(
+        fe,
+        sid,
+        entries=[_entry(seq, 10) for seq in range(1, 21)],
+        system_text="a" * 40,
+        new_turn_text="a" * 40,
+        model=model,
+        model_id="mdl_1",
+        profile={"contextWindow": 200, "maxOutputTokens": 50},
+        app_compaction=_APP,
+    )
+    # 空摘要视为未取得进展：不推进 compactedUpTo、不落库。
+    assert result.compacted is False
+    assert sessions.get_summary(fe, sid) is None
+
+
 async def test_window_unknown_uses_default(tmp_path, monkeypatch):
     root = _ws(tmp_path, monkeypatch)
     fe = root / ".fireeye"

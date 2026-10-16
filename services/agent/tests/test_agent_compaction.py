@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import pytest
-from langchain_core.messages import AIMessage, AIMessageChunk, SystemMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, SystemMessage, ToolMessage
 
 import fireeyeaud_agent.agent.compaction as compaction_mod
 from fireeyeaud_agent.agent.graph import _history_entries, run_agent
@@ -222,6 +222,104 @@ async def test_run_agent_overflow_retries_only_once(tmp_path, monkeypatch):
     errors = [e for e in events if e["type"] == "error"]
     assert errors and errors[0]["data"]["code"] == "E_LLM_UNAVAILABLE"
     assert types[-1] == "done"
+
+
+class _ReissueUntilToolMsg:
+    """直到看到 ToolMessage 才收尾；第二次 astream 抛上下文超限。"""
+
+    def __init__(self) -> None:
+        self.calls = 0
+        self.summary_calls = 0
+
+    def bind_tools(self, _tools):
+        return self
+
+    async def ainvoke(self, _messages):
+        self.summary_calls += 1
+        return AIMessage(content="摘要")
+
+    async def astream(self, messages):
+        self.calls += 1
+        if self.calls == 2:
+            raise Exception("This model's maximum context length is 8192 tokens")
+        if not any(isinstance(m, ToolMessage) for m in messages):
+            yield AIMessageChunk(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "report_finding",
+                        "args": {"title": "重复疑点", "description": "x"},
+                        "id": "call_1",
+                    }
+                ],
+            )
+        else:
+            yield AIMessageChunk(content="完成")
+
+
+async def test_overflow_retry_preserves_executed_tools(tmp_path, monkeypatch):
+    root, fe, sid, model_id = _setup(
+        tmp_path, monkeypatch, n=6, window=131072, max_output=8192
+    )
+    model = _ReissueUntilToolMsg()
+    entries = _history_entries(fe, sid)
+
+    events = [
+        e
+        async for e in run_agent(
+            root,
+            sid,
+            "继续",
+            "zh-CN",
+            model=model,
+            model_id=model_id,
+            history_entries=entries,
+        )
+    ]
+    assert events[-1]["type"] == "done"
+    # 溢出重试必须保留本轮已执行的工具消息，避免重复执行产生重复疑点/证据。
+    findings = [e for e in events if e["type"] == "finding"]
+    assert len(findings) == 1
+
+
+class _SummaryFails:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def bind_tools(self, _tools):
+        return self
+
+    async def ainvoke(self, _messages):
+        raise Exception("summarizer down")
+
+    async def astream(self, _messages):
+        self.calls += 1
+        yield AIMessageChunk(content="完成")
+
+
+async def test_summary_failure_does_not_abort_turn(tmp_path, monkeypatch):
+    root, fe, sid, model_id = _setup(
+        tmp_path, monkeypatch, n=20, window=200, max_output=50
+    )
+    model = _SummaryFails()
+    entries = _history_entries(fe, sid)
+
+    events = [
+        e
+        async for e in run_agent(
+            root,
+            sid,
+            "继续",
+            "zh-CN",
+            model=model,
+            model_id=model_id,
+            history_entries=entries,
+        )
+    ]
+    # 摘要失败不应中断整轮：仍正常完成，不产生 compaction 事件。
+    assert events[-1]["type"] == "done"
+    assert model.calls == 1
+    assert "compaction" not in [e["type"] for e in events]
 
 
 async def test_done_usage_has_estimate_and_window(tmp_path, monkeypatch):

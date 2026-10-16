@@ -216,15 +216,20 @@ async def prepare(
     window = resolve_context_window(
         profile, default=settings_obj.default_context_window
     )
-    reserve = int(
-        _app_value(
-            app,
-            "reserveOutputTokens",
-            resolve_reserve_output(
-                profile, default=settings_obj.compact_reserve_output_tokens
-            ),
+    # reserve 预留：优先取档案 maxOutputTokens（§5），否则用 app 设置；都缺再回退默认。
+    profile_output = profile.get("maxOutputTokens") if profile else None
+    if isinstance(profile_output, int) and profile_output > 0:
+        reserve = int(profile_output)
+    else:
+        reserve = int(
+            _app_value(
+                app,
+                "reserveOutputTokens",
+                resolve_reserve_output(
+                    profile, default=settings_obj.compact_reserve_output_tokens
+                ),
+            )
         )
-    )
     threshold = float(_app_value(app, "threshold", 0.9))
     budget: Budget = compute_budget(
         window=window,
@@ -290,6 +295,9 @@ async def prepare(
         transcript,
         locale=locale,
     )
+    if not new_text.strip():
+        # 空摘要视为未取得进展：不推进边界、不落库，避免丢弃原始历史。
+        return _result(False, previous_up_to, estimated, existing)
     summary = {"text": new_text, "upTo": new_up_to, "createdAt": now_iso()}
     sessions_store.set_summary(
         fe, session_id, summary, model_id=model_id, window=window

@@ -302,22 +302,29 @@ async def run_agent(
 
         app_compact = app_settings.load().get("compaction") or {}
         profile = select_profile(root, model_id)
+        result = None
         yield event("status", {"phase": "compacting"})
-        result = await prepare(
-            fe,
-            session_id,
-            entries=history_entries,
-            system_text=system_text,
-            new_turn_text=step1_text,
-            model=active_model,
-            model_id=model_id,
-            profile=profile,
-            locale=locale,
-            app_compaction=app_compact,
-        )
-        if result.compacted:
+        try:
+            result = await prepare(
+                fe,
+                session_id,
+                entries=history_entries,
+                system_text=system_text,
+                new_turn_text=step1_text,
+                model=active_model,
+                model_id=model_id,
+                profile=profile,
+                locale=locale,
+                app_compaction=app_compact,
+            )
+        except Exception as exc:  # noqa: BLE001 - 摘要失败不应中断整轮
+            print(f"===== compaction failed =====\n{exc!r}", flush=True)
+            result = None
+        if result is not None and result.compacted:
             yield event("compaction", _compaction_data(result, model_id))
-        active_summary = result.summary or get_summary(fe, session_id)
+        active_summary = (result.summary if result else None) or get_summary(
+            fe, session_id
+        )
         messages.extend(_entries_to_messages(history_entries, active_summary))
     elif history:
         messages.extend(history)
@@ -360,6 +367,8 @@ async def run_agent(
 
     step = 0
     overflow_retried = False
+    # 本轮已追加的 AI / 工具消息：溢出重试重建 messages 时保留，避免重复执行工具。
+    turn_extra: list[BaseMessage] = []
     while True:
         step += 1
         if step > settings.max_steps:
@@ -410,30 +419,42 @@ async def run_agent(
                 )
                 from ..store.sessions import get_summary
 
-                forced = await prepare(
-                    fe,
-                    session_id,
-                    entries=history_entries,
-                    system_text=system_text,
-                    new_turn_text=step1_text,
-                    model=active_model,
-                    model_id=model_id,
-                    profile=profile,
-                    locale=locale,
-                    app_compaction=app_compact,
-                    force=True,
-                )
-                active_summary = forced.summary or get_summary(fe, session_id)
-                rebuilt: list[BaseMessage] = [SystemMessage(content=system_text)]
-                rebuilt.extend(
-                    _entries_to_messages(history_entries, active_summary)
-                )
-                rebuilt.append(current_message)
-                messages[:] = rebuilt
-                human_index = len(messages) - 1
-                if forced.compacted:
-                    yield event("compaction", _compaction_data(forced, model_id))
-                continue
+                try:
+                    forced = await prepare(
+                        fe,
+                        session_id,
+                        entries=history_entries,
+                        system_text=system_text,
+                        new_turn_text=step1_text,
+                        model=active_model,
+                        model_id=model_id,
+                        profile=profile,
+                        locale=locale,
+                        app_compaction=app_compact,
+                        force=True,
+                    )
+                except Exception as force_exc:  # noqa: BLE001 - 压缩失败则走常规报错
+                    print(
+                        f"===== forced compaction failed =====\n{force_exc!r}",
+                        flush=True,
+                    )
+                    forced = None
+                if forced is not None:
+                    active_summary = forced.summary or get_summary(fe, session_id)
+                    # 保留本轮已执行的 AI / 工具消息，避免重试时重复执行工具。
+                    rebuilt: list[BaseMessage] = [SystemMessage(content=system_text)]
+                    rebuilt.extend(
+                        _entries_to_messages(history_entries, active_summary)
+                    )
+                    rebuilt.append(current_message)
+                    rebuilt.extend(turn_extra)
+                    messages[:] = rebuilt
+                    human_index = len(messages) - 1 - len(turn_extra)
+                    if forced.compacted:
+                        yield event(
+                            "compaction", _compaction_data(forced, model_id)
+                        )
+                    continue
             print(
                 f"===== LLM error (step {step}) =====\n{exc!r}\n===== end LLM error =====",
                 flush=True,
@@ -494,6 +515,7 @@ async def run_agent(
             )
 
         messages.append(ai)
+        turn_extra.append(ai)
         for call in tool_calls:
             call_id = call.get("id") or f"call_{step}"
             name = call.get("name", "")
@@ -536,6 +558,7 @@ async def run_agent(
             messages.append(
                 ToolMessage(content=_tool_message_content(result), tool_call_id=call_id)
             )
+            turn_extra.append(messages[-1])
         yield event("status", {"phase": "reflecting"})
 
     usage = _usage()
