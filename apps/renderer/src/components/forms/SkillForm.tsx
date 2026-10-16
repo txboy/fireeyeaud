@@ -79,8 +79,10 @@ export function SkillForm({
     const payload = {
       name: form.name.trim(),
       prompt: form.prompt.trim(),
-      description: form.description.trim() || undefined,
-      whenToUse: form.whenToUse.trim() || undefined,
+      // 空字符串表示「清空该字段」（undefined 会被 JSON 丢弃、null 会被 store 的
+      // drop_none 忽略，二者都无法清除已有值）。
+      description: form.description.trim(),
+      whenToUse: form.whenToUse.trim(),
       eager: form.eager,
       toolIds: parseTokens(form.toolIds),
       scope: form.scope,
