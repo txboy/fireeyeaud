@@ -33,5 +33,11 @@ class Settings(BaseSettings):
     sql_row_limit: int = 200
     sql_timeout_seconds: int = 30
 
+    # 上下文压缩（Phase 9）：窗口未知时的保守回退与预算系数。
+    default_context_window: int = 8192
+    context_safety_factor: float = 0.8
+    compact_keep_tokens: int = 15000
+    compact_reserve_output_tokens: int = 4096
+
 
 settings = Settings()
