@@ -1,11 +1,12 @@
 # Phase 9 · 技能按需加载（Skills On-Demand Loading）
 
 - 日期：2026-10-15
-- 状态：**未实现**（本文为设计方案；仓库中尚无对应代码，当前行为见「现状」）
+- 状态：**已实现**（T1–T8 已落地于 `main`；实现说明见 §10）
 - 关联模块：`store/skills.py`、`api/skills.py`、`agent/prompts.py`、`agent/graph.py`、`tools/registry.py`、`store/app_settings.py`
 - 相关文档：[上下文压缩](./2026-10-15-agent-context-compaction.md)、[MCP 接入](./2026-10-15-mcp-tool-integration.md)
 
-> **本文实现的功能目前不存在。** 目前技能提示词是**全量注入** system prompt 的；本文描述拟改为「先广告元数据、按需 `load_skill` 拉取正文」。
+> **本文描述的功能已实现。** 技能提示词改为「先广告元数据、按需 `load_skill` 拉取正文」；
+> `eager=true` 的技能与全局 `skills.mode="eager"` 仍保留全量注入（§4.5）。
 
 ---
 
@@ -175,28 +176,60 @@ def load_skill(root, params, *, allowed_skill_ids):
 
 ## 6. 测试
 
-- [ ] `catalog_for`：只含生效技能、只含元数据（无 `prompt`）。
-- [ ] `effective_ids`：默认∪勾选 ∧ enabled。
-- [ ] `load_skill`：命中返回正文；未启用/越权返回 `not_allowed`。
-- [ ] lazy 模式：system prompt 含广告、不含正文。
-- [ ] eager 技能：仍全量注入正文。
-- [ ] `mode=eager`：等同旧行为。
-- [ ] 无描述技能：自动生成描述。
-- [ ] 回归：会话上下文栏（`skillIds`）勾选与默认语义不变。
+- [x] `catalog_for`：只含生效技能、只含元数据（无 `prompt`）。（`test_catalog_for_is_metadata_only_and_skips_eager`）
+- [x] `effective_ids`：默认∪勾选 ∧ enabled。（`test_effective_ids_default_union_selected_and_enabled`）
+- [x] `load_skill`：命中返回正文；未启用/越权返回 `not_allowed`。（`test_tool_load_skill.py`）
+- [x] lazy 模式：system prompt 含广告、不含正文。（`test_agent_skills_lazy.py::test_lazy_mode_advertises_catalog_not_body`）
+- [x] eager 技能：仍全量注入正文。（`test_eager_skill_injects_body_and_is_not_advertised`）
+- [x] `mode=eager`：等同旧行为。（`test_mode_eager_injects_all_bodies`）
+- [x] 无描述技能：自动生成描述。（`test_catalog_for_derives_description_from_prompt`）
+- [x] 回归：会话上下文栏（`skillIds`）勾选与默认语义不变。（`test_prompts_for_default_union_selected`、`test_registry_context_includes_allowed_skill_ids`）
 
 ## 7. 任务拆解
 
-- [ ] T1 `api/skills.py`：`SkillBody`/`SkillPatch` 增 `description`/`whenToUse`/`eager`。
-- [ ] T2 `store/skills.py`：`catalog_for` / `get_prompt` / `effective_ids`（含描述兜底）。
-- [ ] T3 `agent/prompts.py`：`skill_catalog` 渲染。
-- [ ] T4 新增 `tools/load_skill.py` + `tools/registry.py` 注册 + 上下文注入。
-- [ ] T5 `agent/graph.py`：`_registry_context` 增 `allowedSkillIds`；catalog 注入。
-- [ ] T6 `store/app_settings.py`：`skills.mode`。
-- [ ] T7 前端：`SkillForm` 增加描述/何时用字段（可选）。
-- [ ] T8 测试 + 文档。
+- [x] T1 `api/skills.py`：`SkillBody`/`SkillPatch` 增 `description`/`whenToUse`/`eager`。
+- [x] T2 `store/skills.py`：`catalog_for` / `get_prompt` / `effective_ids`（含描述兜底）。
+- [x] T3 `agent/prompts.py`：`skill_catalog` 渲染。
+- [x] T4 新增 `tools/load_skill.py` + `tools/registry.py` 注册 + 上下文注入。
+- [x] T5 `agent/graph.py`：`_registry_context` 增 `allowedSkillIds`；catalog 注入。
+- [x] T6 `store/app_settings.py`：`skills.mode`。
+- [x] T7 前端：`SkillForm` 增加描述/何时用字段（可选）。
+- [x] T8 测试 + 文档。
 
 ## 8. 待决问题
 
 1. 技能是否要支持引用**工作区文件**（类似 `SKILL.md` 的 `references/`）？本期不做，可作后续。
-2. `whenToUse` 是否必要，还是仅 `description` 足够？
-3. 广告行数上限（技能很多时是否只广告前 N 个）？
+2. `whenToUse` 是否必要，还是仅 `description` 足够？→ **已实现**为可选字段，渲染进广告。
+3. 广告行数上限（技能很多时是否只广告前 N 个）？→ **暂不设上限**，避免静默截断。
+
+## 10. 实现说明（as-built）
+
+### 10.1 模块与接口
+
+| 位置 | 内容 |
+|---|---|
+| `store/skills.py` | `effective_ids`、`catalog_for`（含 `_derived_description` 兜底）、`get_prompt` |
+| `api/skills.py` | `SkillBody`/`SkillPatch` 增 `description`/`whenToUse`/`eager` |
+| `agent/prompts.py` | `system_prompt(..., skill_catalog=...)` 渲染广告；`skills` 仍用于 eager 正文 |
+| `tools/load_skill.py` | `load_skill(root, params)`：越权/未启用返回 `{"error": "not_allowed"}` |
+| `tools/registry.py` | `LoadSkillArgs`、`_SPECS` 注册、`_context_wrapper` 注入 `allowedSkillIds` |
+| `agent/graph.py` | `_registry_context` 产出 `allowedSkillIds`；`run_agent` 按 `skills.mode` 拆分 catalog 与 eager 正文 |
+| `store/app_settings.py` + `api/settings.py` | 全局 `skills.mode`（`lazy`/`eager`，默认 `lazy`） |
+| `packages/shared` + `apps/renderer` | `Skill`/`AppSettings`/`SkillInput`/`SettingsPatch` 类型与 `SkillForm` 字段、i18n |
+
+### 10.2 决策与偏差
+
+- **描述兜底（§4.2）**：`description` 缺省 → `prompt` 首个非空行 → `name`，截断 120 字符。
+- **eager 与广告（§4.5）**：`catalog_for` 只返回**非 eager** 生效技能的元数据；`eager` 技能走 `prompts_for` 全量注入，不重复广告。
+- **模式开关（§4.4）**：`skills.mode` 默认 `lazy`；`eager` 等同旧行为，作为回滚开关。仅经设置 API/配置暴露，未做独立 UI 开关。
+- **allowlist（§5.3）**：`load_skill` 仅返回 `allowedSkillIds`（默认∪勾选 ∧ enabled）内的技能；`context is None` 时不限制（与数据库/知识库一致，MCP 则显式关闭）。
+- **`effective_ids` 语义**：要求 `enabled` 且 `prompt` 非空，与既有 `prompts_for` 完全一致，保证会话上下文栏勾选行为不变。
+
+### 10.3 测试
+
+- `tests/test_skills_store.py`：`effective_ids`、`catalog_for`（元数据/描述兜底/eager 剔除）、`get_prompt`。
+- `tests/test_tool_load_skill.py`：命中、越权、未启用/缺失、无限制、registry 注入。
+- `tests/test_prompt_skills.py`：广告渲染（含 `whenToUse`）与无广告分支。
+- `tests/test_agent_skills_lazy.py`：lazy 广告、eager 正文、混合、全局 `mode=eager`。
+- `tests/test_context.py`、`tests/test_settings_api.py`、`tests/test_skills_api.py`：`allowedSkillIds`、`skills.mode`、schema 字段。
+- 前端：`apps/renderer` `npm run build`（`tsc --noEmit` + `vite build`）通过（无前端测试运行器）。
