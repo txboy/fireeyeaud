@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import type { SseEvent } from '@fireeyeaud/shared';
 import {
   ApiError,
-  compactSessionApi,
   createSessionApi,
   deleteSessionApi,
   EMPTY_CONTEXT,
@@ -14,7 +13,6 @@ import {
   type AttachmentRef,
   type AttachmentText,
   type ChatContext,
-  type CompactResult,
   type ContextSnapshot,
   type SessionMessage,
   type SessionSummary,
@@ -147,8 +145,6 @@ interface ChatState {
   setModel: (sessionId: string, modelId: string | null) => void;
   setContext: (sessionId: string, patch: Partial<ChatContext>) => void;
   setDraft: (sessionId: string, segments: DraftSegment[]) => void;
-  /** 手动压缩该会话上下文（较早对话摘要化）。 */
-  compact: (sessionId: string) => Promise<void>;
   /** 清空所有聊天分片（切换工作区时）。 */
   clearAllChats: () => void;
 }
@@ -603,47 +599,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((s) => ({
       chats: withChat(s.chats, sessionId, (chat) => ({ ...chat, draft: segments })),
     })),
-
-  compact: async (sessionId) => {
-    const chat = get().chats[sessionId];
-    if (chat?.streaming) return;
-    let result: CompactResult;
-    try {
-      result = await compactSessionApi(sessionId);
-    } catch {
-      return;
-    }
-    if (!result.compacted) return;
-    const notice: ChatMessage = {
-      id: nextId(),
-      role: 'assistant',
-      content: '',
-      thinking: '',
-      phase: null,
-      streaming: false,
-      errorKey: null,
-      tools: [],
-      findingIds: [],
-      options: null,
-      attachments: [],
-      mentions: [],
-      attachmentTexts: [],
-      noticeKey: null,
-      noticeParams: null,
-      compaction: {
-        summarizedUpTo: result.summarizedUpTo,
-        tokensBefore: result.tokensBefore,
-        tokensAfter: result.tokensAfter,
-        window: result.window,
-      },
-    };
-    set((s) => ({
-      chats: withChat(s.chats, sessionId, (c) => ({
-        ...c,
-        messages: [...c.messages, notice],
-      })),
-    }));
-  },
 
   clearAllChats: () => {
     for (const controller of controllers.values()) controller.abort();

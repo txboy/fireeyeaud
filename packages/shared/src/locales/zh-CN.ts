@@ -399,9 +399,9 @@ export default {
     findingCreated: '发现疑点 {{id}}',
     compactionDivider: '较早的 {{count}} 条对话已压缩为摘要（约 {{before}} → {{after}} tokens）',
     compactionDividerTitle: '摘要仅作背景参考，不作为取证依据',
-    compactNow: '压缩上下文',
-    compactionNone: '无需压缩',
     scrollToLatest: '回到最新',
+    copyCode: '复制代码',
+    copied: '已复制',
     phase: {
       planning: '规划中…',
       executing: '执行中…',

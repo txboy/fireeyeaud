@@ -613,56 +613,6 @@ async def run_agent(
                 print(f"===== MCP cleanup failed =====\n{exc!r}", flush=True)
 
 
-async def compact_session_manual(
-    root: Path, session_id: str, model_id: str | None = None
-) -> dict[str, Any]:
-    """手动压缩（`POST /sessions/{id}/compact`，方案 §4.4 第 3 条）。
-
-    强制压缩一次（不受阈值与 auto 限制），返回压缩后的估算。
-    """
-    root = Path(root)
-    fe = root / ".fireeye"
-    from ..store.rules import list_rules
-    from ..store.sessions import list_sessions
-
-    if model_id is None:
-        model_id = next(
-            (
-                item.get("modelId")
-                for item in list_sessions(fe)
-                if item.get("id") == session_id
-            ),
-            None,
-        )
-    entries = _history_entries(fe, session_id)
-    enabled_rules = [r for r in list_rules(root) if r.get("enabled") and r.get("sql")]
-    custom_prompt = (app_settings.load().get("systemPrompt") or "").strip() or None
-    system_text = system_prompt(None, enabled_rules, None, custom_prompt)
-    app_compact = app_settings.load().get("compaction") or {}
-    profile = select_profile(root, model_id)
-    model = build_chat_model(root, model_id)
-    result = await prepare(
-        fe,
-        session_id,
-        entries=entries,
-        system_text=system_text,
-        new_turn_text="",
-        model=model,
-        model_id=model_id,
-        profile=profile,
-        app_compaction=app_compact,
-        force=True,
-    )
-    return {
-        "compacted": result.compacted,
-        "summarizedUpTo": result.summarized_up_to,
-        "tokensBefore": result.tokens_before,
-        "tokensAfter": result.tokens_after,
-        "modelId": model_id,
-        "window": result.window,
-    }
-
-
 def _entries_to_messages(
     entries: list[dict[str, Any]], summary: dict[str, Any] | None
 ) -> list[BaseMessage]:

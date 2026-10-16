@@ -327,6 +327,18 @@ function registerIpc() {
     shell.showItemInFolder(filePath);
     return { ok: true };
   });
+  ipcMain.handle('shell:open-external', (_event, url) => {
+    if (typeof url !== 'string') return { ok: false };
+    let parsed;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return { ok: false };
+    }
+    if (!['http:', 'https:', 'mailto:'].includes(parsed.protocol)) return { ok: false };
+    shell.openExternal(url);
+    return { ok: true };
+  });
   ipcMain.handle('secret:put', async (_event, plaintext) => {
     if (typeof plaintext !== 'string' || !plaintext) return null;
     const ref = secrets.put(plaintext);

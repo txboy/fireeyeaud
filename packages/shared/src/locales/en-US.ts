@@ -405,9 +405,9 @@ export default {
       '{{count}} earlier messages were compacted into a summary (≈ {{before}} → {{after}} tokens)',
     compactionDividerTitle:
       'The summary is background only and is not used as audit evidence',
-    compactNow: 'Compact context',
-    compactionNone: 'Nothing to compact',
     scrollToLatest: 'Back to latest',
+    copyCode: 'Copy code',
+    copied: 'Copied',
     phase: {
       planning: 'Planning…',
       executing: 'Working…',

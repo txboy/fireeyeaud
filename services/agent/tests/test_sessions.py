@@ -84,59 +84,6 @@ def test_session_summary_roundtrip(tmp_path, monkeypatch):
     assert sessions.get_summary(fe, sid) is None
 
 
-async def test_compact_endpoint_forces_compaction(tmp_path, monkeypatch):
-    from langchain_core.messages import AIMessage, AIMessageChunk
-
-    import fireeyeaud_agent.agent.graph as graph_mod
-    from fireeyeaud_agent.config import store as cfg_store
-
-    root = _ws(tmp_path, monkeypatch)
-    fe = root / ".fireeye"
-    sid = sessions.create_session(fe, root, None)["id"]
-    for seq in range(1, 21):
-        role = "user" if seq % 2 == 1 else "assistant"
-        sessions.add_message(fe, root, sid, role, {"text": f"m{seq} " + "a" * 40})
-    cfg_store.create_item(
-        "models",
-        {
-            "name": "小窗口",
-            "baseUrl": "http://x/v1",
-            "model": "m",
-            "contextWindow": 200,
-            "maxOutputTokens": 50,
-            "isDefault": True,
-            "scope": "project",
-        },
-        root,
-    )
-
-    class _Model:
-        def bind_tools(self, _tools):
-            return self
-
-        async def ainvoke(self, _messages):
-            return AIMessage(content="摘要Z")
-
-        async def astream(self, _messages):
-            yield AIMessageChunk(content="x")
-
-    monkeypatch.setattr(graph_mod, "build_chat_model", lambda *a, **k: _Model())
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        await client.post("/api/v1/workspaces/open", json={"path": str(root)})
-        res = await client.post(f"/api/v1/sessions/{sid}/compact")
-        assert res.status_code == 200
-        body = res.json()
-        assert body["compacted"] is True
-        assert 0 < body["summarizedUpTo"] < 20
-        assert body["window"] == 200
-        await client.post("/api/v1/workspaces/close")
-
-    assert sessions.get_summary(fe, sid)["text"] == "摘要Z"
-
-
 async def test_rules_is_default_api(tmp_path, monkeypatch):
     root = _ws(tmp_path, monkeypatch)
     async with httpx.AsyncClient(

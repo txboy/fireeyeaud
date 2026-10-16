@@ -2239,6 +2239,218 @@ textarea.searchbox {
   padding: 8px 12px;
 }
 
+/* ---- Markdown 渲染（assistant 正文） ---- */
+.msg__body--md {
+  white-space: normal;
+  user-select: text;
+}
+
+.md > :first-child {
+  margin-top: 0;
+}
+
+.md > :last-child {
+  margin-bottom: 0;
+}
+
+.md p {
+  margin: 6px 0;
+}
+
+.md h1,
+.md h2,
+.md h3,
+.md h4 {
+  margin: 14px 0 6px;
+  line-height: 1.35;
+  font-weight: 600;
+}
+
+.md h1 {
+  font-size: 17px;
+}
+
+.md h2 {
+  font-size: 15.5px;
+}
+
+.md h3 {
+  font-size: 14px;
+}
+
+.md h4 {
+  font-size: 13.5px;
+}
+
+.md ul,
+.md ol {
+  margin: 6px 0;
+  padding-left: 22px;
+}
+
+.md li {
+  margin: 2px 0;
+}
+
+.md li > p {
+  margin: 0;
+}
+
+.md blockquote {
+  margin: 8px 0;
+  padding: 2px 12px;
+  border-left: 3px solid var(--border-strong);
+  color: var(--text-2);
+}
+
+.md hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 12px 0;
+}
+
+.md a.md-link {
+  color: var(--info);
+  text-decoration: none;
+}
+
+.md a.md-link:hover {
+  text-decoration: underline;
+}
+
+.md img {
+  max-width: 100%;
+  border-radius: 6px;
+}
+
+.md code.md-inline-code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--hover);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.md table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 12.5px;
+}
+
+.md th,
+.md td {
+  border: 1px solid var(--border);
+  padding: 5px 10px;
+  text-align: left;
+}
+
+.md th {
+  background: var(--hover);
+  font-weight: 600;
+}
+
+.md-code {
+  margin: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--editor-bg);
+}
+
+.md-code__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 8px 3px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-bg);
+}
+
+.md-code__lang {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.md-code__copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+}
+
+.md-code__copy:hover {
+  background: var(--hover);
+  color: var(--text-1);
+}
+
+.md-code__pre {
+  margin: 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+}
+
+.md-code__code {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre;
+  color: var(--text-1);
+}
+
+/* highlight.js 令牌配色：复用主题变量，明暗自适应 */
+.hljs-comment,
+.hljs-quote {
+  color: var(--text-3);
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-type,
+.hljs-name {
+  color: var(--accent);
+}
+
+.hljs-string,
+.hljs-attr,
+.hljs-addition {
+  color: var(--success);
+}
+
+.hljs-number,
+.hljs-built_in,
+.hljs-symbol {
+  color: var(--info);
+}
+
+.hljs-title,
+.hljs-title.function_,
+.hljs-section,
+.hljs-selector-id,
+.hljs-selector-class {
+  color: var(--warning);
+}
+
+.hljs-meta,
+.hljs-doctag {
+  color: var(--text-2);
+}
+
 .msg__options {
   display: flex;
   flex-wrap: wrap;

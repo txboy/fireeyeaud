@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import type { LucideIcon } from 'lucide-react';
 import {
   AlertTriangle,
-  Archive,
   ArrowDown,
   BookOpen,
   Database,
@@ -21,6 +20,7 @@ import type { ContextSnapshot, WorkspaceRef } from '../lib/api';
 import { draftHasContent, useChatStore, type CompactionInfo } from '../store/chat';
 import { ContextBar } from './ContextBar';
 import { MentionInput, type MentionInputHandle } from './MentionInput';
+import { Markdown } from './Markdown';
 
 const OPT_GROUPS: {
   key: Exclude<keyof ContextSnapshot, 'model'>;
@@ -104,7 +104,6 @@ export function AgentColumn({ sessionId }: { sessionId: string }) {
   const loadMessages = useChatStore((s) => s.loadMessages);
   const send = useChatStore((s) => s.send);
   const setDraft = useChatStore((s) => s.setDraft);
-  const compact = useChatStore((s) => s.compact);
 
   const editorRef = useRef<MentionInputHandle>(null);
   const convRef = useRef<HTMLDivElement>(null);
@@ -232,8 +231,14 @@ export function AgentColumn({ sessionId }: { sessionId: string }) {
                   </div>
                 )}
                 {!compactionOnly && (
-                  <div className="msg__body">
-                    {m.content}
+                  <div
+                    className={`msg__body${m.role === 'assistant' ? ' msg__body--md' : ''}`}
+                  >
+                    {m.role === 'assistant' && m.content ? (
+                      <Markdown content={m.content} plain={m.streaming} />
+                    ) : (
+                      m.content
+                    )}
                     {m.streaming && <span className="msg__caret" />}
                   </div>
                 )}
@@ -301,15 +306,6 @@ export function AgentColumn({ sessionId }: { sessionId: string }) {
       <ContextBar sessionId={sessionId} />
 
       <div className="agent__input">
-        <button
-          type="button"
-          className="activitybar__item"
-          title={t('compactNow')}
-          disabled={streaming || messages.length === 0}
-          onClick={() => void compact(sessionId)}
-        >
-          <Archive size={16} strokeWidth={1.75} />
-        </button>
         <button
           type="button"
           className="activitybar__item"

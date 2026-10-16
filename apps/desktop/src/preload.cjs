@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('fireeyeaud', {
   getPathForFile: (file) => webUtils.getPathForFile(file),
   openPath: (filePath) => ipcRenderer.invoke('shell:open-path', filePath),
   showItemInFolder: (filePath) => ipcRenderer.invoke('shell:show-item', filePath),
+  openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
   putSecret: (plaintext) => ipcRenderer.invoke('secret:put', plaintext),
   deleteSecret: (ref) => ipcRenderer.invoke('secret:delete', ref),
   minimizeWindow: () => ipcRenderer.invoke('window:minimize'),

@@ -203,20 +203,6 @@ export function updateSessionContextApi(
   });
 }
 
-/** 手动压缩会话上下文（较早对话摘要化）。 */
-export interface CompactResult {
-  compacted: boolean;
-  summarizedUpTo: number;
-  tokensBefore: number;
-  tokensAfter: number;
-  modelId: string | null;
-  window: number;
-}
-
-export function compactSessionApi(id: string): Promise<CompactResult> {
-  return request<CompactResult>(`/sessions/${id}/compact`, { method: 'POST' });
-}
-
 export interface ChatHandlers {
   onEvent: (event: SseEvent) => void;
   signal?: AbortSignal;

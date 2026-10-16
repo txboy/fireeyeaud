@@ -41,6 +41,7 @@ declare global {
       getPathForFile: (file: File) => string;
       openPath: (filePath: string) => Promise<{ ok: boolean }>;
       showItemInFolder: (filePath: string) => Promise<{ ok: boolean }>;
+      openExternal: (url: string) => Promise<{ ok: boolean }>;
       putSecret: (plaintext: string) => Promise<string | null>;
       deleteSecret: (ref: string) => Promise<{ ok: boolean }>;
       minimizeWindow: () => Promise<void>;
