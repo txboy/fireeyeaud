@@ -91,6 +91,32 @@ def test_registry_context_includes_allowed_mcp_ids(tmp_path, monkeypatch):
     assert _registry_context(root, {})["allowedMcpServerIds"] == {default["id"]}
 
 
+def test_registry_context_includes_allowed_skill_ids(tmp_path, monkeypatch):
+    root = _ws(tmp_path, monkeypatch)
+    default = skills.create_skill(
+        {"name": "D", "prompt": "pd", "enabled": True, "isDefault": True, "scope": "project"},
+        root=root,
+    )
+    other = skills.create_skill(
+        {"name": "O", "prompt": "po", "enabled": True, "scope": "project"}, root=root
+    )
+    disabled = skills.create_skill(
+        {
+            "name": "X",
+            "prompt": "px",
+            "enabled": False,
+            "isDefault": True,
+            "scope": "project",
+        },
+        root=root,
+    )
+
+    ctx = _registry_context(root, {"skillIds": [other["id"]]})
+    assert ctx["allowedSkillIds"] == {default["id"], other["id"]}
+    assert disabled["id"] not in ctx["allowedSkillIds"]
+    assert _registry_context(root, {})["allowedSkillIds"] == {default["id"]}
+
+
 def test_run_rule_tool_gate(tmp_path, monkeypatch):
     import pytest
 

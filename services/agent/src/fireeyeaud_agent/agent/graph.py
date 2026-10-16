@@ -208,6 +208,7 @@ def _registry_context(
     from ..store import db as db_store
     from ..store import knowledge as kb_store
     from ..store import rules as rules_store
+    from ..store import skills as skills_store
 
     return {
         "allowedConnectionIds": _allowed_ids(
@@ -222,6 +223,9 @@ def _registry_context(
         ),
         "allowedMcpServerIds": mcp_manager.effective_server_ids(
             root, context.get("mcpServerIds")
+        ),
+        "allowedSkillIds": skills_store.effective_ids(
+            root, context.get("skillIds")
         ),
     }
 
@@ -275,7 +279,7 @@ async def run_agent(
         bound = _maybe_bind(active_model, tools)
 
         from ..store.rules import list_rules
-        from ..store.skills import prompts_for
+        from ..store.skills import catalog_for, prompts_for
 
         enabled_rules = [r for r in list_rules(root) if r.get("enabled") and r.get("sql")]
         if registry_ctx is not None:
@@ -283,7 +287,17 @@ async def run_agent(
             rules = [r for r in enabled_rules if str(r.get("id")) in allowed_rules]
         else:
             rules = enabled_rules
-        skill_prompts = prompts_for(root, (context or {}).get("skillIds"))
+        # 技能按需加载（Phase 9）：lazy 模式只广告元数据，eager 技能仍全量注入正文；
+        # 全局 mode=eager 时等同旧行为（全部正文注入）。
+        skill_ids = (context or {}).get("skillIds")
+        effective_skills = prompts_for(root, skill_ids)
+        skills_mode = (app_settings.load().get("skills") or {}).get("mode") or "lazy"
+        if skills_mode == "eager":
+            skill_prompts = effective_skills
+            skill_catalog = None
+        else:
+            skill_prompts = [s for s in effective_skills if s.get("eager")]
+            skill_catalog = catalog_for(root, skill_ids)
         custom_prompt = (app_settings.load().get("systemPrompt") or "").strip() or None
         system_text = system_prompt(
             locale,
@@ -291,6 +305,7 @@ async def run_agent(
             skill_prompts,
             custom_prompt,
             mcp_servers=mcp_tools.servers if mcp_tools else None,
+            skill_catalog=skill_catalog,
         )
         messages: list[BaseMessage] = [SystemMessage(content=system_text)]
 
