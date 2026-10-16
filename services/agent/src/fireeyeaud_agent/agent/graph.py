@@ -24,13 +24,14 @@ from langchain_core.messages import (
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
-from ..config.models import build_chat_model
+from ..config.models import build_chat_model, select_profile
 from ..config.settings import settings
 from ..store import app_settings
 from ..store.evidence import append_evidence
 from ..store.findings import create_finding
 from ..tools.registry import build_langchain_tools, build_tool_dict
 from ..util import now_iso
+from .compaction import prepare, summary_message
 from .prompts import system_prompt
 from .context_snapshot import build_snapshot
 
@@ -227,6 +228,7 @@ async def run_agent(
     model: Any = None,
     model_id: str | None = None,
     history: list[BaseMessage] | None = None,
+    history_entries: list[dict[str, Any]] | None = None,
     context: dict[str, Any] | None = None,
     attachment_texts: list[dict[str, Any]] | None = None,
     image_blocks: list[dict[str, Any]] | None = None,
@@ -235,6 +237,7 @@ async def run_agent(
 ) -> AsyncIterator[dict[str, Any]]:
     root = Path(root)
     event = event_factory or _event_factory(session_id)
+    fe = root / ".fireeye"
     active_model = model or build_chat_model(root, model_id)
     registry_ctx = _registry_context(root, context)
     build_file_model = lambda: build_chat_model(root, model_id)  # noqa: E731
@@ -263,9 +266,13 @@ async def run_agent(
         rules = enabled_rules
     skill_prompts = prompts_for(root, (context or {}).get("skillIds"))
     custom_prompt = (app_settings.load().get("systemPrompt") or "").strip() or None
-    messages: list[BaseMessage] = [
-        SystemMessage(content=system_prompt(locale, rules, skill_prompts, custom_prompt))
-    ]
+    system_text = system_prompt(locale, rules, skill_prompts, custom_prompt)
+    messages: list[BaseMessage] = [SystemMessage(content=system_text)]
+
+    yield event("status", {"phase": "planning"})
+    if options is not None:
+        yield event("context", {"options": options})
+
     # 附件文本（本地抽取 + 视觉转写）并入用户消息正文；图片/扫描页在首步直传原图。
     from ..store.attachments import render_attachment_texts
 
@@ -275,8 +282,52 @@ async def run_agent(
         [t for t in texts if t.get("source") == "local"]
     )
     step1_text = message + (f"\n\n{local_block}" if local_block else "")
-    if history:
+
+    # 上下文压缩（Phase 9）：按当前模型预算，必要时把较早对话并入摘要。
+    if history_entries is not None:
+        from ..store.sessions import get_summary
+
+        app_compact = app_settings.load().get("compaction") or {}
+        profile = select_profile(root, model_id)
+        yield event("status", {"phase": "compacting"})
+        result = await prepare(
+            fe,
+            session_id,
+            entries=history_entries,
+            system_text=system_text,
+            new_turn_text=step1_text,
+            model=active_model,
+            model_id=model_id,
+            profile=profile,
+            locale=locale,
+            app_compaction=app_compact,
+        )
+        if result.compacted:
+            yield event(
+                "compaction",
+                {
+                    "phase": "done",
+                    "summarizedUpTo": result.summarized_up_to,
+                    "tokensBefore": result.tokens_before,
+                    "tokensAfter": result.tokens_after,
+                    "modelId": model_id,
+                    "window": result.window,
+                },
+            )
+        active_summary = result.summary or get_summary(fe, session_id)
+        if active_summary and active_summary.get("text"):
+            messages.append(summary_message(active_summary))
+        up_to = int((active_summary or {}).get("upTo") or 0)
+        for entry in history_entries:
+            if int(entry.get("seq") or 0) <= up_to:
+                continue
+            if entry.get("role") == "user":
+                messages.append(HumanMessage(content=str(entry.get("text") or "")))
+            elif entry.get("text"):
+                messages.append(AIMessage(content=str(entry["text"])))
+    elif history:
         messages.extend(history)
+
     if blocks:
         messages.append(
             HumanMessage(content=[{"type": "text", "text": step1_text}, *blocks])
@@ -308,10 +359,6 @@ async def run_agent(
             raise ValueError(f"unknown tool: {name}")
         value = tool_dict[name](root, args)
         return await value if inspect.isawaitable(value) else value
-
-    yield event("status", {"phase": "planning"})
-    if options is not None:
-        yield event("context", {"options": options})
 
     step = 0
     while True:
@@ -449,23 +496,37 @@ async def run_agent(
     yield event("done", {"usage": {}})
 
 
-def _load_history(fe: Path, session_id: str) -> list[BaseMessage]:
+def _history_entries(fe: Path, session_id: str) -> list[dict[str, Any]]:
+    """把会话消息投影为本轮之前的 [{seq, role, text}]（供压缩与历史回放）。"""
     from ..store.attachments import render_attachment_texts
     from ..store.sessions import get_messages
 
-    history: list[BaseMessage] = []
+    entries: list[dict[str, Any]] = []
     for item in get_messages(fe, session_id):
         content = item.get("content")
         text = content.get("text", "") if isinstance(content, dict) else str(content)
-        if item.get("role") == "user":
+        role = item.get("role")
+        if role == "user":
             if isinstance(content, dict):
                 text = _compose_user_message(text, content.get("mentions") or [])
                 block = render_attachment_texts(content.get("attachmentTexts") or [])
                 if block:
                     text = f"{text}\n\n{block}"
-            history.append(HumanMessage(content=text))
-        elif item.get("role") == "assistant" and text:
-            history.append(AIMessage(content=text))
+            entries.append({"seq": item.get("seq"), "role": "user", "text": text})
+        elif role == "assistant" and text:
+            entries.append(
+                {"seq": item.get("seq"), "role": "assistant", "text": text}
+            )
+    return entries
+
+
+def _load_history(fe: Path, session_id: str) -> list[BaseMessage]:
+    history: list[BaseMessage] = []
+    for entry in _history_entries(fe, session_id):
+        if entry["role"] == "user":
+            history.append(HumanMessage(content=entry["text"]))
+        else:
+            history.append(AIMessage(content=entry["text"]))
     return history
 
 
@@ -546,7 +607,7 @@ async def stream_chat(
 
     fe = root / ".fireeye"
     event = _event_factory(session_id)
-    history = _load_history(fe, session_id)
+    history_entries = _history_entries(fe, session_id)
     snapshot = build_snapshot(root, context, model_id)
 
     # 发送即读：把附件一次性转成文本（本地抽取 / 视觉转写），供本轮与后续轮次使用。
@@ -594,7 +655,7 @@ async def stream_chat(
         agent_message,
         locale,
         model_id=model_id,
-        history=history,
+        history_entries=history_entries,
         context=context,
         attachment_texts=attachment_texts,
         image_blocks=read.image_blocks,

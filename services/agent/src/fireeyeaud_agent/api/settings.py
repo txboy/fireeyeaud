@@ -18,11 +18,19 @@ class WebSearchBody(BaseModel):
     baseUrl: str | None = None
 
 
+class CompactionBody(BaseModel):
+    auto: bool | None = None
+    keepTokens: int | None = None
+    reserveOutputTokens: int | None = None
+    threshold: float | None = None
+
+
 class SettingsPatch(BaseModel):
     locale: str | None = None
     theme: str | None = None
     systemPrompt: str | None = None
     webSearch: WebSearchBody | None = None
+    compaction: CompactionBody | None = None
 
 
 @router.get("/settings")

@@ -13,6 +13,12 @@ _DEFAULTS: dict[str, Any] = {
     "theme": "light",
     "systemPrompt": "",
     "webSearch": {"enabled": False, "provider": "tavily", "keyRef": None},
+    "compaction": {
+        "auto": True,
+        "keepTokens": 15000,
+        "reserveOutputTokens": 4096,
+        "threshold": 0.9,
+    },
     "telemetry": False,
 }
 
@@ -32,6 +38,10 @@ def load() -> dict[str, Any]:
             data = {}
     merged = {**_DEFAULTS, **data}
     merged["webSearch"] = {**_DEFAULTS["webSearch"], **(data.get("webSearch") or {})}
+    merged["compaction"] = {
+        **_DEFAULTS["compaction"],
+        **(data.get("compaction") or {}),
+    }
     merged["systemPrompt"] = str(merged.get("systemPrompt") or "")
     merged["telemetry"] = False
     return merged
@@ -42,6 +52,8 @@ def patch(update: dict[str, Any]) -> dict[str, Any]:
     merged = {**current, **{k: v for k, v in update.items() if v is not None}}
     if isinstance(update.get("webSearch"), dict):
         merged["webSearch"] = {**current["webSearch"], **update["webSearch"]}
+    if isinstance(update.get("compaction"), dict):
+        merged["compaction"] = {**current["compaction"], **update["compaction"]}
     merged["telemetry"] = False
     path = _path()
     path.parent.mkdir(parents=True, exist_ok=True)
