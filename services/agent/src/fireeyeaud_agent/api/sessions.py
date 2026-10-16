@@ -84,6 +84,13 @@ def update_session_context(session_id: str, body: SessionContextBody) -> dict[st
     return {"ok": ok}
 
 
+@router.post("/sessions/{session_id}/compact")
+async def compact_session(session_id: str) -> dict[str, object]:
+    from ..agent.graph import compact_session_manual
+
+    return await compact_session_manual(_root(), session_id)
+
+
 @router.delete("/sessions/{session_id}")
 def delete_session(session_id: str) -> dict[str, object]:
     root = _root()

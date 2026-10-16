@@ -224,6 +224,30 @@ async def test_run_agent_overflow_retries_only_once(tmp_path, monkeypatch):
     assert types[-1] == "done"
 
 
+async def test_done_usage_has_estimate_and_window(tmp_path, monkeypatch):
+    root, fe, sid, model_id = _setup(
+        tmp_path, monkeypatch, n=2, window=131072, max_output=8192
+    )
+    model = _CompactModel()
+    events = [
+        e
+        async for e in run_agent(
+            root,
+            sid,
+            "继续",
+            "zh-CN",
+            model=model,
+            model_id=model_id,
+            history_entries=_history_entries(fe, sid),
+        )
+    ]
+    usage = events[-1]["data"]["usage"]
+    assert usage["contextWindow"] == 131072
+    assert usage["tokensEstimated"] > 0
+    listed = sessions.list_sessions(fe)
+    assert listed[0]["tokensEstimate"] == usage["tokensEstimated"]
+
+
 async def test_run_agent_injects_existing_summary_without_recompaction(
     tmp_path, monkeypatch
 ):

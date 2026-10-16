@@ -32,7 +32,7 @@ from ..store.findings import create_finding
 from ..tools.registry import build_langchain_tools, build_tool_dict
 from ..util import now_iso
 from .compaction import is_context_overflow, prepare, summary_message
-from .token_budget import estimate_tokens
+from .token_budget import estimate_messages_tokens, estimate_tokens, resolve_context_window
 from .prompts import system_prompt
 from .context_snapshot import build_snapshot
 
@@ -325,6 +325,15 @@ async def run_agent(
     messages.append(current_message)
     human_index = len(messages) - 1
 
+    def _usage() -> dict[str, Any]:
+        """done 事件的用量：最近估算总 token 与当前模型窗口（方案 §4.5）。"""
+        return {
+            "tokensEstimated": estimate_messages_tokens(messages),
+            "contextWindow": resolve_context_window(
+                profile, default=settings.default_context_window
+            ),
+        }
+
     evidence_ids: list[str] = []
 
     async def execute_tool(name: str, args: dict[str, Any]) -> Any:
@@ -354,7 +363,7 @@ async def run_agent(
     while True:
         step += 1
         if step > settings.max_steps:
-            yield event("done", {"usage": {}, "messageKey": "error.agentLimit"})
+            yield event("done", {"usage": _usage(), "messageKey": "error.agentLimit"})
             return
 
         yield event("status", {"phase": "executing"})
@@ -384,7 +393,7 @@ async def run_agent(
                     "params": {},
                 },
             )
-            yield event("done", {"usage": {}})
+            yield event("done", {"usage": _usage()})
             return
         except Exception as exc:  # noqa: BLE001 - 模型不可达/鉴权失败/超时
             # 溢出兜底：provider 报上下文超限 → 强制压缩一次并重试一次（§4.4/§6.2）。
@@ -445,7 +454,7 @@ async def run_agent(
                     },
                 },
             )
-            yield event("done", {"usage": {}})
+            yield event("done", {"usage": _usage()})
             return
 
         if ai is None:
@@ -457,7 +466,7 @@ async def run_agent(
                     "params": {},
                 },
             )
-            yield event("done", {"usage": {}})
+            yield event("done", {"usage": _usage()})
             return
 
         print(format_llm_response(ai, step=step), flush=True)
@@ -529,7 +538,61 @@ async def run_agent(
             )
         yield event("status", {"phase": "reflecting"})
 
-    yield event("done", {"usage": {}})
+    usage = _usage()
+    from ..store.sessions import set_tokens_estimate
+
+    set_tokens_estimate(fe, session_id, usage["tokensEstimated"])
+    yield event("done", {"usage": usage})
+
+
+async def compact_session_manual(
+    root: Path, session_id: str, model_id: str | None = None
+) -> dict[str, Any]:
+    """手动压缩（`POST /sessions/{id}/compact`，方案 §4.4 第 3 条）。
+
+    强制压缩一次（不受阈值与 auto 限制），返回压缩后的估算。
+    """
+    root = Path(root)
+    fe = root / ".fireeye"
+    from ..store.rules import list_rules
+    from ..store.sessions import list_sessions
+
+    if model_id is None:
+        model_id = next(
+            (
+                item.get("modelId")
+                for item in list_sessions(fe)
+                if item.get("id") == session_id
+            ),
+            None,
+        )
+    entries = _history_entries(fe, session_id)
+    enabled_rules = [r for r in list_rules(root) if r.get("enabled") and r.get("sql")]
+    custom_prompt = (app_settings.load().get("systemPrompt") or "").strip() or None
+    system_text = system_prompt(None, enabled_rules, None, custom_prompt)
+    app_compact = app_settings.load().get("compaction") or {}
+    profile = select_profile(root, model_id)
+    model = build_chat_model(root, model_id)
+    result = await prepare(
+        fe,
+        session_id,
+        entries=entries,
+        system_text=system_text,
+        new_turn_text="",
+        model=model,
+        model_id=model_id,
+        profile=profile,
+        app_compaction=app_compact,
+        force=True,
+    )
+    return {
+        "compacted": result.compacted,
+        "summarizedUpTo": result.summarized_up_to,
+        "tokensBefore": result.tokens_before,
+        "tokensAfter": result.tokens_after,
+        "modelId": model_id,
+        "window": result.window,
+    }
 
 
 def _entries_to_messages(
