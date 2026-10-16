@@ -53,6 +53,9 @@ async def test_run_agent_exposes_and_calls_mcp_tools(tmp_path, monkeypatch):
         class _M:
             tools = [tool]
             tool_dict = {"mcp__mcp_1__echo": _entry}
+            servers = [
+                {"serverId": "mcp_1", "name": "echo-server", "tools": ["echo"]}
+            ]
 
             async def aclose(self):
                 captured["closed"] = True

@@ -284,7 +284,13 @@ async def run_agent(
             rules = enabled_rules
         skill_prompts = prompts_for(root, (context or {}).get("skillIds"))
         custom_prompt = (app_settings.load().get("systemPrompt") or "").strip() or None
-        system_text = system_prompt(locale, rules, skill_prompts, custom_prompt)
+        system_text = system_prompt(
+            locale,
+            rules,
+            skill_prompts,
+            custom_prompt,
+            mcp_servers=mcp_tools.servers if mcp_tools else None,
+        )
         messages: list[BaseMessage] = [SystemMessage(content=system_text)]
 
         yield event("status", {"phase": "planning"})
