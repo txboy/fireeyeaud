@@ -6,6 +6,8 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from ..config import store
+from ..errors import ApiError
+from ..mcp import manager as mcp_manager
 from ..store import mcp
 from ..store.workspace import workspace_manager
 from .deps import require_token
@@ -68,3 +70,41 @@ def update_server(
 def delete_server(server_id: str, scope: str = Query(default="global")) -> dict:
     mcp.delete_server(server_id, scope, workspace_manager.root)
     return {"ok": True}
+
+
+def _require_server(server_id: str) -> dict:
+    root = workspace_manager.root
+    if root is None:
+        raise ApiError("E_NO_WORKSPACE", 409, "error.noWorkspace")
+    server = mcp_manager.find_server(root, server_id)
+    if server is None:
+        raise ApiError("E_NOT_FOUND", 404, "error.notFound", {"id": server_id})
+    return server
+
+
+def _tool_items(specs: list) -> list[dict]:
+    return [{"name": s.name, "description": s.description} for s in specs]
+
+
+@router.post("/mcp/servers/{server_id}/test")
+async def test_server(server_id: str) -> dict:
+    """连接 + `tools/list`，返回连通性与工具预览（设计 §5.7）。"""
+    server = _require_server(server_id)
+    try:
+        specs = await mcp_manager.server_tools(
+            workspace_manager.root, server, ttl_seconds=0
+        )
+    except Exception as exc:  # noqa: BLE001 - 连通性失败以结构化结果返回
+        return {"ok": False, "tools": [], "error": str(exc)}
+    return {"ok": True, "tools": _tool_items(specs)}
+
+
+@router.get("/mcp/servers/{server_id}/tools")
+async def server_tools(server_id: str) -> dict:
+    """工具列表预览（短 TTL 缓存，设计 §5.7）。"""
+    server = _require_server(server_id)
+    try:
+        specs = await mcp_manager.server_tools(workspace_manager.root, server)
+    except Exception as exc:  # noqa: BLE001 - 失败以空列表 + error 返回
+        return {"tools": [], "error": str(exc)}
+    return {"tools": _tool_items(specs)}

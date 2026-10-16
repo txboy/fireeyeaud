@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+import json
+import time
 from contextlib import AsyncExitStack
 from pathlib import Path
 from typing import Any, Awaitable, Callable
@@ -18,6 +20,49 @@ from ..store import mcp as mcp_store
 from . import adapters, client
 
 _ALL = object()
+
+# `tools/list` 预览缓存：key = root|serverId|配置指纹，value = (过期时间, specs)。
+_TOOLS_CACHE: dict[str, tuple[float, list[client.McpToolSpec]]] = {}
+
+
+def _clear_tools_cache() -> None:
+    _TOOLS_CACHE.clear()
+
+
+def _fingerprint(server: dict[str, Any]) -> str:
+    keys = ("transport", "command", "args", "env", "url", "apiKeyRef", "apiKeyEnv")
+    return json.dumps(
+        {k: server.get(k) for k in keys}, sort_keys=True, ensure_ascii=False, default=str
+    )
+
+
+def find_server(root: Path | None, server_id: str) -> dict[str, Any] | None:
+    for server in mcp_store.list_servers(root):
+        if str(server.get("id")) == str(server_id):
+            return server
+    return None
+
+
+async def server_tools(
+    root: Path,
+    server: dict[str, Any],
+    *,
+    ttl_seconds: float = 60.0,
+    open_session: Callable[..., Any] | None = None,
+) -> list[client.McpToolSpec]:
+    """连接 server 并返回其工具列表（带短 TTL 缓存，供预览/测试）。"""
+    key = f"{Path(root)}|{server.get('id')}|{_fingerprint(server)}"
+    now = time.monotonic()
+    hit = _TOOLS_CACHE.get(key)
+    if hit is not None and hit[0] > now:
+        return hit[1]
+    opener = open_session or client.open_session
+    async with opener(server, workspace=Path(root)) as session:
+        specs = await session.list_tools()
+    if ttl_seconds > 0:
+        _TOOLS_CACHE[key] = (now + ttl_seconds, specs)
+    return specs
+
 
 
 def effective_server_ids(root: Path | None, selected: Any = None) -> set[str]:
