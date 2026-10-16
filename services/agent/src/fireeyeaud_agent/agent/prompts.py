@@ -37,6 +37,7 @@ def system_prompt(
     skills: list[dict] | None = None,
     custom: str | None = None,
     mcp_servers: list[dict] | None = None,
+    skill_catalog: list[dict] | None = None,
 ) -> str:
     directive = _EN_DIRECTIVE if locale == "en-US" else _ZH_DIRECTIVE
     text = _BASE
@@ -60,6 +61,20 @@ def system_prompt(
         lines = ["", "可参考的审计技能（方法与视角，非强制流程）："]
         for skill in skills:
             lines.append(f"- {skill.get('name', '')}：{skill.get('prompt', '')}")
+        text += "\n".join(lines) + "\n"
+    if skill_catalog:
+        lines = [
+            "",
+            "可用技能（相关时用 load_skill 获取详细方法，不要臆测其内容）：",
+        ]
+        for skill in skill_catalog:
+            name = skill.get("name", "")
+            desc = skill.get("description", "")
+            line = f"- [{skill.get('id', '')}] {name}：{desc}"
+            when = str(skill.get("whenToUse") or "").strip()
+            if when:
+                line += f"（何时用：{when}）"
+            lines.append(line)
         text += "\n".join(lines) + "\n"
     if mcp_servers:
         lines = [
