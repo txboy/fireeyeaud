@@ -836,6 +836,9 @@ export function listSkills(): Promise<{ items: Skill[] }> {
 export interface SkillInput {
   name: string;
   prompt: string;
+  description?: string;
+  whenToUse?: string;
+  eager?: boolean;
   toolIds?: string[];
   params?: Record<string, unknown>;
   enabled?: boolean;
@@ -875,6 +878,9 @@ export interface SettingsPatch {
     provider?: string;
     keyRef?: string | null;
     baseUrl?: string | null;
+  };
+  skills?: {
+    mode?: string;
   };
 }
 

@@ -474,6 +474,12 @@ export interface Skill {
   id: string;
   name: string;
   prompt: string;
+  /** 一句话描述，用于 system prompt 广告（缺省时后端从 prompt 首行生成）。 */
+  description?: string;
+  /** 何时使用（可选，进一步提示模型）。 */
+  whenToUse?: string;
+  /** True=始终全量注入正文（lazy 模式下的逃生口）。 */
+  eager?: boolean;
   toolIds?: string[];
   params?: Record<string, unknown>;
   enabled: boolean;
@@ -502,6 +508,10 @@ export interface AppSettings {
     keepTokens: number;
     reserveOutputTokens: number;
     threshold: number;
+  };
+  /** 技能加载模式（Phase 9 · 按需加载）。lazy=广告+load_skill，eager=全量注入。 */
+  skills?: {
+    mode: string;
   };
   telemetry: boolean;
 }

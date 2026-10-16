@@ -9,6 +9,9 @@ import { useUnsavedGuard } from './UnsavedGuard';
 interface FormState {
   name: string;
   prompt: string;
+  description: string;
+  whenToUse: string;
+  eager: boolean;
   toolIds: string;
   scope: ConfigScope;
   isDefault: boolean;
@@ -18,6 +21,9 @@ interface FormState {
 const EMPTY: FormState = {
   name: '',
   prompt: '',
+  description: '',
+  whenToUse: '',
+  eager: false,
   toolIds: '',
   scope: 'project',
   isDefault: false,
@@ -29,6 +35,9 @@ function init(entity?: Skill): FormState {
   return {
     name: entity.name,
     prompt: entity.prompt,
+    description: entity.description ?? '',
+    whenToUse: entity.whenToUse ?? '',
+    eager: Boolean(entity.eager),
     toolIds: (entity.toolIds ?? []).join(' '),
     scope: entity.scope,
     isDefault: Boolean(entity.isDefault),
@@ -70,6 +79,9 @@ export function SkillForm({
     const payload = {
       name: form.name.trim(),
       prompt: form.prompt.trim(),
+      description: form.description.trim() || undefined,
+      whenToUse: form.whenToUse.trim() || undefined,
+      eager: form.eager,
       toolIds: parseTokens(form.toolIds),
       scope: form.scope,
       isDefault: form.isDefault,
@@ -106,6 +118,22 @@ export function SkillForm({
           rows={4}
           value={form.prompt}
           onChange={(e) => setForm({ ...form, prompt: e.target.value })}
+        />
+      </label>
+      <label className="field">
+        <span className="field__label">{t('description')}</span>
+        <input
+          className="searchbox"
+          value={form.description}
+          onChange={(e) => setForm({ ...form, description: e.target.value })}
+        />
+      </label>
+      <label className="field">
+        <span className="field__label">{t('whenToUse')}</span>
+        <input
+          className="searchbox"
+          value={form.whenToUse}
+          onChange={(e) => setForm({ ...form, whenToUse: e.target.value })}
         />
       </label>
       <label className="field">
@@ -155,6 +183,15 @@ export function SkillForm({
           onChange={(e) => setForm({ ...form, enabled: e.target.checked })}
         />
         <span>{t('enabled')}</span>
+      </label>
+
+      <label className="field field--inline">
+        <input
+          type="checkbox"
+          checked={form.eager}
+          onChange={(e) => setForm({ ...form, eager: e.target.checked })}
+        />
+        <span>{t('eager')}</span>
       </label>
 
       <FormError errorKey={errorKey} />
