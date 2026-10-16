@@ -805,10 +805,42 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
+.agent__conv-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
 .agent__conv {
   flex: 1;
+  min-width: 0;
   overflow: auto;
   padding: 18px;
+}
+
+/* 「回到最新」浮动按钮：仅在用户上翻（未贴底）时显示。 */
+.agent__scroll-latest {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--editor-bg);
+  color: var(--text-2);
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+
+.agent__scroll-latest:hover {
+  background: var(--hover);
+  color: var(--text-1);
 }
 
 .agent__chip {

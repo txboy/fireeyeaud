@@ -407,6 +407,7 @@ export default {
       'The summary is background only and is not used as audit evidence',
     compactNow: 'Compact context',
     compactionNone: 'Nothing to compact',
+    scrollToLatest: 'Back to latest',
     phase: {
       planning: 'Planning…',
       executing: 'Working…',

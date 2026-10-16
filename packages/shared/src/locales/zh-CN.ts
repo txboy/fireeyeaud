@@ -401,6 +401,7 @@ export default {
     compactionDividerTitle: '摘要仅作背景参考，不作为取证依据',
     compactNow: '压缩上下文',
     compactionNone: '无需压缩',
+    scrollToLatest: '回到最新',
     phase: {
       planning: '规划中…',
       executing: '执行中…',
