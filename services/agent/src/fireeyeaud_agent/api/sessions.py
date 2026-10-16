@@ -68,6 +68,13 @@ def get_messages(session_id: str) -> dict[str, object]:
     return {"items": sessions_store.get_messages(root / ".fireeye", session_id)}
 
 
+@router.delete("/sessions/{session_id}/messages/{message_id}")
+def delete_message(session_id: str, message_id: str) -> dict[str, object]:
+    root = _root()
+    ok = sessions_store.delete_message(root / ".fireeye", session_id, message_id)
+    return {"ok": ok}
+
+
 @router.patch("/sessions/{session_id}")
 def update_session(session_id: str, body: UpdateSessionBody) -> dict[str, object]:
     root = _root()

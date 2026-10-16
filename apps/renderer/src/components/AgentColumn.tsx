@@ -21,6 +21,7 @@ import { draftHasContent, useChatStore, type CompactionInfo } from '../store/cha
 import { ContextBar } from './ContextBar';
 import { MentionInput, type MentionInputHandle } from './MentionInput';
 import { Markdown } from './Markdown';
+import { MessageActions } from './MessageActions';
 
 const OPT_GROUPS: {
   key: Exclude<keyof ContextSnapshot, 'model'>;
@@ -284,6 +285,13 @@ export function AgentColumn({ sessionId }: { sessionId: string }) {
                     <AlertTriangle size={13} strokeWidth={1.75} />
                     <span>{errorText(m.errorKey)}</span>
                   </div>
+                )}
+                {!compactionOnly && (
+                  <MessageActions
+                    message={m}
+                    sessionId={sessionId}
+                    disabled={streaming}
+                  />
                 )}
               </div>
               );

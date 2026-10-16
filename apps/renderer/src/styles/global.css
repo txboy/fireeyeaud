@@ -2203,6 +2203,46 @@ textarea.searchbox {
   color: var(--text-2);
 }
 
+.msg__actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.msg:hover .msg__actions {
+  opacity: 1;
+}
+
+.msg--user .msg__actions {
+  justify-content: flex-end;
+}
+
+.msg__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+}
+
+.msg__action:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text-1);
+}
+
+.msg__action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .msg--user {
   margin-left: auto;
   margin-right: 0;
@@ -3179,6 +3219,47 @@ textarea.searchbox {
   font-weight: 500;
   text-align: right;
   font-family: var(--font-mono);
+}
+
+/* CSV 表头：首行固定、加粗 */
+.sheet--csv thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--panel-bg);
+  color: var(--text-1);
+  font-weight: 600;
+  text-align: left;
+}
+
+.sheet--csv thead th.sheet__rowno {
+  z-index: 2;
+}
+
+/* 文件预览头部的分段切换（CSV：表格 / 文本） */
+.filepreview__seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.filepreview__seg button {
+  font-size: 11.5px;
+  padding: 3px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.filepreview__seg button + button {
+  border-left: 1px solid var(--border);
+}
+
+.filepreview__seg button.is-active {
+  background: var(--accent-weak);
+  color: var(--accent);
 }
 
 /* ---- 欢迎页 ---- */

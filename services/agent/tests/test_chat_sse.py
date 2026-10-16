@@ -51,7 +51,11 @@ async def test_chat_streams_sse_envelope(tmp_path, monkeypatch) -> None:
     assert types[0] == "status"
     assert "context" in types
     assert "token" in types
-    assert types[-1] == "done"
+    assert types[-2] == "done"
+    assert types[-1] == "persisted"
+    persisted = events[-1]
+    assert persisted["data"]["userMessageId"].startswith("m_")
+    assert persisted["data"]["assistantMessageId"].startswith("m_")
     assert all(e["sessionId"] == session_id for e in events)
     assert [e["seq"] for e in events] == list(range(1, len(events) + 1))
 

@@ -60,9 +60,16 @@ def _connect(fe: Path) -> sqlite3.Connection:
         ("summaryModel", "TEXT"),
         ("summaryWindow", "INTEGER"),
         ("tokensEstimate", "INTEGER"),
+        ("messageSeq", "INTEGER"),
     ):
         if column not in existing:
             con.execute(f"ALTER TABLE sessions ADD COLUMN {column} {decl}")
+    if "messageSeq" not in existing:
+        # 老库回填：以现有最大 seq 为起点，保证会话内计数器不倒退。
+        con.execute(
+            "UPDATE sessions SET messageSeq = COALESCE("
+            "(SELECT MAX(seq) FROM messages WHERE messages.sessionId = sessions.id), 0)"
+        )
     con.commit()
     return con
 
@@ -150,17 +157,21 @@ def add_message(
 ) -> dict[str, Any]:
     con = _connect(fe)
     try:
-        seq = _next_seq(con, "messages", "m")
-        count = con.execute(
-            "SELECT COUNT(*) FROM messages WHERE sessionId=?", (session_id,)
-        ).fetchone()[0]
+        # seq 用会话内单调计数器（落库 sessions.messageSeq），删除消息后也不复用，
+        # 以保住消息排序与压缩边界 compactedUpTo 的语义；id 用全局最大后缀（跨会话唯一）。
+        row = con.execute(
+            "SELECT COALESCE(messageSeq, 0) FROM sessions WHERE id=?", (session_id,)
+        ).fetchone()
+        seq = (int(row[0]) if row else 0) + 1
+        con.execute("UPDATE sessions SET messageSeq=? WHERE id=?", (seq, session_id))
+        message_id = f"m_{_next_seq(con, 'messages', 'm')}"
         ts = now_iso()
         con.execute(
             "INSERT INTO messages (id, sessionId, seq, role, content, ts) VALUES (?,?,?,?,?,?)",
             (
-                f"m_{seq}",
+                message_id,
                 session_id,
-                count + 1,
+                seq,
                 role,
                 json.dumps(content, ensure_ascii=False),
                 ts,
@@ -170,7 +181,20 @@ def add_message(
         con.commit()
     finally:
         con.close()
-    return {"id": f"m_{seq}", "sessionId": session_id, "seq": count + 1, "role": role}
+    return {"id": message_id, "sessionId": session_id, "seq": seq, "role": role}
+
+
+def delete_message(fe: Path, session_id: str, message_id: str) -> bool:
+    """删除某会话内的一条消息；返回是否命中并删除了行。"""
+    con = _connect(fe)
+    try:
+        cur = con.execute(
+            "DELETE FROM messages WHERE id=? AND sessionId=?", (message_id, session_id)
+        )
+        con.commit()
+        return cur.rowcount > 0
+    finally:
+        con.close()
 
 
 def get_messages(fe: Path, session_id: str, limit: int = 200) -> list[dict[str, Any]]:

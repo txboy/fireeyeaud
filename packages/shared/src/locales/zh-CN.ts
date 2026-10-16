@@ -402,6 +402,8 @@ export default {
     scrollToLatest: '回到最新',
     copyCode: '复制代码',
     copied: '已复制',
+    deleteMessage: '删除消息',
+    deleteMessageConfirm: '确定删除这条消息？此操作不可撤销。',
     phase: {
       planning: '规划中…',
       executing: '执行中…',
@@ -546,6 +548,8 @@ export default {
     parseFailed: '文件解析失败，可用系统程序打开',
     truncated: '内容过大，仅显示前 {{rows}} 行 / {{cols}} 列',
     sheetLabel: '工作表',
+    viewTable: '表格',
+    viewText: '文本',
     pageOf: '第 {{page}} / {{total}} 页',
     zoomIn: '放大',
     zoomOut: '缩小',

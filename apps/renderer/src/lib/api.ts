@@ -181,6 +181,15 @@ export function getSessionMessagesApi(id: string): Promise<{ items: SessionMessa
   return request<{ items: SessionMessage[] }>(`/sessions/${id}/messages`);
 }
 
+export function deleteSessionMessageApi(
+  id: string,
+  messageId: string,
+): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/sessions/${id}/messages/${messageId}`, {
+    method: 'DELETE',
+  });
+}
+
 export function deleteSessionApi(id: string): Promise<{ ok: boolean }> {
   return request<{ ok: boolean }>(`/sessions/${id}`, { method: 'DELETE' });
 }

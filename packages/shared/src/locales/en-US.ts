@@ -408,6 +408,8 @@ export default {
     scrollToLatest: 'Back to latest',
     copyCode: 'Copy code',
     copied: 'Copied',
+    deleteMessage: 'Delete message',
+    deleteMessageConfirm: 'Delete this message? This cannot be undone.',
     phase: {
       planning: 'Planning…',
       executing: 'Working…',
@@ -556,6 +558,8 @@ export default {
     parseFailed: 'Failed to parse file; open with system app',
     truncated: 'Content too large; showing first {{rows}} rows / {{cols}} columns',
     sheetLabel: 'Sheet',
+    viewTable: 'Table',
+    viewText: 'Text',
     pageOf: 'Page {{page}} / {{total}}',
     zoomIn: 'Zoom in',
     zoomOut: 'Zoom out',

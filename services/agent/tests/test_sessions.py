@@ -84,6 +84,39 @@ def test_session_summary_roundtrip(tmp_path, monkeypatch):
     assert sessions.get_summary(fe, sid) is None
 
 
+def test_add_message_seq_monotonic_after_delete(tmp_path, monkeypatch):
+    root = _ws(tmp_path, monkeypatch)
+    fe = root / ".fireeye"
+    sid = sessions.create_session(fe, root, None)["id"]
+    a = sessions.add_message(fe, root, sid, "user", {"text": "a"})
+    b = sessions.add_message(fe, root, sid, "assistant", {"text": "b"})
+    assert (a["seq"], b["seq"]) == (1, 2)
+    assert sessions.delete_message(fe, sid, b["id"]) is True
+    c = sessions.add_message(fe, root, sid, "user", {"text": "c"})
+    assert c["seq"] == 3  # 删除后不复用已用过的 seq
+    assert [m["id"] for m in sessions.get_messages(fe, sid)] == [a["id"], c["id"]]
+
+
+async def test_delete_message_endpoint(tmp_path, monkeypatch):
+    root = _ws(tmp_path, monkeypatch)
+    fe = root / ".fireeye"
+    sid = sessions.create_session(fe, root, None)["id"]
+    m1 = sessions.add_message(fe, root, sid, "user", {"text": "hi"})
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        await client.post("/api/v1/workspaces/open", json={"path": str(root)})
+        res = await client.delete(f"/api/v1/sessions/{sid}/messages/{m1['id']}")
+        assert res.status_code == 200
+        assert res.json()["ok"] is True
+        again = await client.delete(f"/api/v1/sessions/{sid}/messages/{m1['id']}")
+        assert again.json()["ok"] is False
+        items = (await client.get(f"/api/v1/sessions/{sid}/messages")).json()["items"]
+        assert items == []
+        await client.post("/api/v1/workspaces/close")
+
+
 async def test_rules_is_default_api(tmp_path, monkeypatch):
     root = _ws(tmp_path, monkeypatch)
     async with httpx.AsyncClient(

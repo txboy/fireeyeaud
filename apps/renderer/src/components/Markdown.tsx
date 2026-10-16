@@ -14,6 +14,7 @@ import sql from 'highlight.js/lib/languages/sql';
 import typescript from 'highlight.js/lib/languages/typescript';
 import xml from 'highlight.js/lib/languages/xml';
 import yaml from 'highlight.js/lib/languages/yaml';
+import { copyText } from '../lib/clipboard';
 
 // 只注册会用到的语言，控制打包体积。
 hljs.registerLanguage('bash', bash);
@@ -61,31 +62,6 @@ function highlight(code: string, lang: string): string {
     }
   }
   return escapeHtml(code);
-}
-
-/** 复制到剪贴板：优先 Clipboard API，不可用（如打包后的 file://）时退回 execCommand。 */
-async function copyText(text: string): Promise<boolean> {
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch {
-    // 退回 execCommand
-  }
-  try {
-    const area = document.createElement('textarea');
-    area.value = text;
-    area.style.position = 'fixed';
-    area.style.opacity = '0';
-    document.body.appendChild(area);
-    area.select();
-    const ok = document.execCommand('copy');
-    document.body.removeChild(area);
-    return ok;
-  } catch {
-    return false;
-  }
 }
 
 /** 在系统浏览器打开链接（Electron 主进程已禁止渲染进程内导航）。 */

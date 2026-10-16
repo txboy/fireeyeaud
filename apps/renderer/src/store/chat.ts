@@ -4,6 +4,7 @@ import {
   ApiError,
   createSessionApi,
   deleteSessionApi,
+  deleteSessionMessageApi,
   EMPTY_CONTEXT,
   getSessionMessagesApi,
   listSessionsApi,
@@ -145,6 +146,8 @@ interface ChatState {
   setModel: (sessionId: string, modelId: string | null) => void;
   setContext: (sessionId: string, patch: Partial<ChatContext>) => void;
   setDraft: (sessionId: string, segments: DraftSegment[]) => void;
+  /** 删除单条消息（后端按 id 持久化删除；非持久化消息仅本地移除）。 */
+  deleteMessage: (sessionId: string, messageId: string) => Promise<void>;
   /** 清空所有聊天分片（切换工作区时）。 */
   clearAllChats: () => void;
 }
@@ -493,6 +496,28 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }));
         return;
       }
+      // 后端回传本轮两条消息的持久化 id：把本地临时 id 换成后端 id，供删除对齐。
+      if (event.type === 'persisted') {
+        const data = (event.data ?? {}) as {
+          userMessageId?: string;
+          assistantMessageId?: string | null;
+        };
+        set((s) => ({
+          chats: withChat(s.chats, sessionId, (c) => ({
+            ...c,
+            messages: c.messages.map((m) => {
+              if (data.userMessageId && m.id === userMessage.id) {
+                return { ...m, id: data.userMessageId };
+              }
+              if (data.assistantMessageId && m.id === assistantMessage.id) {
+                return { ...m, id: data.assistantMessageId };
+              }
+              return m;
+            }),
+          })),
+        }));
+        return;
+      }
       set((s) => {
         if (!s.chats[sessionId]) return s;
         return {
@@ -599,6 +624,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((s) => ({
       chats: withChat(s.chats, sessionId, (chat) => ({ ...chat, draft: segments })),
     })),
+
+  deleteMessage: async (sessionId, messageId) => {
+    const chat = get().chats[sessionId];
+    if (!chat || chat.streaming) return;
+    try {
+      await deleteSessionMessageApi(sessionId, messageId);
+    } catch {
+      /* 非持久化消息（报错/中止）后端无行：仅本地移除 */
+    }
+    set((s) => ({
+      chats: withChat(s.chats, sessionId, (c) => ({
+        ...c,
+        messages: c.messages.filter((m) => m.id !== messageId),
+      })),
+    }));
+  },
 
   clearAllChats: () => {
     for (const controller of controllers.values()) controller.abort();

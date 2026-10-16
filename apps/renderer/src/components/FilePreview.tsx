@@ -7,6 +7,7 @@ import { setLeaveGuard, type PreviewTab } from '../store/ui';
 import { useSettingsStore } from '../store/settings';
 import { ImagePreview } from './preview/ImagePreview';
 import { extOf, formatBytes } from './preview/util';
+import { CsvPreview } from './preview/CsvPreview';
 
 // 重依赖查看器按需加载（pdfjs / exceljs / docx-preview / codemirror）。
 const TextPreview = lazy(() =>
@@ -49,6 +50,7 @@ export function FilePreview({ target }: { target: PreviewTab }) {
   const [text, setText] = useState('');
   const [dirty, setDirty] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [view, setView] = useState<'table' | 'text'>('table');
 
   const originalRef = useRef('');
   const textRef = useRef('');
@@ -77,6 +79,11 @@ export function FilePreview({ target }: { target: PreviewTab }) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // 切换文件时回到默认「表格」视图（仅 CSV/TSV 用到）。
+  useEffect(() => {
+    setView('table');
+  }, [target.path]);
 
   const save = useCallback(async (): Promise<boolean> => {
     const res = await window.fireeyeaud?.writeTextFile({
@@ -123,6 +130,8 @@ export function FilePreview({ target }: { target: PreviewTab }) {
   const name = target.name;
   const ext = extOf(name);
   const isText = content?.ok === true && content.kind === 'text';
+  const isCsv = ext === '.csv' || ext === '.tsv';
+  const csvDelimiter = ext === '.tsv' ? '\t' : undefined;
 
   return (
     <div className="filepreview">
@@ -133,6 +142,24 @@ export function FilePreview({ target }: { target: PreviewTab }) {
         </span>
         {dirty && <span className="filepreview__dirty">{t('unsaved')}</span>}
         <span className="spacer" />
+        {isText && isCsv && (
+          <div className="filepreview__seg">
+            <button
+              type="button"
+              className={view === 'table' ? 'is-active' : ''}
+              onClick={() => setView('table')}
+            >
+              {t('viewTable')}
+            </button>
+            <button
+              type="button"
+              className={view === 'text' ? 'is-active' : ''}
+              onClick={() => setView('text')}
+            >
+              {t('viewText')}
+            </button>
+          </div>
+        )}
         {isText && (
           <button
             type="button"
@@ -190,17 +217,21 @@ export function FilePreview({ target }: { target: PreviewTab }) {
             </button>
           </div>
         ) : content.kind === 'text' ? (
-          <TextPreview
-            key={target.path}
-            initialValue={text}
-            name={name}
-            readOnly={false}
-            dark={dark}
-            line={target.line}
-            column={target.column}
-            onChange={changeText}
-            onSave={() => void save()}
-          />
+          isCsv && view === 'table' ? (
+            <CsvPreview key={`${target.path}:csv`} text={text} delimiter={csvDelimiter} />
+          ) : (
+            <TextPreview
+              key={target.path}
+              initialValue={text}
+              name={name}
+              readOnly={false}
+              dark={dark}
+              line={target.line}
+              column={target.column}
+              onChange={changeText}
+              onSave={() => void save()}
+            />
+          )
         ) : IMAGE_EXT.has(ext) ? (
           <ImagePreview data={content.data} mime={content.mime} name={name} />
         ) : ext === '.pdf' ? (

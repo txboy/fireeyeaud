@@ -780,7 +780,7 @@ async def stream_chat(
     attachment_texts = [t.as_dict() for t in read.texts]
     mention_list = _normalize_mentions(mentions)
     agent_message = _compose_user_message(message, mention_list)
-    add_message(
+    user_message = add_message(
         fe,
         root,
         session_id,
@@ -818,5 +818,15 @@ async def stream_chat(
             yield _wrap(ev)
 
     answer = "".join(answer_parts).strip()
+    assistant_id: str | None = None
     if answer:
-        add_message(fe, root, session_id, "assistant", {"text": answer})
+        assistant_id = add_message(fe, root, session_id, "assistant", {"text": answer})[
+            "id"
+        ]
+    # 尾部事件：回传两条消息的持久化 id，供前端按后端 id 做删除对齐（本地消息 id 是临时生成的）。
+    yield _wrap(
+        event(
+            "persisted",
+            {"userMessageId": user_message["id"], "assistantMessageId": assistant_id},
+        )
+    )
