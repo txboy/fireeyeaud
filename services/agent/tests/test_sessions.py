@@ -50,6 +50,40 @@ async def test_session_context_api(tmp_path, monkeypatch):
         await client.post("/api/v1/workspaces/close")
 
 
+def test_session_summary_roundtrip(tmp_path, monkeypatch):
+    root = _ws(tmp_path, monkeypatch)
+    fe = root / ".fireeye"
+    session = sessions.create_session(fe, root, None)
+    sid = session["id"]
+
+    assert sessions.get_summary(fe, sid) is None
+
+    sessions.set_summary(
+        fe,
+        sid,
+        {"text": "早期对话摘要", "upTo": 4, "createdAt": "2026-01-01T00:00:00Z"},
+        model_id="mdl_2",
+        window=131072,
+    )
+
+    stored = sessions.get_summary(fe, sid)
+    assert stored["text"] == "早期对话摘要"
+    assert stored["upTo"] == 4
+    assert stored["modelId"] == "mdl_2"
+    assert stored["window"] == 131072
+
+    # 幂等升级：再次连接（模拟重开）仍能读回。
+    again = sessions.get_summary(fe, sid)
+    assert again == stored
+
+    sessions.set_tokens_estimate(fe, sid, 48210)
+    items = sessions.list_sessions(fe)
+    assert items[0]["tokensEstimate"] == 48210
+
+    sessions.clear_summary(fe, sid)
+    assert sessions.get_summary(fe, sid) is None
+
+
 async def test_rules_is_default_api(tmp_path, monkeypatch):
     root = _ws(tmp_path, monkeypatch)
     async with httpx.AsyncClient(

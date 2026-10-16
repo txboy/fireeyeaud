@@ -53,6 +53,16 @@ def _connect(fe: Path) -> sqlite3.Connection:
         con.execute("ALTER TABLE sessions ADD COLUMN context TEXT")
     if "modelId" not in existing:
         con.execute("ALTER TABLE sessions ADD COLUMN modelId TEXT")
+    # 上下文压缩状态（Phase 9）：摘要与诊断字段，摘要不进 messages 表。
+    for column, decl in (
+        ("summary", "TEXT"),
+        ("compactedUpTo", "INTEGER"),
+        ("summaryModel", "TEXT"),
+        ("summaryWindow", "INTEGER"),
+        ("tokensEstimate", "INTEGER"),
+    ):
+        if column not in existing:
+            con.execute(f"ALTER TABLE sessions ADD COLUMN {column} {decl}")
     con.commit()
     return con
 
@@ -76,8 +86,8 @@ def list_sessions(fe: Path) -> list[dict[str, Any]]:
     con = _connect(fe)
     try:
         rows = con.execute(
-            "SELECT id, title, createdAt, lastMessageAt, context, modelId "
-            "FROM sessions ORDER BY createdAt"
+            "SELECT id, title, createdAt, lastMessageAt, context, modelId, "
+            "compactedUpTo, tokensEstimate FROM sessions ORDER BY createdAt"
         ).fetchall()
     finally:
         con.close()
@@ -182,3 +192,97 @@ def get_messages(fe: Path, session_id: str, limit: int = 200) -> list[dict[str, 
             pass
         items.append(item)
     return items
+
+
+def get_summary(fe: Path, session_id: str) -> dict[str, Any] | None:
+    """读取会话摘要；无摘要返回 None。
+
+    返回 {text, upTo, createdAt, modelId, window}。
+    """
+    con = _connect(fe)
+    try:
+        row = con.execute(
+            "SELECT summary, compactedUpTo, summaryModel, summaryWindow "
+            "FROM sessions WHERE id=?",
+            (session_id,),
+        ).fetchone()
+    finally:
+        con.close()
+    if row is None:
+        return None
+    raw = row["summary"]
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    return {
+        "text": str(data.get("text") or ""),
+        "upTo": int(row["compactedUpTo"] or data.get("upTo") or 0),
+        "createdAt": data.get("createdAt"),
+        "modelId": row["summaryModel"],
+        "window": row["summaryWindow"],
+    }
+
+
+def set_summary(
+    fe: Path,
+    session_id: str,
+    summary: dict[str, Any],
+    *,
+    model_id: str | None,
+    window: int | None,
+) -> bool:
+    """写入/更新会话摘要，并记录生成时的模型与窗口（诊断用，不用于回滚）。"""
+    created = summary.get("createdAt") or now_iso()
+    stored = {
+        "text": str(summary.get("text") or ""),
+        "upTo": int(summary.get("upTo") or 0),
+        "createdAt": created,
+    }
+    con = _connect(fe)
+    try:
+        cur = con.execute(
+            "UPDATE sessions SET summary=?, compactedUpTo=?, summaryModel=?, "
+            "summaryWindow=? WHERE id=?",
+            (
+                json.dumps(stored, ensure_ascii=False),
+                stored["upTo"],
+                model_id,
+                window,
+                session_id,
+            ),
+        )
+        con.commit()
+        return cur.rowcount > 0
+    finally:
+        con.close()
+
+
+def clear_summary(fe: Path, session_id: str) -> None:
+    con = _connect(fe)
+    try:
+        con.execute(
+            "UPDATE sessions SET summary=NULL, compactedUpTo=NULL, "
+            "summaryModel=NULL, summaryWindow=NULL WHERE id=?",
+            (session_id,),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+
+def set_tokens_estimate(fe: Path, session_id: str, tokens: int) -> None:
+    """记录最近一轮估算总 token（诊断 / UI 用）。"""
+    con = _connect(fe)
+    try:
+        con.execute(
+            "UPDATE sessions SET tokensEstimate=? WHERE id=?",
+            (int(tokens), session_id),
+        )
+        con.commit()
+    finally:
+        con.close()
