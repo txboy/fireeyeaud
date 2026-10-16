@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, Trash2 } from 'lucide-react';
 import type { ConfigScope, McpServer, McpTransport } from '@fireeyeaud/shared';
+import { getMcpServerTools, testMcpServer, type McpToolInfo } from '../../lib/api';
 import { useMcpStore } from '../../store/mcp';
 import { FormActions } from './FormActions';
 import { FormError } from './FormError';
@@ -104,9 +105,33 @@ export function McpForm({
   const initialRef = useRef<FormState>(init(entity));
   const [form, setForm] = useState<FormState>(initialRef.current);
   const [busy, setBusy] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{
+    ok: boolean;
+    tools: McpToolInfo[];
+    error?: string;
+  } | null>(null);
 
   const isStdio = form.transport === 'stdio';
   const dirty = JSON.stringify(form) !== JSON.stringify(initialRef.current);
+
+  const runTest = async (mode: 'test' | 'tools') => {
+    if (!entity) return;
+    setTesting(true);
+    setTestResult(null);
+    try {
+      if (mode === 'test') {
+        setTestResult(await testMcpServer(entity.id));
+      } else {
+        const res = await getMcpServerTools(entity.id);
+        setTestResult({ ok: !res.error, tools: res.tools, error: res.error });
+      }
+    } catch (e) {
+      setTestResult({ ok: false, tools: [], error: String(e) });
+    } finally {
+      setTesting(false);
+    }
+  };
 
   const save = async (): Promise<boolean> => {
     if (!form.name.trim()) return false;
@@ -342,6 +367,52 @@ export function McpForm({
       </label>
 
       <span className="card__meta">{t('stdioHint')}</span>
+
+      <div className="field">
+        <span className="field__label">{t('testConnection')}</span>
+        {entity ? (
+          <>
+            <div className="search-opts">
+              <button
+                type="button"
+                className="button button--sm button--ghost"
+                disabled={testing}
+                onClick={() => void runTest('test')}
+              >
+                {t('testConnection')}
+              </button>
+              <button
+                type="button"
+                className="button button--sm button--ghost"
+                disabled={testing}
+                onClick={() => void runTest('tools')}
+              >
+                {t('viewTools')}
+              </button>
+            </div>
+            {testing ? <span className="card__meta">{t('testing')}</span> : null}
+            {testResult ? (
+              testResult.ok ? (
+                <span className="card__meta">
+                  {testResult.tools.length
+                    ? `${t('testOk', { count: testResult.tools.length })}：${testResult.tools
+                        .map((x) => x.name)
+                        .join('、')}`
+                    : t('testToolsEmpty')}
+                </span>
+              ) : (
+                <span className="card__meta">
+                  {t('testFailed')}
+                  {testResult.error ? `：${testResult.error}` : ''}
+                </span>
+              )
+            ) : null}
+          </>
+        ) : (
+          <span className="card__meta">{t('testSaveFirst')}</span>
+        )}
+      </div>
+
       <FormError errorKey={errorKey} />
       <FormActions
         onSave={() => void save().then((ok) => ok && close(onSaved))}

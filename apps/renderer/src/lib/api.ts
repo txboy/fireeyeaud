@@ -806,6 +806,29 @@ export function deleteMcpServer(id: string, scope: ConfigScope): Promise<{ ok: b
   });
 }
 
+export interface McpToolInfo {
+  name: string;
+  description?: string;
+}
+
+export interface McpTestResult {
+  ok: boolean;
+  tools: McpToolInfo[];
+  error?: string;
+}
+
+/** 连接测试：连接 Server 并返回 tools/list（失败时 ok=false + error）。 */
+export function testMcpServer(id: string): Promise<McpTestResult> {
+  return request<McpTestResult>(`/mcp/servers/${id}/test`, { method: 'POST' });
+}
+
+/** 工具预览（后端短 TTL 缓存）。 */
+export function getMcpServerTools(
+  id: string,
+): Promise<{ tools: McpToolInfo[]; error?: string }> {
+  return request<{ tools: McpToolInfo[]; error?: string }>(`/mcp/servers/${id}/tools`);
+}
+
 export function listSkills(): Promise<{ items: Skill[] }> {
   return request<{ items: Skill[] }>('/skills');
 }

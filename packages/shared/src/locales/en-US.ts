@@ -275,6 +275,13 @@ export default {
     cancel: 'Cancel',
     delete: 'Delete',
     stdioHint: 'stdio servers run local commands as subprocesses; only add trusted sources.',
+    testConnection: 'Test connection',
+    viewTools: 'View tools',
+    testing: 'Testing…',
+    testOk: 'Connected: {{count}} tool(s)',
+    testToolsEmpty: 'Connected, but no tools available (check the allowlist).',
+    testFailed: 'Connection failed',
+    testSaveFirst: 'Save first to test the connection and view tools.',
     empty: 'No MCP servers yet',
   },
   skills: {

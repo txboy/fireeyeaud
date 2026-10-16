@@ -273,6 +273,13 @@ export default {
     cancel: '取消',
     delete: '删除',
     stdioHint: 'stdio Server 会以子进程方式执行本机命令，请仅添加可信来源。',
+    testConnection: '测试连接',
+    viewTools: '查看工具',
+    testing: '测试中…',
+    testOk: '连接成功：{{count}} 个工具',
+    testToolsEmpty: '连接成功，但没有可用工具（检查允许工具列表）。',
+    testFailed: '连接失败',
+    testSaveFirst: '保存后可测试连接与查看工具。',
     empty: '尚无 MCP Server',
   },
   skills: {
