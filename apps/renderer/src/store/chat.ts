@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { SseEvent } from '@fireeyeaud/shared';
 import {
   ApiError,
+  compactSessionApi,
   createSessionApi,
   deleteSessionApi,
   EMPTY_CONTEXT,
@@ -13,6 +14,7 @@ import {
   type AttachmentRef,
   type AttachmentText,
   type ChatContext,
+  type CompactResult,
   type ContextSnapshot,
   type SessionMessage,
   type SessionSummary,
@@ -28,6 +30,14 @@ export interface ToolCall {
   params: Record<string, unknown>;
   summary?: string;
   ok?: boolean;
+}
+
+/** 一次上下文压缩的提示信息（较早对话已摘要化）。 */
+export interface CompactionInfo {
+  summarizedUpTo: number;
+  tokensBefore: number;
+  tokensAfter: number;
+  window: number;
 }
 
 /**
@@ -98,6 +108,8 @@ export interface ChatMessage {
   /** 提示（如当前模型不支持图片/扫描版 PDF），仅用户消息可能非空。 */
   noticeKey: string | null;
   noticeParams: Record<string, unknown> | null;
+  /** 上下文压缩提示（较早对话已摘要化），仅在发生压缩的那一轮/手动压缩时非空。 */
+  compaction: CompactionInfo | null;
 }
 
 /**
@@ -135,6 +147,8 @@ interface ChatState {
   setModel: (sessionId: string, modelId: string | null) => void;
   setContext: (sessionId: string, patch: Partial<ChatContext>) => void;
   setDraft: (sessionId: string, segments: DraftSegment[]) => void;
+  /** 手动压缩该会话上下文（较早对话摘要化）。 */
+  compact: (sessionId: string) => Promise<void>;
   /** 清空所有聊天分片（切换工作区时）。 */
   clearAllChats: () => void;
 }
@@ -207,6 +221,7 @@ function assistantError(messageKey: string): ChatMessage {
     attachmentTexts: [],
     noticeKey: null,
     noticeParams: null,
+    compaction: null,
   };
 }
 
@@ -233,6 +248,7 @@ function toChatMessage(message: SessionMessage): ChatMessage {
     attachmentTexts: content?.attachmentTexts ?? [],
     noticeKey: null,
     noticeParams: null,
+    compaction: null,
   };
 }
 
@@ -286,6 +302,16 @@ function applyEvent(message: ChatMessage, event: SseEvent): ChatMessage {
         ...message,
         noticeKey: String(data.messageKey ?? ''),
         noticeParams: (data.params as Record<string, unknown>) ?? {},
+      };
+    case 'compaction':
+      return {
+        ...message,
+        compaction: {
+          summarizedUpTo: Number(data.summarizedUpTo ?? 0),
+          tokensBefore: Number(data.tokensBefore ?? 0),
+          tokensAfter: Number(data.tokensAfter ?? 0),
+          window: Number(data.window ?? 0),
+        },
       };
     case 'done':
       return { ...message, streaming: false, thinking: '' };
@@ -409,6 +435,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       attachmentTexts: [],
       noticeKey: null,
       noticeParams: null,
+      compaction: null,
     };
     const assistantMessage: ChatMessage = {
       id: nextId(),
@@ -426,6 +453,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       attachmentTexts: [],
       noticeKey: null,
       noticeParams: null,
+      compaction: null,
     };
     set((s) => ({
       chats: withChat(s.chats, sessionId, (chat) => ({
@@ -575,6 +603,47 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((s) => ({
       chats: withChat(s.chats, sessionId, (chat) => ({ ...chat, draft: segments })),
     })),
+
+  compact: async (sessionId) => {
+    const chat = get().chats[sessionId];
+    if (chat?.streaming) return;
+    let result: CompactResult;
+    try {
+      result = await compactSessionApi(sessionId);
+    } catch {
+      return;
+    }
+    if (!result.compacted) return;
+    const notice: ChatMessage = {
+      id: nextId(),
+      role: 'assistant',
+      content: '',
+      thinking: '',
+      phase: null,
+      streaming: false,
+      errorKey: null,
+      tools: [],
+      findingIds: [],
+      options: null,
+      attachments: [],
+      mentions: [],
+      attachmentTexts: [],
+      noticeKey: null,
+      noticeParams: null,
+      compaction: {
+        summarizedUpTo: result.summarizedUpTo,
+        tokensBefore: result.tokensBefore,
+        tokensAfter: result.tokensAfter,
+        window: result.window,
+      },
+    };
+    set((s) => ({
+      chats: withChat(s.chats, sessionId, (c) => ({
+        ...c,
+        messages: [...c.messages, notice],
+      })),
+    }));
+  },
 
   clearAllChats: () => {
     for (const controller of controllers.values()) controller.abort();

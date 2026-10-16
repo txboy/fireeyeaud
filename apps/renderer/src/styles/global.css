@@ -2300,6 +2300,18 @@ textarea.searchbox {
   padding: 6px 10px;
 }
 
+.compaction-divider {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 8px;
+  padding: 4px 0;
+  font-size: 11.5px;
+  color: var(--text-2);
+  border-top: 1px dashed var(--border);
+  border-bottom: 1px dashed var(--border);
+}
+
 .msg__attach-text {
   margin-top: 6px;
   font-size: 11.5px;

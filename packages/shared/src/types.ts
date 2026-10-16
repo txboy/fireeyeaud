@@ -164,6 +164,10 @@ export interface ModelProfile {
   apiKeyRef?: string | null;
   isDefault?: boolean;
   vision?: boolean;
+  /** 上下文窗口（token）；缺省表示未知，运行时回退保守默认。 */
+  contextWindow?: number | null;
+  /** 单次最大输出 token；缺省表示未知。 */
+  maxOutputTokens?: number | null;
   scope: ConfigScope;
   createdAt?: string;
   updatedAt?: string;
@@ -492,5 +496,12 @@ export interface AppSettings {
   theme: ThemeMode;
   systemPrompt: string;
   webSearch: WebSearchSettings;
+  /** 上下文压缩设置（Phase 9）。 */
+  compaction?: {
+    auto: boolean;
+    keepTokens: number;
+    reserveOutputTokens: number;
+    threshold: number;
+  };
   telemetry: boolean;
 }

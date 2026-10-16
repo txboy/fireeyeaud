@@ -391,11 +391,18 @@ export default {
     toolCall: 'Calling tool…',
     toolResult: 'Tool result',
     findingCreated: 'Finding {{id}} created',
+    compactionDivider:
+      '{{count}} earlier messages were compacted into a summary (≈ {{before}} → {{after}} tokens)',
+    compactionDividerTitle:
+      'The summary is background only and is not used as audit evidence',
+    compactNow: 'Compact context',
+    compactionNone: 'Nothing to compact',
     phase: {
       planning: 'Planning…',
       executing: 'Working…',
       reflecting: 'Reviewing…',
       reading: 'Reading attachments…',
+      compacting: 'Compacting context…',
     },
   },
   evidence: {

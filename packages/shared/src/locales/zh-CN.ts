@@ -387,11 +387,16 @@ export default {
     toolCall: '调用工具…',
     toolResult: '工具结果',
     findingCreated: '发现疑点 {{id}}',
+    compactionDivider: '较早的 {{count}} 条对话已压缩为摘要（约 {{before}} → {{after}} tokens）',
+    compactionDividerTitle: '摘要仅作背景参考，不作为取证依据',
+    compactNow: '压缩上下文',
+    compactionNone: '无需压缩',
     phase: {
       planning: '规划中…',
       executing: '执行中…',
       reflecting: '复核中…',
       reading: '读取附件…',
+      compacting: '压缩上下文中…',
     },
   },
   evidence: {

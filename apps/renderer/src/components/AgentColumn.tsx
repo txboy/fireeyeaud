@@ -3,10 +3,12 @@ import { useTranslation } from 'react-i18next';
 import type { LucideIcon } from 'lucide-react';
 import {
   AlertTriangle,
+  Archive,
   BookOpen,
   Database,
   FileText,
   Folder,
+  History,
   Paperclip,
   Plug,
   Send,
@@ -15,7 +17,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import type { ContextSnapshot, WorkspaceRef } from '../lib/api';
-import { draftHasContent, useChatStore } from '../store/chat';
+import { draftHasContent, useChatStore, type CompactionInfo } from '../store/chat';
 import { ContextBar } from './ContextBar';
 import { MentionInput, type MentionInputHandle } from './MentionInput';
 
@@ -70,6 +72,26 @@ function MessageMentions({ mentions }: { mentions: WorkspaceRef[] }) {
   );
 }
 
+const formatTokens = (n: number): string =>
+  n >= 1000 ? `${Math.round(n / 1000)}k` : String(n);
+
+/** 对话流中的分隔提示：较早对话已压缩为摘要。 */
+function CompactionDivider({ info }: { info: CompactionInfo }) {
+  const { t } = useTranslation('agent');
+  return (
+    <div className="compaction-divider" title={t('compactionDividerTitle')}>
+      <History size={12} strokeWidth={1.75} />
+      <span>
+        {t('compactionDivider', {
+          count: info.summarizedUpTo,
+          before: formatTokens(info.tokensBefore),
+          after: formatTokens(info.tokensAfter),
+        })}
+      </span>
+    </div>
+  );
+}
+
 export function AgentColumn({ sessionId }: { sessionId: string }) {
   const { t, i18n } = useTranslation('agent');
   const { t: te } = useTranslation('error');
@@ -78,6 +100,7 @@ export function AgentColumn({ sessionId }: { sessionId: string }) {
   const loadMessages = useChatStore((s) => s.loadMessages);
   const send = useChatStore((s) => s.send);
   const setDraft = useChatStore((s) => s.setDraft);
+  const compact = useChatStore((s) => s.compact);
 
   const editorRef = useRef<MentionInputHandle>(null);
 
@@ -121,9 +144,17 @@ export function AgentColumn({ sessionId }: { sessionId: string }) {
             <span>{t('empty')}</span>
           </div>
         ) : (
-          messages.map((m) => (
+          messages.map((m) => {
+            const compactionOnly =
+              m.compaction !== null &&
+              !m.content &&
+              !m.thinking &&
+              !m.errorKey &&
+              m.tools.length === 0;
+            return (
             <div key={m.id} className={`msg msg--${m.role}`}>
-              {m.role === 'assistant' && (
+              {m.compaction && <CompactionDivider info={m.compaction} />}
+              {!compactionOnly && m.role === 'assistant' && (
                 <div className="msg__head">
                   <Sparkles size={13} strokeWidth={1.75} color="var(--accent)" />
                   <span className="msg__role">{t(m.role)}</span>
@@ -132,7 +163,9 @@ export function AgentColumn({ sessionId }: { sessionId: string }) {
                   )}
                 </div>
               )}
-              {m.thinking && <div className="msg__thinking">{m.thinking}</div>}
+              {!compactionOnly && m.thinking && (
+                <div className="msg__thinking">{m.thinking}</div>
+              )}
               {m.tools.length > 0 && (
                 <div className="msg__tools">
                   {m.tools.map((tool) => (
@@ -160,10 +193,12 @@ export function AgentColumn({ sessionId }: { sessionId: string }) {
                   ))}
                 </div>
               )}
-              <div className="msg__body">
-                {m.content}
-                {m.streaming && <span className="msg__caret" />}
-              </div>
+              {!compactionOnly && (
+                <div className="msg__body">
+                  {m.content}
+                  {m.streaming && <span className="msg__caret" />}
+                </div>
+              )}
               {m.role === 'user' && m.mentions.length > 0 && (
                 <MessageMentions mentions={m.mentions} />
               )}
@@ -208,13 +243,23 @@ export function AgentColumn({ sessionId }: { sessionId: string }) {
                 </div>
               )}
             </div>
-          ))
+            );
+          })
         )}
       </div>
 
       <ContextBar sessionId={sessionId} />
 
       <div className="agent__input">
+        <button
+          type="button"
+          className="activitybar__item"
+          title={t('compactNow')}
+          disabled={streaming || messages.length === 0}
+          onClick={() => void compact(sessionId)}
+        >
+          <Archive size={16} strokeWidth={1.75} />
+        </button>
         <button
           type="button"
           className="activitybar__item"
