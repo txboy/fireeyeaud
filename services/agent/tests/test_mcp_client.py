@@ -6,6 +6,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 from fireeyeaud_agent.mcp import client
 from fireeyeaud_agent.store import secrets
 
@@ -123,3 +125,40 @@ def test_secret_value_not_persisted_to_config(tmp_path, monkeypatch):
         assert saved["items"][0]["apiKeyRef"] == "sec_store"
     finally:
         secrets.clear()
+
+
+async def test_call_tool_timeout_raises_and_does_not_hang(tmp_path, monkeypatch):
+    import time
+
+    monkeypatch.setattr(client.settings, "mcp_timeout_seconds", 3.0)
+    server = {
+        "transport": "stdio",
+        "command": sys.executable,
+        "args": [str(_SERVER)],
+    }
+    cm = client.open_session(server, workspace=tmp_path)
+    session = await cm.__aenter__()
+    started = time.monotonic()
+    with pytest.raises(BaseException):
+        await session.call_tool("sleep_seconds", {"seconds": 30})
+    assert time.monotonic() - started < 15
+    try:
+        await cm.__aexit__(None, None, None)
+    except BaseException:
+        pass  # 超时后清理可能抛出异常组，忽略即可
+
+
+async def test_connect_timeout_raises(tmp_path, monkeypatch):
+    import time
+
+    monkeypatch.setattr(client.settings, "mcp_timeout_seconds", 0.3)
+    server = {
+        "transport": "stdio",
+        "command": sys.executable,
+        "args": ["-c", "import time; time.sleep(5)"],
+    }
+    started = time.monotonic()
+    with pytest.raises(BaseException):
+        async with client.open_session(server, workspace=tmp_path):
+            pass
+    assert time.monotonic() - started < 3

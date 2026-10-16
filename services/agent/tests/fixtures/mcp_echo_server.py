@@ -20,5 +20,13 @@ def show_env(name: str) -> str:
     return os.environ.get(name, "")
 
 
+@server.tool(description="睡眠指定秒数（用于超时测试）")
+def sleep_seconds(seconds: float) -> str:
+    import time
+
+    time.sleep(seconds)
+    return "ok"
+
+
 if __name__ == "__main__":
     asyncio.run(server.run_stdio_async())

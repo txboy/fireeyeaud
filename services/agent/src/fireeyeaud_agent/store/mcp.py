@@ -1,4 +1,4 @@
-"""MCP Server 配置存储（设计 §14 / §10 / 决策：本期仅配置，不执行）。"""
+"""MCP Server 配置存储（设计 §14 / §10；执行层见 `mcp/` 包）。"""
 
 from __future__ import annotations
 

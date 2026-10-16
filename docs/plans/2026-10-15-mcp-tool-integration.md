@@ -1,11 +1,13 @@
 # Phase 9 · MCP 接入（MCP Tool Integration）
 
 - 日期：2026-10-15
-- 状态：**未实现**（本文为设计方案；仓库中 MCP **仅有配置 CRUD，未加载、未执行**）
-- 关联模块：`store/mcp.py`、`api/mcp.py`、`tools/registry.py`、`agent/graph.py`、`agent/prompts.py`、`store/secrets.py`、`main.py`、`services/agent/pyproject.toml`
+- 状态：**已实现**（T1–T11 全部落地；MCP Server 可连接、发现并执行工具）
+- 关联模块：`store/mcp.py`、`api/mcp.py`、`tools/registry.py`、`agent/graph.py`、`agent/prompts.py`、`store/secrets.py`、`mcp/`（client/adapters/manager）、`main.py`、`services/agent/pyproject.toml`
 - 相关文档：[上下文压缩](./2026-10-15-agent-context-compaction.md)、[技能按需加载](./2026-10-15-skills-on-demand-loading.md)
 
-> **本文实现的功能目前不存在。** 目前 MCP 只是「配置面板」：能增删改查 Server，但不会真正连接、发现或调用其工具。`tools/registry.py` 顶部注释明确写着「MCP 封装推迟 Phase 6」，而 Phase 6 实际只做了配置面板（见 `docs/plans/2026-10-10-phase6-websearch-mcp-packaging.md`，其 Goal 即「配置级，不真实执行 MCP」）。
+> **状态：已实现。** MCP Server 现在会按 `stdio`/`sse`/`http` 真实连接、发现工具（`tools/list`）并按 `toolsAllow` 过滤后包装为 LangChain 工具供模型调用（`tools/call`）；调用结果写入 `evidence.jsonl`。见下方 §10 实现说明。
+
+> 历史背景：本方案落地前，MCP 只是「配置面板」——能增删改查 Server，但不会连接、发现或调用其工具（Phase 6 的 Goal 即「配置级，不真实执行 MCP」，见 `docs/plans/2026-10-10-phase6-websearch-mcp-packaging.md`）。
 
 ---
 
@@ -172,29 +174,29 @@ GET  /api/v1/mcp/servers/{id}/tools   # 预览（带短 TTL 缓存）
 
 ## 7. 测试
 
-- [ ] 假 MCP Server（stdio echo，pytest fixture 启动）→ 发现工具、调用并返回。
-- [ ] JSON Schema → pydantic 转换（含 optional / enum / nested）。
-- [ ] `toolsAllow` 过滤：不在白名单的工具不暴露。
-- [ ] allowlist：未启用 / 未勾选 / 非默认的 server 不连接。
-- [ ] 超时：连接超时与 `tools/call` 超时均返回错误而不挂起。
-- [ ] 失败隔离：一个 server 抛错不影响内置工具与其它 server。
-- [ ] 凭据：`apiKeyRef` 从 `store/secrets` 解析并注入（断言不落日志）。
-- [ ] evidence：MCP 调用写入 `evidence.jsonl`（tool 名含 server 标识）。
-- [ ] `POST /mcp/servers/{id}/test` 返回工具列表 / 错误。
+- [x] 假 MCP Server（stdio echo，pytest fixture 启动）→ 发现工具、调用并返回。
+- [x] JSON Schema → pydantic 转换（含 optional / enum / nested）。
+- [x] `toolsAllow` 过滤：不在白名单的工具不暴露。
+- [x] allowlist：未启用 / 未勾选 / 非默认的 server 不连接。
+- [x] 超时：连接超时与 `tools/call` 超时均返回错误而不挂起。
+- [x] 失败隔离：一个 server 抛错不影响内置工具与其它 server。
+- [x] 凭据：`apiKeyRef` 从 `store/secrets` 解析并注入（断言不落日志）。
+- [x] evidence：MCP 调用写入 `evidence.jsonl`（tool 名含 server 标识）。
+- [x] `POST /mcp/servers/{id}/test` 返回工具列表 / 错误。
 
 ## 8. 任务拆解
 
-- [ ] T1 `pyproject.toml` 增 `mcp` 依赖；确认 PyInstaller 收集规则。
-- [ ] T2 新增 `mcp/client.py`：三传输连接 + `tools/list` + `tools/call`。
-- [ ] T3 新增 `mcp/adapters.py`：MCP Tool → `StructuredTool`（动态 schema、命名前缀）。
-- [ ] T4 新增 `mcp/manager.py`：按 effective ids 连接、缓存、关闭、失败隔离。
-- [ ] T5 `tools/registry.py` + `agent/graph.py`：`build_mcp_tools` 并入工具列表与 `tool_dict`。
-- [ ] T6 `agent/graph.py::_registry_context`：消费 `mcpServerIds`，与 `permissions` 合并出运行期约束。
-- [ ] T7 凭据：`apiKeyRef`/`apiKeyEnv` 经 `store/secrets` 注入。
-- [ ] T8 `api/mcp.py`：`/test` 与 `/tools` 路由。
-- [ ] T9 `agent/prompts.py`：system prompt 增加「已连接 MCP 工具」说明与不可信数据规则（沿用 §10）。
-- [ ] T10 前端：MCP 表单加「测试连接 / 查看工具」；连接态展示。
-- [ ] T11 测试 + 文档。
+- [x] T1 `pyproject.toml` 增 `mcp` 依赖；确认 PyInstaller 收集规则。
+- [x] T2 新增 `mcp/client.py`：三传输连接 + `tools/list` + `tools/call`。
+- [x] T3 新增 `mcp/adapters.py`：MCP Tool → `StructuredTool`（动态 schema、命名前缀）。
+- [x] T4 新增 `mcp/manager.py`：按 effective ids 连接、缓存、关闭、失败隔离。
+- [x] T5 `tools/registry.py` + `agent/graph.py`：`build_mcp_tools` 并入工具列表与 `tool_dict`。
+- [x] T6 `agent/graph.py::_registry_context`：消费 `mcpServerIds`，与 `permissions` 合并出运行期约束。
+- [x] T7 凭据：`apiKeyRef`/`apiKeyEnv` 经 `store/secrets` 注入。
+- [x] T8 `api/mcp.py`：`/test` 与 `/tools` 路由。
+- [x] T9 `agent/prompts.py`：system prompt 增加「已连接 MCP 工具」说明与不可信数据规则（沿用 §10）。
+- [x] T10 前端：MCP 表单加「测试连接 / 查看工具」；连接态展示。
+- [x] T11 测试 + 文档。
 
 ## 9. 待决问题
 
@@ -202,3 +204,43 @@ GET  /api/v1/mcp/servers/{id}/tools   # 预览（带短 TTL 缓存）
 2. 连接是否跨轮常驻（连接池）还是每轮建立？本期倾向每轮建立。
 3. 是否支持 MCP 原生资源（resources）与提示模板（prompts）？本期仅 tools。
 4. stdio 运行时依赖如何在安装/首次使用时检测并提示？
+
+## 10. 实现说明（as-built）
+
+### 10.1 模块与接口
+
+| 位置 | 内容 |
+|---|---|
+| `mcp/client.py` | `open_session`（stdio/sse/http）、`stdio_params`、`http_headers`、`McpSession.list_tools/call_tool`、`result_text` |
+| `mcp/adapters.py` | `tool_name`、`tool_description`、`schema_to_model`（JSON Schema→pydantic）、`normalize_result`/`truncate`、`build_tool`、`dict_entry` |
+| `mcp/manager.py` | `effective_server_ids`、`build_mcp_tools`（含 `McpTools.aclose`）、`find_server`、`server_tools`（预览缓存） |
+| `agent/graph.py` | `_registry_context` 产出 `allowedMcpServerIds`；`run_agent` 连接 MCP 并并入 `tools`/`tool_dict`，`finally` 关闭；system prompt 注入已连接工具 |
+| `api/mcp.py` | `POST /mcp/servers/{id}/test`、`GET /mcp/servers/{id}/tools` |
+| `agent/prompts.py` | `system_prompt(..., mcp_servers=...)` |
+| `config/settings.py` | `mcp_timeout_seconds`（30）、`mcp_max_output_chars`（20000） |
+
+工具命名 `mcp__<serverId>__<toolName>`；结果写入既有 `evidence.jsonl`（`tool_result` 记录，工具名含 server 标识）。
+
+### 10.2 决策与偏差
+
+- **SDK**：`mcp>=2.0.0`（仅 v2 可解析）。v2 API 差异：`FastMCP`→`MCPServer`、`streamablehttp_client`→`streamable_http_client`、pydantic 属性为 snake_case（`input_schema`、`is_error`）。原方案写 `mcp>=1.0.0`。
+- **工具白名单默认策略（§9.1）**：空 `toolsAllow` = **拒绝全部**（最安全）；`["*"]` 为显式「允许全部」哨兵（供 UI 使用）。`sse`/`http` 传输还要求 `permissions.net=true`。
+- **生命周期（§9.2）**：每轮 `run_agent` 建立连接，`finally` 关闭，无跨轮连接池。
+- **原语范围（§9.3）**：仅 tools；不实现 resources/prompts/sampling。
+- **超时**：连接超时（`asyncio.timeout` 包裹 `initialize`）与调用读超时（`call_tool(read_timeout_seconds=...)`）均由 `mcp_timeout_seconds` 控制；超时以错误返回，不挂起。
+- **输出上限**：`normalize_result` 按 `mcp_max_output_chars` 截断并标注。
+
+### 10.3 测试
+
+- `tests/test_mcp_client.py`：参数/头构造、真实 stdio echo server 的发现与调用、凭据注入子进程、凭据不落盘、连接/调用超时。
+- `tests/test_mcp_adapters.py`：JSON Schema→pydantic（含 optional/enum/nested/空 schema）、命名、结果截断。
+- `tests/test_mcp_manager.py`：生效集合、白名单/拒绝全部/允许全部、net 门控、失败隔离、关闭。
+- `tests/test_mcp_api_tools.py`：`/test` 与 `/tools`（含缓存）。
+- `tests/test_mcp_agent.py` + `tests/test_context.py`：MCP 工具并入 run_agent、evidence 留痕、无上下文跳过、`allowedMcpServerIds`。
+- `tests/test_prompt_system.py`：system prompt MCP 段。
+
+### 10.4 运行时依赖与打包
+
+- `pyproject.toml` 增加 `mcp>=2.0.0`；`fireeyeaud-agent.spec` 用 `collect_submodules("mcp")` 收集。
+- **stdio Server 依赖用户机器上的外部运行时**（如 Node `npx @modelcontextprotocol/server-*`）。本期不随包分发，也不做自动探测；在表单 `stdioHint` 提示「仅添加可信来源」，并在 §6 风险登记。
+- **安全边界**：默认关闭（`enabled`）、需勾选或 `isDefault` 才生效；工作区沙箱（cwd + `FIREYEAUD_WORKSPACE`）；`toolsAllow` 白名单；`net` 门控；连接/调用超时与输出上限；单 Server 失败隔离。

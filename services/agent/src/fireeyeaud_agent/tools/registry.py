@@ -1,4 +1,8 @@
-"""工具注册表：进程内 LangChain StructuredTool 绑定（Phase 1；MCP 封装推迟 Phase 6）。"""
+"""工具注册表：进程内 LangChain StructuredTool 绑定（Phase 1）。
+
+MCP 工具不在此处构建：由 `agent/graph.py::run_agent` 经 `mcp/manager.py` 连接、发现后并入
+工具列表（Phase 9 · MCP 接入）。本模块只负责内置工具与工作区文件工具。
+"""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""MCP Server 路由（设计 §14.8；本期仅配置）。"""
+"""MCP Server 路由（设计 §14.8；执行层见 `mcp/` 包）。"""
 
 from __future__ import annotations
 
