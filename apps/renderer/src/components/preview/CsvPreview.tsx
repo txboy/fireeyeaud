@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { parseDelimited } from './csv';
+import { CopyButton } from '../CopyButton';
 
 const MAX_ROWS = 500;
 const MAX_COLS = 50;
@@ -19,6 +20,12 @@ export function CsvPreview({ text, delimiter }: { text: string; delimiter?: stri
 
   return (
     <div className="sheetpreview">
+      <div className="preview-toolbar">
+        <CopyButton
+          title={t('copyTable')}
+          text={() => rows.map((row) => row.join('\t')).join('\n')}
+        />
+      </div>
       {truncated && (
         <div className="preview-status">
           <span className="panel-hint">

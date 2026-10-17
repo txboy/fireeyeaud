@@ -1556,6 +1556,8 @@ textarea.searchbox {
   position: fixed;
   z-index: 2000;
   min-width: 148px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
   padding: 4px;
   display: flex;
   flex-direction: column;
@@ -3143,12 +3145,86 @@ textarea.searchbox {
   max-width: 100%;
 }
 
+.pdfpage-sheet {
+  position: relative;
+  max-width: 100%;
+  line-height: 0;
+}
+
+/* PDF 文本层：透明文本按坐标覆盖在 canvas 上，支持鼠标框选复制（精简自 pdfjs 样式）。 */
+.textLayer {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  line-height: 1;
+  text-align: initial;
+  letter-spacing: normal;
+  word-spacing: normal;
+  transform-origin: 0 0;
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  caret-color: CanvasText;
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+}
+
+.textLayer span,
+.textLayer br {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.textLayer > :not(.markedContent),
+.textLayer .markedContent span:not(.markedContent) {
+  z-index: 1;
+  --font-height: 0;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  --scale-x: 1;
+  --rotate: 0deg;
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x))
+    scale(var(--min-font-size-inv));
+}
+
+.textLayer .markedContent {
+  display: contents;
+}
+
+.textLayer span[role='img'] {
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
+}
+
+.textLayer ::selection {
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+  color: transparent;
+}
+
+.textLayer br::selection {
+  background: transparent;
+}
+
+.preview-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 10px 0;
+}
+
 .docxpreview__pages {
   flex: 1;
   min-height: 0;
   overflow: auto;
   padding: 16px;
   background: var(--panel-bg);
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .docxpreview__pages .docx-wrapper {
@@ -3192,6 +3268,8 @@ textarea.searchbox {
   flex: 1;
   min-height: 0;
   overflow: auto;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .sheet {

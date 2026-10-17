@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Loader2 } from 'lucide-react';
 import ExcelJS from 'exceljs';
 import { base64ToBytes } from './util';
+import { CopyButton } from '../CopyButton';
 
 const MAX_ROWS = 500;
 const MAX_COLS = 50;
@@ -94,6 +95,14 @@ export function SpreadsheetPreview({ data }: { data: string }) {
       )}
       {status === 'ok' && (
         <>
+          <div className="preview-toolbar">
+            <CopyButton
+              title={t('copyTable')}
+              text={() =>
+                current ? current.rows.map((row) => row.join('\t')).join('\n') : ''
+              }
+            />
+          </div>
           {sheets.length > 1 && (
             <div className="sheetpreview__tabs">
               {sheets.map((sheet, index) => (

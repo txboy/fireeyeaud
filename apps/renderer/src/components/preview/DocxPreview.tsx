@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Loader2 } from 'lucide-react';
 import { renderAsync } from 'docx-preview';
 import { base64ToBytes } from './util';
+import { CopyButton } from '../CopyButton';
 
 /** Word（.docx）预览：用 docx-preview 渲染为白纸页 DOM。 */
 export function DocxPreview({ data, mime }: { data: string; mime: string }) {
@@ -50,6 +51,13 @@ export function DocxPreview({ data, mime }: { data: string; mime: string }) {
           </>
         )}
         {status === 'error' && <span className="panel-error">{t('parseFailed')}</span>}
+        <span className="spacer" />
+        {status === 'ok' && (
+          <CopyButton
+            title={t('copyAllText')}
+            text={() => hostRef.current?.innerText ?? ''}
+          />
+        )}
       </div>
       <div className="docxpreview__pages" ref={hostRef} />
     </div>
