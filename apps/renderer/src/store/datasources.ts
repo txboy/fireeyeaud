@@ -19,6 +19,8 @@ interface DatasourcesState {
   importing: ImportState | null;
   syncing: boolean;
   lastSync: { added: number; removed: number; updated: number } | null;
+  /** 导入失败的文件：路径 → 错误码（用于文件树上的失败标识）。 */
+  importFailed: Record<string, string>;
   errorKey: string | null;
   load: () => Promise<void>;
   importPath: (path: string) => Promise<void>;
@@ -32,6 +34,7 @@ export const useDatasourcesStore = create<DatasourcesState>((set, get) => ({
   importing: null,
   syncing: false,
   lastSync: null,
+  importFailed: {},
   errorKey: null,
 
   load: async () => {
@@ -64,7 +67,20 @@ export const useDatasourcesStore = create<DatasourcesState>((set, get) => ({
               },
             });
           } else if (event.type === 'error') {
-            set({ errorKey: String(data.messageKey ?? 'error.importParse') });
+            set((s) => ({
+              errorKey: String(data.messageKey ?? 'error.importParse'),
+              importFailed: {
+                ...s.importFailed,
+                [path]: String(data.code ?? 'E_IMPORT_PARSE'),
+              },
+            }));
+          } else if (event.type === 'done') {
+            set((s) => {
+              if (!(path in s.importFailed)) return {};
+              const next = { ...s.importFailed };
+              delete next[path];
+              return { importFailed: next };
+            });
           }
         },
       });
@@ -95,6 +111,13 @@ export const useDatasourcesStore = create<DatasourcesState>((set, get) => ({
           removed: result.removed.length,
           updated: result.updated.length,
         },
+        importFailed: (() => {
+          const failed: Record<string, string> = {};
+          for (const err of result.errors) {
+            if (err.path) failed[err.path] = err.code;
+          }
+          return failed;
+        })(),
       });
       await get().load();
     } catch (err) {
@@ -122,6 +145,7 @@ export const useDatasourcesStore = create<DatasourcesState>((set, get) => ({
       importing: null,
       syncing: false,
       lastSync: null,
+      importFailed: {},
       errorKey: null,
     }),
 }));

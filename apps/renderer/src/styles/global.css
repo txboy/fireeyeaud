@@ -1504,6 +1504,13 @@ textarea.searchbox {
   text-overflow: ellipsis;
 }
 
+.tree__fail {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  color: var(--danger);
+}
+
 .tree__del {
   flex: 0 0 auto;
   display: inline-flex;

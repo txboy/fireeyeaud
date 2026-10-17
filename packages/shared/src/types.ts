@@ -238,7 +238,15 @@ export type FsOpErrorCode =
 
 /** fs:read-file 返回：文本或 base64 内容，或错误。 */
 export type FsFileContent =
-  | { ok: true; kind: 'text'; text: string; size: number; path: string }
+  | {
+      ok: true;
+      kind: 'text';
+      text: string;
+      /** 探测到的文本编码（utf-8 / gb18030 / utf-16le / utf-16be）。 */
+      encoding?: string;
+      size: number;
+      path: string;
+    }
   | { ok: true; kind: 'base64'; data: string; mime: string; size: number; path: string }
   | {
       ok: false;

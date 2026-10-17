@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { DragEvent, MouseEvent as ReactMouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  AlertTriangle,
   ChevronDown,
   ChevronRight,
   File as FileIcon,
@@ -14,10 +15,19 @@ import { WORKSPACE_DRAG_ENTRY, WORKSPACE_DRAG_PATH } from '../lib/dnd';
 import { useUiStore } from '../store/ui';
 import { useConfirmStore } from '../store/confirm';
 import { usePromptStore } from '../store/prompt';
+import { useDatasourcesStore } from '../store/datasources';
 import { ContextMenu, type ContextMenuItem } from './ContextMenu';
 
 /** 可「导入数据」的表格文件后缀。 */
 const TABLE_EXT = new Set(['.csv', '.txt', '.xlsx', '.xlsm']);
+
+/** 导入错误码 → error 命名空间 key。 */
+const IMPORT_ERROR_KEYS: Record<string, string> = {
+  E_IMPORT_PARSE: 'importParse',
+  E_IMPORT_DUP: 'importDup',
+  E_PATH_INVALID: 'pathInvalid',
+  E_READ_FAILED: 'internal',
+};
 /** 树内拖拽的自定义 MIME。 */
 const DRAG_TYPE = WORKSPACE_DRAG_PATH;
 
@@ -91,6 +101,10 @@ interface TreeNodeProps {
 /** 单个文件/文件夹节点，目录按需展开（懒加载子项）。 */
 function TreeNode({ entry, depth, isRoot, protectedPath, api }: TreeNodeProps) {
   const openPreview = useUiStore((s) => s.openPreview);
+  const { t } = useTranslation('explorer');
+  const { t: te } = useTranslation('error');
+  // 该文件最近一次自动/手动导入失败的标识（路径 → 错误码）。
+  const failCode = useDatasourcesStore((s) => s.importFailed[entry.path]);
   const [open, setOpen] = useState(isRoot);
   const [children, setChildren] = useState<FsEntry[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -185,6 +199,14 @@ function TreeNode({ entry, depth, isRoot, protectedPath, api }: TreeNodeProps) {
         )}
         <Icon size={14} strokeWidth={1.75} />
         <span className="tree__label">{entry.name}</span>
+        {failCode && (
+          <span
+            className="tree__fail"
+            title={`${t('importFailed')}: ${te(IMPORT_ERROR_KEYS[failCode] ?? 'internal')}`}
+          >
+            <AlertTriangle size={12} strokeWidth={2} />
+          </span>
+        )}
       </div>
       {open && (
         <>

@@ -117,6 +117,7 @@ export default {
     attachDbConfirm: '附加',
     attachDbBusy: '正在附加…',
     syncing: '正在同步数据…',
+    importFailed: '导入失败',
   },
   search: {
     title: '搜索',

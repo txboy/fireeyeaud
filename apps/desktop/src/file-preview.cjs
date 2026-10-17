@@ -68,6 +68,33 @@ const DOC_MIME = {
 const DEFAULT_MAX_TEXT_BYTES = 5 * 1024 * 1024;
 const DEFAULT_MAX_BINARY_BYTES = 30 * 1024 * 1024;
 
+/**
+ * 按编码探测解码文本字节：BOM → UTF-8(严格) → GB18030 → 宽松 UTF-8。
+ * 返回 { text, encoding }，供预览按正确编码显示（避免 GBK 中文乱码）。
+ */
+function decodeText(buf) {
+  if (buf.length >= 3 && buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf) {
+    return { text: buf.subarray(3).toString('utf8'), encoding: 'utf-8' };
+  }
+  if (buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xfe) {
+    return { text: new TextDecoder('utf-16le').decode(buf.subarray(2)), encoding: 'utf-16le' };
+  }
+  if (buf.length >= 2 && buf[0] === 0xfe && buf[1] === 0xff) {
+    return { text: new TextDecoder('utf-16be').decode(buf.subarray(2)), encoding: 'utf-16be' };
+  }
+  try {
+    return { text: new TextDecoder('utf-8', { fatal: true }).decode(buf), encoding: 'utf-8' };
+  } catch {
+    /* 非 UTF-8，尝试 GB18030 */
+  }
+  try {
+    return { text: new TextDecoder('gb18030').decode(buf), encoding: 'gb18030' };
+  } catch {
+    /* 回退：宽松 UTF-8 */
+  }
+  return { text: buf.toString('utf8'), encoding: 'utf-8' };
+}
+
 /** 目标是否位于工作区根目录内（含根本身）。 */
 function isInsideWorkspace(root, target) {
   if (typeof root !== 'string' || typeof target !== 'string') return false;
@@ -127,7 +154,8 @@ function readFileContent({
   }
 
   if (isText) {
-    return { ok: true, kind: 'text', text: buf.toString('utf8'), size: stat.size, path: filePath };
+    const { text, encoding } = decodeText(buf);
+    return { ok: true, kind: 'text', text, encoding, size: stat.size, path: filePath };
   }
   return {
     ok: true,

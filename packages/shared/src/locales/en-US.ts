@@ -119,6 +119,7 @@ export default {
     attachDbConfirm: 'Attach',
     attachDbBusy: 'Attaching…',
     syncing: 'Syncing data…',
+    importFailed: 'Import failed',
   },
   search: {
     title: 'Search',
