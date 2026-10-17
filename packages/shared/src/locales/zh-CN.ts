@@ -94,6 +94,7 @@ export default {
     rename: '重命名',
     upload: '上传文件',
     importData: '导入数据',
+    showInFolder: '在文件资源管理器中显示',
     nameLabel: '名称',
     refresh: '刷新',
     more: '更多',

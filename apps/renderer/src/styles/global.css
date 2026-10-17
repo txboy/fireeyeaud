@@ -1489,14 +1489,6 @@ textarea.searchbox {
   user-select: none;
 }
 
-.tree__chevron {
-  flex: 0 0 auto;
-  width: 13px;
-  display: inline-flex;
-  justify-content: center;
-  color: var(--text-3);
-}
-
 .tree__label {
   flex: 1;
   min-width: 0;

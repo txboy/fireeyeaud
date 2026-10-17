@@ -94,6 +94,7 @@ export default {
     rename: 'Rename',
     upload: 'Upload files',
     importData: 'Import data',
+    showInFolder: 'Show in File Explorer',
     nameLabel: 'Name',
     refresh: 'Refresh',
     more: 'More',

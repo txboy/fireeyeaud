@@ -3,10 +3,8 @@ import type { DragEvent, MouseEvent as ReactMouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
-  ChevronDown,
-  ChevronRight,
   File as FileIcon,
-  Folder,
+  FolderClosed,
   FolderOpen,
 } from 'lucide-react';
 import type { FsEntry } from '@fireeyeaud/shared';
@@ -172,8 +170,7 @@ function TreeNode({ entry, depth, isRoot, protectedPath, api }: TreeNodeProps) {
     api.dropOn(entry.isDir ? entry.path : parentDir(entry.path), event);
   };
 
-  const Chevron = open ? ChevronDown : ChevronRight;
-  const Icon = entry.isDir ? (open ? FolderOpen : Folder) : FileIcon;
+  const Icon = entry.isDir ? (open ? FolderOpen : FolderClosed) : FileIcon;
   const selected = entry.isDir && entry.path === api.selectedDir;
   const dropTarget = api.dropDir === entry.path;
 
@@ -192,11 +189,6 @@ function TreeNode({ entry, depth, isRoot, protectedPath, api }: TreeNodeProps) {
         onDrop={onDrop}
         title={entry.path}
       >
-        {entry.isDir ? (
-          <Chevron size={13} strokeWidth={2} className="tree__chevron" />
-        ) : (
-          <span className="tree__chevron" />
-        )}
         <Icon size={14} strokeWidth={1.75} />
         <span className="tree__label">{entry.name}</span>
         {failCode && (
@@ -213,7 +205,7 @@ function TreeNode({ entry, depth, isRoot, protectedPath, api }: TreeNodeProps) {
           {loading && (
             <div
               className="tree__row tree__row--muted"
-              style={{ paddingLeft: 4 + (depth + 1) * 14 + 13 }}
+              style={{ paddingLeft: 4 + (depth + 1) * 14 }}
             >
               …
             </div>
@@ -393,6 +385,13 @@ export function FileTree({
       onSelect: () => void createFile(parent),
     });
     items.push({ key: 'upload', label: t('upload'), onSelect: onUpload });
+    if (entry) {
+      items.push({
+        key: 'reveal',
+        label: t('showInFolder'),
+        onSelect: () => void window.fireeyeaud?.showItemInFolder(entry.path),
+      });
+    }
     if (!isRoot && entry) {
       items.push({
         key: 'rename',
