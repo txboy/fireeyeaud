@@ -54,6 +54,48 @@ function createLogger() {
 }
 
 const logger = createLogger();
+
+// ---- 工作区文件监听（外部增删改文件 → 去抖通知渲染层触发数据源对账）----
+let workspaceWatcher = null;
+let workspaceWatchTimer = null;
+
+function stopWorkspaceWatch() {
+  if (workspaceWatcher) {
+    try {
+      workspaceWatcher.close();
+    } catch {
+      /* 忽略关闭失败 */
+    }
+    workspaceWatcher = null;
+  }
+  if (workspaceWatchTimer) {
+    clearTimeout(workspaceWatchTimer);
+    workspaceWatchTimer = null;
+  }
+}
+
+function startWorkspaceWatch(root) {
+  stopWorkspaceWatch();
+  if (typeof root !== 'string' || !root) return;
+  try {
+    workspaceWatcher = fs.watch(root, { recursive: true }, (_event, filename) => {
+      const name = filename ? String(filename) : '';
+      // 忽略 .fireeye 内部写入（workspace.duckdb / 索引），否则导入会触发监听风暴。
+      if (name.split(/[\\/]/)[0] === '.fireeye') return;
+      if (workspaceWatchTimer) clearTimeout(workspaceWatchTimer);
+      workspaceWatchTimer = setTimeout(() => {
+        workspaceWatchTimer = null;
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('workspace:fs-changed');
+        }
+      }, 1200);
+    });
+  } catch (err) {
+    logger.error(`[watch] failed to watch ${root}: ${err}`);
+    workspaceWatcher = null;
+  }
+}
+
 const BUNDLED_AGENT = bundledAgentExe();
 const sidecar = new SidecarManager({
   repoRoot: REPO_ROOT,
@@ -339,6 +381,14 @@ function registerIpc() {
     shell.openExternal(url);
     return { ok: true };
   });
+  ipcMain.handle('workspace:watch', (_event, root) => {
+    startWorkspaceWatch(root);
+    return { ok: true };
+  });
+  ipcMain.handle('workspace:unwatch', () => {
+    stopWorkspaceWatch();
+    return { ok: true };
+  });
   ipcMain.handle('secret:put', async (_event, plaintext) => {
     if (typeof plaintext !== 'string' || !plaintext) return null;
     const ref = secrets.put(plaintext);
@@ -521,6 +571,7 @@ app.on('before-quit', (event) => {
   if (quitting) return;
   event.preventDefault();
   quitting = true;
+  stopWorkspaceWatch();
   sidecar
     .stop()
     .catch((err) => logger.error(`[sidecar] stop failed: ${err}`))

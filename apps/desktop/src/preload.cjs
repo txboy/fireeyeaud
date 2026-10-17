@@ -22,6 +22,13 @@ contextBridge.exposeInMainWorld('fireeyeaud', {
   openPath: (filePath) => ipcRenderer.invoke('shell:open-path', filePath),
   showItemInFolder: (filePath) => ipcRenderer.invoke('shell:show-item', filePath),
   openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
+  watchWorkspace: (root) => ipcRenderer.invoke('workspace:watch', root),
+  unwatchWorkspace: () => ipcRenderer.invoke('workspace:unwatch'),
+  onWorkspaceFsChanged: (callback) => {
+    const handler = () => callback();
+    ipcRenderer.on('workspace:fs-changed', handler);
+    return () => ipcRenderer.removeListener('workspace:fs-changed', handler);
+  },
   putSecret: (plaintext) => ipcRenderer.invoke('secret:put', plaintext),
   deleteSecret: (ref) => ipcRenderer.invoke('secret:delete', ref),
   minimizeWindow: () => ipcRenderer.invoke('window:minimize'),

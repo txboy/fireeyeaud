@@ -1,6 +1,11 @@
 import { create } from 'zustand';
 import type { DataSourceInfo, SseEvent } from '@fireeyeaud/shared';
-import { deleteDataSource, importDataSource, listDatasources } from '../lib/api';
+import {
+  deleteDataSource,
+  importDataSource,
+  listDatasources,
+  syncDatasources,
+} from '../lib/api';
 
 export interface ImportState {
   path: string;
@@ -12,9 +17,12 @@ export interface ImportState {
 interface DatasourcesState {
   items: DataSourceInfo[];
   importing: ImportState | null;
+  syncing: boolean;
+  lastSync: { added: number; removed: number; updated: number } | null;
   errorKey: string | null;
   load: () => Promise<void>;
   importPath: (path: string) => Promise<void>;
+  sync: () => Promise<void>;
   remove: (id: string) => Promise<void>;
   reset: () => void;
 }
@@ -22,6 +30,8 @@ interface DatasourcesState {
 export const useDatasourcesStore = create<DatasourcesState>((set, get) => ({
   items: [],
   importing: null,
+  syncing: false,
+  lastSync: null,
   errorKey: null,
 
   load: async () => {
@@ -67,6 +77,34 @@ export const useDatasourcesStore = create<DatasourcesState>((set, get) => ({
     await get().load();
   },
 
+  sync: async () => {
+    if (get().syncing) return;
+    set({ syncing: true, errorKey: null });
+    try {
+      const result = await syncDatasources({
+        onEvent: (event: SseEvent) => {
+          if (event.type === 'error') {
+            const data = (event.data ?? {}) as Record<string, unknown>;
+            set({ errorKey: String(data.messageKey ?? 'error.importParse') });
+          }
+        },
+      });
+      set({
+        lastSync: {
+          added: result.added.length,
+          removed: result.removed.length,
+          updated: result.updated.length,
+        },
+      });
+      await get().load();
+    } catch (err) {
+      set({
+        errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal',
+      });
+    }
+    set({ syncing: false });
+  },
+
   remove: async (id) => {
     try {
       await deleteDataSource(id);
@@ -78,5 +116,12 @@ export const useDatasourcesStore = create<DatasourcesState>((set, get) => ({
     }
   },
 
-  reset: () => set({ items: [], importing: null, errorKey: null }),
+  reset: () =>
+    set({
+      items: [],
+      importing: null,
+      syncing: false,
+      lastSync: null,
+      errorKey: null,
+    }),
 }));

@@ -33,6 +33,7 @@ export function ExplorerPanel() {
 
   const items = useDatasourcesStore((s) => s.items);
   const importing = useDatasourcesStore((s) => s.importing);
+  const syncing = useDatasourcesStore((s) => s.syncing);
   const importError = useDatasourcesStore((s) => s.errorKey);
   const load = useDatasourcesStore((s) => s.load);
   const importPath = useDatasourcesStore((s) => s.importPath);
@@ -43,6 +44,8 @@ export function ExplorerPanel() {
   const deleteSession = useChatStore((s) => s.deleteSession);
 
   const [refreshKey, setRefreshKey] = useState(0);
+  const fsRevision = useWorkspaceStore((s) => s.fsRevision);
+  const fsRevisionRef = useRef(fsRevision);
   const [actionError, setActionError] = useState<string | null>(null);
   const [selectedDir, setSelectedDir] = useState<string>('');
   const openSession = useUiStore((s) => s.openSession);
@@ -195,6 +198,13 @@ export function ExplorerPanel() {
     void load();
   }, [path, load]);
 
+  // 外部文件变化（fsRevision 自增）→ 刷新文件树。
+  useEffect(() => {
+    if (fsRevisionRef.current === fsRevision) return;
+    fsRevisionRef.current = fsRevision;
+    setRefreshKey((key) => key + 1);
+  }, [fsRevision]);
+
   if (!workspace || !path) {
     return (
       <div className="panel-empty">
@@ -331,6 +341,8 @@ export function ExplorerPanel() {
           )}
 
           {attaching && <span className="panel-hint">{t('attachDbBusy')}</span>}
+
+          {syncing && <span className="panel-hint">{t('syncing')}</span>}
 
           {items.length > 0 && (
             <div className="datasource-list">

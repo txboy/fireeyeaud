@@ -42,6 +42,9 @@ declare global {
       openPath: (filePath: string) => Promise<{ ok: boolean }>;
       showItemInFolder: (filePath: string) => Promise<{ ok: boolean }>;
       openExternal: (url: string) => Promise<{ ok: boolean }>;
+      watchWorkspace: (root: string) => Promise<{ ok: boolean }>;
+      unwatchWorkspace: () => Promise<{ ok: boolean }>;
+      onWorkspaceFsChanged: (callback: () => void) => () => void;
       putSecret: (plaintext: string) => Promise<string | null>;
       deleteSecret: (ref: string) => Promise<{ ok: boolean }>;
       minimizeWindow: () => Promise<void>;

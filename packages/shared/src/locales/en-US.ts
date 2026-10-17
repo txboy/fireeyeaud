@@ -118,6 +118,7 @@ export default {
     attachDbScope: 'Scope',
     attachDbConfirm: 'Attach',
     attachDbBusy: 'Attaching…',
+    syncing: 'Syncing data…',
   },
   search: {
     title: 'Search',

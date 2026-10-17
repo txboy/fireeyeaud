@@ -43,6 +43,9 @@ interface WorkspaceState {
   loading: boolean;
   error: ApiError | null;
   recent: RecentWorkspace[];
+  /** 工作区外部文件变化的修订号：变化时自增，供文件树等刷新。 */
+  fsRevision: number;
+  bumpFsRevision: () => void;
   openFromDialog: () => Promise<void>;
   openPath: (path: string) => Promise<void>;
   removeRecent: (path: string) => void;
@@ -55,6 +58,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   loading: false,
   error: null,
   recent: loadRecent(),
+  fsRevision: 0,
+
+  bumpFsRevision: () => set((s) => ({ fsRevision: s.fsRevision + 1 })),
 
   openPath: async (path) => {
     // 切换工作区若有会话正在生成，先警告并中止。

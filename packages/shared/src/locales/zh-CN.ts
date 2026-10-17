@@ -116,6 +116,7 @@ export default {
     attachDbScope: '作用域',
     attachDbConfirm: '附加',
     attachDbBusy: '正在附加…',
+    syncing: '正在同步数据…',
   },
   search: {
     title: '搜索',
