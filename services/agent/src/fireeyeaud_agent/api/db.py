@@ -57,6 +57,13 @@ class QueryBody(BaseModel):
     includeTotal: bool = True
 
 
+class ValidateSqlBody(BaseModel):
+    """纯语法校验：不连库，只按驱动方言解析。"""
+
+    driver: str
+    sql: str
+
+
 class ConnectionPatch(BaseModel):
     name: str | None = None
     driver: str | None = None
@@ -157,6 +164,12 @@ def reflect_connection(
     return db_engine.reflect_and_register(
         root, conn, db.get_secret(conn.get("credRef") or connection_id)
     )
+
+
+@router.post("/db/validate-sql")
+def validate_sql_syntax(body: ValidateSqlBody) -> dict:
+    """编辑器实时语法检查：只解析，不访问数据库。"""
+    return db_engine.validate_sql_syntax(body.sql, body.driver)
 
 
 @router.post("/db/connections/{connection_id}/query")

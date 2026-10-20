@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { DataSourceInfo } from '@fireeyeaud/shared';
 import {
+  ChevronDown,
+  ChevronRight,
   Database,
   FolderOpen,
   MessageSquare,
@@ -20,6 +23,17 @@ import { dbDriverFor, normalizePath } from '../../lib/db-file';
 import { confirmStopSession } from '../../lib/stop-guard';
 import { FileTree } from '../FileTree';
 
+/** 数据源列表折叠状态（面板切换会卸载，故用 localStorage 记忆）。 */
+const DATASOURCES_OPEN_KEY = 'fireeyeaud.datasourcesOpen';
+
+function loadDatasourcesOpen(): boolean {
+  try {
+    return localStorage.getItem(DATASOURCES_OPEN_KEY) !== '0';
+  } catch {
+    return true;
+  }
+}
+
 export function ExplorerPanel() {
   const { t } = useTranslation('explorer');
   const { t: tc } = useTranslation('common');
@@ -34,9 +48,11 @@ export function ExplorerPanel() {
   const items = useDatasourcesStore((s) => s.items);
   const importing = useDatasourcesStore((s) => s.importing);
   const syncing = useDatasourcesStore((s) => s.syncing);
+  const syncingFull = useDatasourcesStore((s) => s.syncingFull);
   const importError = useDatasourcesStore((s) => s.errorKey);
   const load = useDatasourcesStore((s) => s.load);
   const importPath = useDatasourcesStore((s) => s.importPath);
+  const sync = useDatasourcesStore((s) => s.sync);
   const removeDatasource = useDatasourcesStore((s) => s.remove);
 
   const sessions = useChatStore((s) => s.sessions);
@@ -44,6 +60,7 @@ export function ExplorerPanel() {
   const deleteSession = useChatStore((s) => s.deleteSession);
 
   const [refreshKey, setRefreshKey] = useState(0);
+  const [datasourcesOpen, setDatasourcesOpen] = useState(loadDatasourcesOpen);
   const fsRevision = useWorkspaceStore((s) => s.fsRevision);
   const fsRevisionRef = useRef(fsRevision);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -53,6 +70,7 @@ export function ExplorerPanel() {
   const activeRightTabId = useUiStore((s) => s.activeRightTabId);
   const closeRightTab = useUiStore((s) => s.closeRightTab);
   const confirm = useConfirmStore((s) => s.confirm);
+  const openPreview = useUiStore((s) => s.openPreview);
   const openDbSchema = useUiStore((s) => s.openDbSchema);
   const createReturning = useDatabaseStore((s) => s.createReturning);
   const promptAttach = useAttachDbStore((s) => s.promptAttach);
@@ -83,8 +101,21 @@ export function ExplorerPanel() {
   );
 
   const handleRefresh = () => {
+    if (syncing) return;
     setActionError(null);
     setRefreshKey((key) => key + 1);
+    // 刷新语义：忽略指纹缓存，重新解析并覆盖全部表格文件。
+    void sync({ full: true });
+  };
+
+  const toggleDatasources = () => {
+    const next = !datasourcesOpen;
+    setDatasourcesOpen(next);
+    try {
+      localStorage.setItem(DATASOURCES_OPEN_KEY, next ? '1' : '0');
+    } catch {
+      /* 忽略写入失败（隐私模式等） */
+    }
   };
 
   // 上传文件：仅把文件复制进工作区（不导入数据源）。
@@ -103,6 +134,7 @@ export function ExplorerPanel() {
   };
 
   const handleImportData = (target: string) => {
+    if (syncing) return;
     setActionError(null);
     void importPath(target);
   };
@@ -152,6 +184,30 @@ export function ExplorerPanel() {
     },
     [openDbSchema, promptAttach, createReturning, t, tc],
   );
+
+  // 点击数据源：文件型在右侧打开原始文件预览；数据库型打开其表结构 / 授权 tab。
+  const handleOpenDatasource = async (ds: DataSourceInfo) => {
+    if (!path) return;
+    if (ds.type === 'db') {
+      if (!ds.connectionId) return;
+      const store = useDatabaseStore.getState();
+      let conn = store.items.find((item) => item.id === ds.connectionId);
+      if (!conn) {
+        await store.load();
+        conn = useDatabaseStore
+          .getState()
+          .items.find((item) => item.id === ds.connectionId);
+      }
+      if (conn) {
+        await openDbSchema({ id: conn.id, scope: conn.scope, name: conn.name });
+      }
+      return;
+    }
+    if (ds.path) {
+      const name = ds.path.split(/[\\/]/).pop() ?? ds.id;
+      await openPreview(path, ds.path, name);
+    }
+  };
 
   const handleDeleteDatasource = async (id: string, name: string) => {
     const confirmed = await confirm({
@@ -295,6 +351,7 @@ export function ExplorerPanel() {
             title={t('refresh')}
             aria-label={t('refresh')}
             onClick={handleRefresh}
+            disabled={syncing}
           >
             <RefreshCw size={14} strokeWidth={1.9} />
           </button>
@@ -342,35 +399,77 @@ export function ExplorerPanel() {
 
           {attaching && <span className="panel-hint">{t('attachDbBusy')}</span>}
 
-          {syncing && <span className="panel-hint">{t('syncing')}</span>}
+          {syncing && (
+            <span className="panel-hint">
+              {syncingFull ? t('reimporting') : t('syncing')}
+            </span>
+          )}
 
           {items.length > 0 && (
-            <div className="datasource-list">
-              {items.map((ds) => (
-                <div key={ds.id} className="datasource-chip" title={ds.path ?? ds.id}>
-                  <Database size={12} strokeWidth={1.75} />
-                  <span className="datasource-chip__name">
-                    {ds.path ? ds.path.split(/[\\/]/).pop() : ds.id}
-                  </span>
-                  <span className="datasource-chip__meta">
-                    {ti('tables', { count: ds.tables.length })}
-                  </span>
-                  <button
-                    type="button"
-                    className="datasource-chip__del"
-                    title={t('delete')}
-                    aria-label={t('delete')}
-                    onClick={() =>
-                      void handleDeleteDatasource(
-                        ds.id,
-                        ds.path ? ds.path.split(/[\\/]/).pop() ?? ds.id : ds.id,
-                      )
-                    }
-                  >
-                    <Trash2 size={12} strokeWidth={1.75} />
-                  </button>
+            <div className="datasource-group">
+              <button
+                type="button"
+                className="datasource-group__head"
+                aria-expanded={datasourcesOpen}
+                aria-controls="datasource-list"
+                title={datasourcesOpen ? t('collapseDataSources') : t('expandDataSources')}
+                onClick={toggleDatasources}
+              >
+                {datasourcesOpen ? (
+                  <ChevronDown size={13} strokeWidth={2} />
+                ) : (
+                  <ChevronRight size={13} strokeWidth={2} />
+                )}
+                <span>{t('dataSources')}</span>
+                <span className="datasource-group__count">{items.length}</span>
+              </button>
+              {datasourcesOpen && (
+                <div className="datasource-list" id="datasource-list">
+                  {items.map((ds) => (
+                    <div
+                      key={ds.id}
+                      className="datasource-chip datasource-chip--clickable"
+                      title={ds.path ?? ds.id}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`${t('previewDatasource')}: ${
+                        ds.path ? ds.path.split(/[\\/]/).pop() : ds.id
+                      }`}
+                      onClick={() => void handleOpenDatasource(ds)}
+                      onKeyDown={(event) => {
+                        if (event.target !== event.currentTarget) return;
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          void handleOpenDatasource(ds);
+                        }
+                      }}
+                    >
+                      <Database size={12} strokeWidth={1.75} />
+                      <span className="datasource-chip__name">
+                        {ds.path ? ds.path.split(/[\\/]/).pop() : ds.id}
+                      </span>
+                      <span className="datasource-chip__meta">
+                        {ti('tables', { count: ds.tables.length })}
+                      </span>
+                      <button
+                        type="button"
+                        className="datasource-chip__del"
+                        title={t('delete')}
+                        aria-label={t('delete')}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void handleDeleteDatasource(
+                            ds.id,
+                            ds.path ? ds.path.split(/[\\/]/).pop() ?? ds.id : ds.id,
+                          );
+                        }}
+                      >
+                        <Trash2 size={12} strokeWidth={1.75} />
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
           )}
 

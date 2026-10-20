@@ -117,6 +117,8 @@ export interface DataSourceInfo {
   id: string;
   type: 'excel' | 'csv' | 'pdf' | 'db';
   path?: string;
+  /** 数据库数据源对应的连接 id（type === 'db'）。 */
+  connectionId?: string;
   tables: string[];
   importedAt?: string;
 }

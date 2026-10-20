@@ -17,7 +17,7 @@ import { useDatasourcesStore } from '../store/datasources';
 import { ContextMenu, type ContextMenuItem } from './ContextMenu';
 
 /** 可「导入数据」的表格文件后缀。 */
-const TABLE_EXT = new Set(['.csv', '.txt', '.xlsx', '.xlsm']);
+const TABLE_EXT = new Set(['.csv', '.xlsx', '.xlsm']);
 
 /** 导入错误码 → error 命名空间 key。 */
 const IMPORT_ERROR_KEYS: Record<string, string> = {

@@ -18,13 +18,15 @@ interface DatasourcesState {
   items: DataSourceInfo[];
   importing: ImportState | null;
   syncing: boolean;
+  /** 当前同步是否为忽略指纹缓存的全量重导。 */
+  syncingFull: boolean;
   lastSync: { added: number; removed: number; updated: number } | null;
   /** 导入失败的文件：路径 → 错误码（用于文件树上的失败标识）。 */
   importFailed: Record<string, string>;
   errorKey: string | null;
   load: () => Promise<void>;
   importPath: (path: string) => Promise<void>;
-  sync: () => Promise<void>;
+  sync: (options?: { full?: boolean }) => Promise<void>;
   remove: (id: string) => Promise<void>;
   reset: () => void;
 }
@@ -33,6 +35,7 @@ export const useDatasourcesStore = create<DatasourcesState>((set, get) => ({
   items: [],
   importing: null,
   syncing: false,
+  syncingFull: false,
   lastSync: null,
   importFailed: {},
   errorKey: null,
@@ -93,11 +96,13 @@ export const useDatasourcesStore = create<DatasourcesState>((set, get) => ({
     await get().load();
   },
 
-  sync: async () => {
+  sync: async (options) => {
     if (get().syncing) return;
-    set({ syncing: true, errorKey: null });
+    const full = options?.full === true;
+    set({ syncing: true, syncingFull: full, errorKey: null });
     try {
       const result = await syncDatasources({
+        full,
         onEvent: (event: SseEvent) => {
           if (event.type === 'error') {
             const data = (event.data ?? {}) as Record<string, unknown>;
@@ -125,7 +130,7 @@ export const useDatasourcesStore = create<DatasourcesState>((set, get) => ({
         errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal',
       });
     }
-    set({ syncing: false });
+    set({ syncing: false, syncingFull: false });
   },
 
   remove: async (id) => {
@@ -144,6 +149,7 @@ export const useDatasourcesStore = create<DatasourcesState>((set, get) => ({
       items: [],
       importing: null,
       syncing: false,
+      syncingFull: false,
       lastSync: null,
       importFailed: {},
       errorKey: null,

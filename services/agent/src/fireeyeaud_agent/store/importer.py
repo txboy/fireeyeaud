@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 from pathlib import Path
 from typing import Callable
@@ -15,12 +16,22 @@ from ..util import now_iso
 from .duckdb import Database
 from .importers import read_table
 from .index import load_files, remove_schema_entries, save_files, upsert_schema_entry
+from .lock import WORKSPACE_MUTATION_LOCK
 from .project import ensure_project, load_project, next_counter, save_project
 from .schema import infer_column
 
 _SUBDIRS = ("config", "templates", "index", "artifacts")
 _EXCEL_SUFFIXES = (".xlsx", ".xlsm")
+_FILE_SOURCE_TYPES = ("csv", "excel")
 Progress = Callable[[str, int, int], None]
+
+
+def _same_path(a: object, b: object) -> bool:
+    if not a or not b:
+        return False
+    return os.path.normcase(os.path.abspath(str(a))) == os.path.normcase(
+        os.path.abspath(str(b))
+    )
 
 
 def sanitize_table_name(name: str) -> str:
@@ -97,6 +108,13 @@ def _fingerprint(path: Path, source_id: str) -> dict:
 def import_source(root: Path, path: Path, *, progress: Progress | None = None) -> dict:
     root = Path(root)
     path = Path(path)
+    with WORKSPACE_MUTATION_LOCK:
+        return _import_source_locked(root, path, progress=progress)
+
+
+def _import_source_locked(
+    root: Path, path: Path, *, progress: Progress | None = None
+) -> dict:
     if not path.exists() or not path.is_file():
         raise ApiError("E_PATH_INVALID", 400, "error.pathInvalid", {"path": str(path)})
 
@@ -104,31 +122,63 @@ def import_source(root: Path, path: Path, *, progress: Progress | None = None) -
     for sub in _SUBDIRS:
         (fe / sub).mkdir(parents=True, exist_ok=True)
 
-    sha = _sha256(path)
+    project = ensure_project(fe, root)
+    sources = project.setdefault("dataSources", [])
+    same_path = next(
+        (
+            source
+            for source in sources
+            if source.get("type") in _FILE_SOURCE_TYPES
+            and _same_path(source.get("path"), path)
+        ),
+        None,
+    )
+    if same_path is not None:
+        # 同一路径重新导入：沿用原 sourceId / 表名，直接替换内容。
+        return replace_source(root, same_path, path, progress=progress)
+
     files_path = fe / "index" / "files.json"
     files = load_files(files_path)
-    if any(f.get("sha256") == sha and f.get("status") == "ok" for f in files):
-        raise ApiError("E_IMPORT_DUP", 409, "error.importDup", {"path": str(path)})
 
     _emit(progress, "parse", 0, 1)
     columns, rows = _read_table(path)
     _emit(progress, "parse", 1, 1)
 
+    existing_ids = {str(source.get("id")) for source in sources}
     ds_seq = next_counter(fe, "dataSource", root)
+    while f"ds_{ds_seq}" in existing_ids:
+        ds_seq = next_counter(fe, "dataSource", root)
     ds_id = f"ds_{ds_seq}"
     table = f"src_ds{ds_seq}_{sanitize_table_name(path.stem)}"
+
+    # 同一路径的旧指纹（可能来自已重建的 project）不应阻挡重新导入；
+    # 只清理已经不在项目登记里的 source 的 schema，避免误删其他数据源。
+    registered_ids = {str(source.get("id")) for source in sources}
+    for fingerprint in files:
+        if not _same_path(fingerprint.get("path"), path):
+            continue
+        old_id = str(fingerprint.get("sourceId") or "")
+        if old_id and old_id not in registered_ids:
+            remove_schema_entries(fe / "index" / "schema.json", old_id)
 
     _emit(progress, "load", 0, max(len(rows), 1))
     _write_table(fe, table, columns, rows)
     _emit(progress, "load", len(rows), max(len(rows), 1))
 
     _emit(progress, "index", 0, 1)
+    # 计数器可能因项目重建而回退，复用 ds_id 前先清掉旧 schema 条目。
+    remove_schema_entries(fe / "index" / "schema.json", ds_id)
     upsert_schema_entry(
         fe / "index" / "schema.json", _schema_entry(ds_id, table, columns, rows)
     )
     save_files(
         files_path,
-        [f for f in files if f.get("path") != str(path)] + [_fingerprint(path, ds_id)],
+        [
+            f
+            for f in files
+            if f.get("path") != str(path) and f.get("sourceId") != ds_id
+        ]
+        + [_fingerprint(path, ds_id)],
     )
 
     project = ensure_project(fe, root)
@@ -147,10 +197,27 @@ def import_source(root: Path, path: Path, *, progress: Progress | None = None) -
     return {"sourceId": ds_id, "tables": [table], "rowCount": len(rows)}
 
 
-def replace_source(root: Path, source: dict, path: Path) -> dict:
+def replace_source(
+    root: Path,
+    source: dict,
+    path: Path,
+    *,
+    progress: Progress | None = None,
+) -> dict:
     """按新文件内容替换已有数据源（保持 sourceId 与表名，用于文件被修改后的自动同步）。"""
     root = Path(root)
     path = Path(path)
+    with WORKSPACE_MUTATION_LOCK:
+        return _replace_source_locked(root, source, path, progress=progress)
+
+
+def _replace_source_locked(
+    root: Path,
+    source: dict,
+    path: Path,
+    *,
+    progress: Progress | None = None,
+) -> dict:
     fe = root / ".fireeye"
     source_id = str(source.get("id"))
     tables = [str(t) for t in source.get("tables", [])]
@@ -158,14 +225,21 @@ def replace_source(root: Path, source: dict, path: Path) -> dict:
         raise ApiError("E_DS_NOT_FOUND", 404, "error.dsNotFound", {"id": source_id})
     table = tables[0]
 
+    _emit(progress, "parse", 0, 1)
     columns, rows = _read_table(path)
+    _emit(progress, "parse", 1, 1)
+
     db = Database(fe / "workspace.duckdb")
     try:
         db.drop_table(table)
     finally:
         db.close()
+    _emit(progress, "load", 0, max(len(rows), 1))
     _write_table(fe, table, columns, rows)
+    _emit(progress, "load", len(rows), max(len(rows), 1))
 
+    _emit(progress, "index", 0, 1)
+    remove_schema_entries(fe / "index" / "schema.json", source_id)
     upsert_schema_entry(
         fe / "index" / "schema.json", _schema_entry(source_id, table, columns, rows)
     )
@@ -186,8 +260,10 @@ def replace_source(root: Path, source: dict, path: Path) -> dict:
         if str(item.get("id")) == source_id:
             item["path"] = str(path)
             item["type"] = _source_type(path)
+            item["tables"] = [table]
             item["importedAt"] = now_iso()
     save_project(fe, project)
+    _emit(progress, "index", 1, 1)
 
     return {"sourceId": source_id, "tables": [table], "rowCount": len(rows)}
 
@@ -198,6 +274,11 @@ def delete_source(root: Path, source_id: str) -> dict:
     `type == 'db'` 的数据源仅移除反射登记，不删除数据库连接本身。
     """
     root = Path(root)
+    with WORKSPACE_MUTATION_LOCK:
+        return _delete_source_locked(root, source_id)
+
+
+def _delete_source_locked(root: Path, source_id: str) -> dict:
     fe = root / ".fireeye"
     project = load_project(fe) or {}
     sources = project.get("dataSources", [])

@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any
 
 from ..util import now_iso
+from .fsutil import write_json_atomic
+from .lock import WORKSPACE_MUTATION_LOCK
 
 
 def _default_project(root: Path) -> dict[str, Any]:
@@ -46,27 +48,28 @@ def load_project(fe: Path) -> dict[str, Any] | None:
 
 
 def save_project(fe: Path, project: dict[str, Any]) -> None:
-    project["updatedAt"] = now_iso()
-    path = project_path(fe)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(project, ensure_ascii=False, indent=2), "utf-8")
+    with WORKSPACE_MUTATION_LOCK:
+        project["updatedAt"] = now_iso()
+        write_json_atomic(project_path(fe), project)
 
 
 def ensure_project(fe: Path, root: Path) -> dict[str, Any]:
     """读取 project.json；不存在则用默认值初始化并落盘。"""
-    project = load_project(fe)
-    if project is None:
-        project = _default_project(root)
-        save_project(fe, project)
-    return project
+    with WORKSPACE_MUTATION_LOCK:
+        project = load_project(fe)
+        if project is None:
+            project = _default_project(root)
+            save_project(fe, project)
+        return project
 
 
 def next_counter(fe: Path, key: str, root: Path | None = None) -> int:
-    project = load_project(fe)
-    if project is None:
-        project = _default_project(root or fe.parent)
-    counters = project.setdefault("counters", {})
-    value = int(counters.get(key, 0)) + 1
-    counters[key] = value
-    save_project(fe, project)
-    return value
+    with WORKSPACE_MUTATION_LOCK:
+        project = load_project(fe)
+        if project is None:
+            project = _default_project(root or fe.parent)
+        counters = project.setdefault("counters", {})
+        value = int(counters.get(key, 0)) + 1
+        counters[key] = value
+        save_project(fe, project)
+        return value

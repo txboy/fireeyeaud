@@ -93,3 +93,21 @@ async def test_schema_too_new(tmp_path) -> None:
         )
     assert resp.status_code == 409
     assert resp.json()["error"]["code"] == "E_WS_SCHEMA_TOO_NEW"
+
+
+async def test_open_corrupt_project_backs_up_and_errors(tmp_path) -> None:
+    """project.json 损坏时不得静默重建，避免 project 与索引脱节。"""
+    fe = tmp_path / ".fireeye"
+    fe.mkdir()
+    (fe / "project.json").write_text("{not-json", "utf-8")
+
+    async with _client() as client:
+        resp = await client.post(
+            "/api/v1/workspaces/open", json={"path": str(tmp_path)}
+        )
+
+    assert resp.status_code == 409
+    assert resp.json()["error"]["code"] == "E_WS_PROJECT_CORRUPT"
+    backups = list(fe.glob("project.json.corrupt-*"))
+    assert len(backups) == 1
+    assert backups[0].read_text("utf-8") == "{not-json"

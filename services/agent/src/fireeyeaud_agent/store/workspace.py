@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -16,6 +17,8 @@ from ..config.settings import settings
 from ..errors import ApiError
 from .duckdb import Database
 from .evidence import verify_evidence_chain
+from .fsutil import write_json_atomic
+from .lock import WORKSPACE_MUTATION_LOCK
 
 _SUBDIRS = ["config", "templates", "index", "artifacts"]
 _COUNTERS = [
@@ -79,11 +82,13 @@ class WorkspaceManager:
 
         project_file = fe / "project.json"
         existing: dict[str, Any] | None = None
+        corrupt = False
         if project_file.exists():
             try:
                 existing = json.loads(project_file.read_text("utf-8"))
             except (OSError, json.JSONDecodeError):
                 existing = None
+                corrupt = True
             if (
                 existing
                 and int(existing.get("schemaVersion", 1)) > settings.schema_version
@@ -99,7 +104,9 @@ class WorkspaceManager:
         for sub in _SUBDIRS:
             (fe / sub).mkdir(exist_ok=True)
 
-        project = self._load_or_init(project_file, root, existing)
+        project = self._load_or_init(
+            project_file, root, existing, corrupt=corrupt
+        )
         lock.write_text(
             json.dumps(
                 {"pid": os.getpid(), "port": settings.port, "startedAt": _now()},
@@ -117,33 +124,51 @@ class WorkspaceManager:
         return project
 
     def _load_or_init(
-        self, project_file: Path, root: Path, existing: dict[str, Any] | None
+        self,
+        project_file: Path,
+        root: Path,
+        existing: dict[str, Any] | None,
+        *,
+        corrupt: bool = False,
     ) -> dict[str, Any]:
-        if existing:
-            existing["updatedAt"] = _now()
-            existing.setdefault("name", root.name)
-            existing.setdefault("counters", {k: 0 for k in _COUNTERS})
-            existing.setdefault("dataSources", [])
-            existing.setdefault("schemaVersion", settings.schema_version)
-            project_file.write_text(
-                json.dumps(existing, ensure_ascii=False, indent=2), "utf-8"
-            )
-            return existing
+        with WORKSPACE_MUTATION_LOCK:
+            if corrupt:
+                # 不能静默重建：先保留现场，让用户/恢复逻辑决定如何处理。
+                stamp = datetime.now().strftime("%Y%m%d%H%M%S%f")
+                backup = project_file.with_name(
+                    f"project.json.corrupt-{stamp}"
+                )
+                try:
+                    shutil.copy2(project_file, backup)
+                except OSError:
+                    backup = project_file
+                raise ApiError(
+                    "E_WS_PROJECT_CORRUPT",
+                    409,
+                    "error.wsProjectCorrupt",
+                    {"backup": str(backup)},
+                )
+            if existing:
+                existing["updatedAt"] = _now()
+                existing.setdefault("name", root.name)
+                existing.setdefault("counters", {k: 0 for k in _COUNTERS})
+                existing.setdefault("dataSources", [])
+                existing.setdefault("schemaVersion", settings.schema_version)
+                write_json_atomic(project_file, existing)
+                return existing
 
-        project: dict[str, Any] = {
-            "schemaVersion": settings.schema_version,
-            "id": str(uuid.uuid4()),
-            "name": root.name,
-            "createdAt": _now(),
-            "updatedAt": _now(),
-            "defaultModelId": None,
-            "counters": {k: 0 for k in _COUNTERS},
-            "dataSources": [],
-        }
-        project_file.write_text(
-            json.dumps(project, ensure_ascii=False, indent=2), "utf-8"
-        )
-        return project
+            project: dict[str, Any] = {
+                "schemaVersion": settings.schema_version,
+                "id": str(uuid.uuid4()),
+                "name": root.name,
+                "createdAt": _now(),
+                "updatedAt": _now(),
+                "defaultModelId": None,
+                "counters": {k: 0 for k in _COUNTERS},
+                "dataSources": [],
+            }
+            write_json_atomic(project_file, project)
+            return project
 
     def close(self) -> None:
         if self.root is not None:

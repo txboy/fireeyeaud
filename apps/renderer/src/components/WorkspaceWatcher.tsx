@@ -15,7 +15,8 @@ export function WorkspaceWatcher() {
   useEffect(() => {
     const api = window.fireeyeaud;
     if (!api || !path) return;
-    void useDatasourcesStore.getState().sync();
+    // 启动/打开工作区：忽略指纹缓存，全量重新导入数据表。
+    void useDatasourcesStore.getState().sync({ full: true });
     void api.watchWorkspace(path);
     return () => {
       void api.unwatchWorkspace();

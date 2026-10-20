@@ -11,7 +11,7 @@ def read_table(path: Path) -> tuple[list[str], list[list[str]]]:
     suffix = path.suffix.lower()
     if suffix in (".xlsx", ".xlsm"):
         frame = pd.read_excel(path, dtype=str, engine="openpyxl").fillna("")
-    elif suffix in (".csv", ".txt"):
+    elif suffix == ".csv":
         try:
             frame = pd.read_csv(
                 path, dtype=str, keep_default_na=False, encoding="utf-8-sig"

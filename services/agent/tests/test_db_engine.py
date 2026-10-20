@@ -361,3 +361,69 @@ def test_count_access_fallback_failure_returns_none(monkeypatch):
         db_engine, "_engine", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("odbc down"))
     )
     assert db_engine.count_query(conn, "SELECT 1", None) is None
+
+
+def test_validate_sql_syntax_accepts_valid_select():
+    result = db_engine.validate_sql_syntax("SELECT id FROM customers", "sqlite")
+    assert result == {"ok": True, "errors": []}
+
+
+def test_validate_sql_syntax_flags_unknown_statement_start():
+    result = db_engine.validate_sql_syntax("SELEC * FROM t", "sqlite")
+    assert result["ok"] is False
+    first = result["errors"][0]
+    assert first["reason"] == "unknown_statement"
+    assert first["token"] == "SELEC"
+    assert first["from"] == 0
+    assert first["to"] == len("SELEC")
+    assert "SELEC" in first["message"]
+
+
+def test_validate_sql_syntax_keeps_offsets_with_leading_whitespace():
+    result = db_engine.validate_sql_syntax("  SELEC * FROM t", "sqlite")
+    assert result["ok"] is False
+    first = result["errors"][0]
+    assert first["reason"] == "unknown_statement"
+    assert first["from"] == 2
+    assert first["to"] == 2 + len("SELEC")
+
+
+def test_validate_sql_syntax_flags_trailing_from():
+    result = db_engine.validate_sql_syntax("SELECT * FROM", "sqlite")
+    assert result["ok"] is False
+    first = result["errors"][0]
+    assert first["reason"] == "missing_table"
+    assert first["from"] > 0
+    assert first["to"] > first["from"]
+
+
+def test_validate_sql_syntax_flags_select_without_expression():
+    result = db_engine.validate_sql_syntax("SELECT FROM t", "sqlite")
+    assert result["ok"] is False
+    first = result["errors"][0]
+    assert first["reason"] == "missing_expression"
+    assert first["from"] == 0
+    assert first["to"] == len("SELECT")
+
+
+def test_validate_sql_syntax_flags_trailing_where():
+    result = db_engine.validate_sql_syntax("SELECT * FROM t WHERE", "sqlite")
+    assert result["ok"] is False
+    assert result["errors"][0]["reason"] == "incomplete_where"
+
+
+def test_validate_sql_syntax_reports_multiline_position():
+    result = db_engine.validate_sql_syntax("SELECT *\nFROM t\nWHERE", "sqlite")
+    assert result["ok"] is False
+    first = result["errors"][0]
+    assert first["line"] == 3
+    assert first["from"] == len("SELECT *\nFROM t\n")
+
+
+def test_validate_sql_syntax_flags_unclosed_quote():
+    result = db_engine.validate_sql_syntax('SELECT "unclosed FROM t', "sqlite")
+    assert result["ok"] is False
+    first = result["errors"][0]
+    assert first["reason"] == "token_error"
+    assert first["from"] >= 0
+    assert first["to"] > first["from"]

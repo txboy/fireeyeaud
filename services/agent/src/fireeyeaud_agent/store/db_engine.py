@@ -15,6 +15,7 @@ from typing import Any
 from ..errors import ApiError
 from . import access_source
 from .db import build_url
+from .lock import WORKSPACE_MUTATION_LOCK
 from .sandbox import validate_sql
 
 DEFAULT_LIMIT = 200
@@ -409,6 +410,169 @@ def dialect_for(conn: dict[str, Any]) -> str:
     return _DIALECT.get(str(conn.get("driver") or "").lower(), "sqlite")
 
 
+_SQL_STATEMENT_STARTERS = {"select", "with", "explain", "describe", "desc"}
+
+
+def _syntax_diagnostic(
+    message: str,
+    line: int,
+    col: int,
+    from_: int,
+    to: int,
+    sql_len: int,
+    *,
+    reason: str = "parse_error",
+    token: str | None = None,
+) -> dict[str, Any]:
+    start = max(0, min(int(from_), sql_len))
+    end = max(start, min(int(to), sql_len))
+    if end == start and start < sql_len:
+        end = start + 1
+    result = {
+        "message": message,
+        "reason": reason,
+        "line": max(1, int(line)),
+        "col": max(1, int(col)),
+        "from": start,
+        "to": end,
+    }
+    if token:
+        result["token"] = token
+    return result
+
+
+def _parse_error_span(sql: str, error: dict[str, Any]) -> tuple[int, int]:
+    """把 sqlglot 的 start_context / highlight 换算成绝对字符区间。"""
+    start_context = str(error.get("start_context") or "")
+    highlight = str(error.get("highlight") or "")
+    if start_context and sql.startswith(start_context):
+        from_ = len(start_context)
+    else:
+        # 上下文被截断时回退到行列号（col 按 1 基处理）。
+        line = max(1, int(error.get("line") or 1))
+        col = max(1, int(error.get("col") or 1))
+        lines = sql.splitlines(keepends=True)
+        line_start = sum(len(item) for item in lines[: line - 1])
+        from_ = line_start + col - 1
+    return from_, from_ + max(1, len(highlight))
+
+
+def _parse_error_reason(description: str) -> str:
+    lower = description.lower()
+    if "expected table name" in lower:
+        return "missing_table"
+    if "required keyword: 'expression' missing" in lower:
+        return "missing_expression"
+    if "required keyword: 'this' missing" in lower and "where" in lower:
+        return "incomplete_where"
+    if "invalid expression" in lower or "unexpected token" in lower:
+        return "unexpected_token"
+    return "parse_error"
+
+
+def validate_sql_syntax(sql: str, driver: str) -> dict[str, Any]:
+    """纯语法校验：只解析，不连接数据库、不执行 SQL。"""
+    raw = sql or ""
+    text = raw.strip()
+    if not text:
+        return {"ok": True, "errors": []}
+
+    dialect = _DIALECT.get(str(driver or "").lower(), "sqlite")
+    first_token = text.split(None, 1)[0]
+    plain_token = first_token.rstrip(";")
+    if plain_token and plain_token[0].isalpha() and plain_token.lower() not in _SQL_STATEMENT_STARTERS:
+        leading = len(raw) - len(raw.lstrip())
+        prefix = raw[:leading]
+        line = prefix.count("\n") + 1
+        col = len(prefix.rsplit("\n", 1)[-1]) + 1
+        return {
+            "ok": False,
+            "errors": [
+                _syntax_diagnostic(
+                    f'无法识别的语句开头 "{plain_token}"，仅支持只读查询',
+                    line,
+                    col,
+                    leading,
+                    leading + len(first_token),
+                    len(raw),
+                    reason="unknown_statement",
+                    token=plain_token,
+                )
+            ],
+        }
+
+    import sqlglot
+    from sqlglot import exp
+    from sqlglot.errors import ParseError, TokenError
+
+    try:
+        trees = sqlglot.parse(raw, read=dialect)
+        if (
+            len(trees) == 1
+            and isinstance(trees[0], exp.Select)
+            and not trees[0].expressions
+        ):
+            select_at = raw.lower().find("select")
+            select_at = select_at if select_at >= 0 else 0
+            return {
+                "ok": False,
+                "errors": [
+                    _syntax_diagnostic(
+                        "SELECT 后缺少表达式",
+                        1,
+                        select_at + 1,
+                        select_at,
+                        select_at + len("SELECT"),
+                        len(raw),
+                        reason="missing_expression",
+                    )
+                ],
+            }
+    except ParseError as exc:
+        errors = []
+        for item in (exc.errors or [])[:5]:
+            description = str(item.get("description") or "SQL 语法错误")
+            from_, to = _parse_error_span(raw, item)
+            errors.append(
+                _syntax_diagnostic(
+                    description,
+                    int(item.get("line") or 1),
+                    int(item.get("col") or 1),
+                    from_,
+                    to,
+                    len(raw),
+                    reason=_parse_error_reason(description),
+                )
+            )
+        if not errors:
+            errors.append(
+                _syntax_diagnostic(
+                    str(exc), 1, 1, 0, len(raw), len(raw), reason="parse_error"
+                )
+            )
+        return {"ok": False, "errors": errors}
+    except TokenError as exc:
+        message = str(exc).splitlines()[0] or "SQL 词法错误"
+        return {
+            "ok": False,
+            "errors": [
+                _syntax_diagnostic(
+                    message, 1, 1, 0, len(raw), len(raw), reason="token_error"
+                )
+            ],
+        }
+    except Exception as exc:  # noqa: BLE001 - 解析器异常统一转为诊断
+        return {
+            "ok": False,
+            "errors": [
+                _syntax_diagnostic(
+                    str(exc), 1, 1, 0, len(raw), len(raw), reason="parse_error"
+                )
+            ],
+        }
+    return {"ok": True, "errors": []}
+
+
 def check_authorization(root, connection_id: str, sql: str, dialect: str) -> None:
     import sqlglot
     from sqlglot import exp
@@ -458,52 +622,58 @@ def reflect_and_register(
 
     root = Path(root)
     fe = root / ".fireeye"
+    # 反射涉及数据库往返，放在锁外；登记与索引写入必须串行化。
     schema = reflect(conn, password)
-    project = ensure_project(fe, root)
-    data_sources: list[dict[str, Any]] = project.setdefault("dataSources", [])
-    existing = next(
-        (
-            ds
-            for ds in data_sources
-            if ds.get("type") == "db" and ds.get("connectionId") == conn["id"]
-        ),
-        None,
-    )
-    if existing is not None:
-        # 同一连接重复读取：复用数据源，替换其表结构，避免产生重复数据源。
-        ds_id = existing["id"]
-        remove_schema_entries(fe / "index" / "schema.json", ds_id)
-    else:
-        ds_id = f"ds_{next_counter(fe, 'dataSource', root)}"
-        existing = {
-            "id": ds_id,
-            "type": "db",
-            "connectionId": conn["id"],
-            "tables": [],
-            "importedAt": None,
-        }
-        data_sources.append(existing)
-    for entry in schema:
-        upsert_schema_entry(
-            fe / "index" / "schema.json",
-            {
-                "sourceId": ds_id,
-                "connectionId": conn["id"],
-                "table": entry["table"],
-                "rowCount": None,
-                "columns": [
-                    {
-                        "name": c["name"],
-                        "type": c["type"],
-                        "comment": c.get("comment"),
-                        "sample": "",
-                    }
-                    for c in entry["columns"]
-                ],
-            },
+    with WORKSPACE_MUTATION_LOCK:
+        project = ensure_project(fe, root)
+        data_sources: list[dict[str, Any]] = project.setdefault("dataSources", [])
+        existing = next(
+            (
+                ds
+                for ds in data_sources
+                if ds.get("type") == "db" and ds.get("connectionId") == conn["id"]
+            ),
+            None,
         )
-    existing["tables"] = [e["table"] for e in schema]
-    save_project(fe, project)
+        if existing is not None:
+            # 同一连接重复读取：复用数据源，替换其表结构，避免产生重复数据源。
+            ds_id = existing["id"]
+            remove_schema_entries(fe / "index" / "schema.json", ds_id)
+        else:
+            existing_ids = {str(ds.get("id")) for ds in data_sources}
+            ds_seq = next_counter(fe, "dataSource", root)
+            while f"ds_{ds_seq}" in existing_ids:
+                ds_seq = next_counter(fe, "dataSource", root)
+            ds_id = f"ds_{ds_seq}"
+            existing = {
+                "id": ds_id,
+                "type": "db",
+                "connectionId": conn["id"],
+                "tables": [],
+                "importedAt": None,
+            }
+            data_sources.append(existing)
+        for entry in schema:
+            upsert_schema_entry(
+                fe / "index" / "schema.json",
+                {
+                    "sourceId": ds_id,
+                    "connectionId": conn["id"],
+                    "table": entry["table"],
+                    "rowCount": None,
+                    "columns": [
+                        {
+                            "name": c["name"],
+                            "type": c["type"],
+                            "comment": c.get("comment"),
+                            "sample": "",
+                        }
+                        for c in entry["columns"]
+                    ],
+                },
+            )
+        existing["tables"] = [e["table"] for e in schema]
+        save_project(fe, project)
     return {
         "sourceId": ds_id,
         "tables": [e["table"] for e in schema],

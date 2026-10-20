@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 import anyio
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
@@ -48,8 +48,11 @@ def delete_datasource(source_id: str) -> dict:
 
 
 @router.post("/datasources/sync")
-async def sync_datasources() -> EventSourceResponse:
-    """扫描工作区表格文件并对账：新增导入 / 删除移除 / 修改替换。SSE 回推进度与结果。"""
+async def sync_datasources(full: bool = Query(default=False)) -> EventSourceResponse:
+    """扫描工作区表格文件并对账：新增导入 / 删除移除 / 修改替换。SSE 回推进度与结果。
+
+    `full=true` 时忽略文件指纹缓存，重新解析并覆盖全部表格文件。
+    """
     root = _require_root()
     session_id = (workspace_manager.current or {}).get("id", "")
     loop = asyncio.get_running_loop()
@@ -62,7 +65,7 @@ async def sync_datasources() -> EventSourceResponse:
         )
 
     def work() -> dict:
-        return sync_sources(root, progress=progress)
+        return sync_sources(root, progress=progress, full=full)
 
     async def run() -> None:
         try:

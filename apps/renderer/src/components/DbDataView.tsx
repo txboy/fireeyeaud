@@ -1,9 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronLeft, ChevronRight, Copy, Check, Play } from 'lucide-react';
 import type { DbDriver, DbQueryResult, DbTableSchema } from '@fireeyeaud/shared';
 import { runDbQuery } from '../lib/api';
+import { useDatabaseStore } from '../store/database';
+import { useSettingsStore } from '../store/settings';
 import type { DbDataTab } from '../store/ui';
+
+// CodeMirror / SQL 语言包按需加载，避免进入主包。
+const SqlEditor = lazy(() =>
+  import('./SqlEditor').then((module) => ({ default: module.SqlEditor })),
+);
 
 const PAGE_SIZES = [20, 50, 100, 200];
 
@@ -54,6 +61,19 @@ export function DbDataView({ tab }: { tab: DbDataTab }) {
   const [errorKey, setErrorKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  const reflectByConn = useDatabaseStore((s) => s.reflectByConn);
+  const dark = useSettingsStore((s) => s.theme === 'dark');
+
+  // 补全尽量使用整个连接的最新反射结果；尚未反射时回退到当前预览表。
+  const tables = useMemo(() => {
+    const byName = new Map<string, DbTableSchema>();
+    for (const table of reflectByConn[tab.connectionId] ?? []) {
+      byName.set(table.table, table);
+    }
+    if (!byName.has(tab.table.table)) byName.set(tab.table.table, tab.table);
+    return [...byName.values()];
+  }, [reflectByConn, tab.connectionId, tab.table]);
+
   const copySql = async () => {
     const text = result?.sql ?? '';
     if (!text) return;
@@ -93,6 +113,11 @@ export function DbDataView({ tab }: { tab: DbDataTab }) {
     } finally {
       setBusy(false);
     }
+  };
+
+  const handleRun = () => {
+    if (busy || !sql.trim()) return;
+    void fetchPage(1, true, pageSize);
   };
 
   // 初次载入：跑默认 SQL 第 1 页并统计总数。
@@ -179,20 +204,32 @@ export function DbDataView({ tab }: { tab: DbDataTab }) {
       </div>
 
       <div className="dbdata__editor">
-        <textarea
-          className="searchbox"
-          rows={3}
-          value={sql}
-          spellCheck={false}
-          onChange={(e) => setSql(e.target.value)}
-        />
+        <Suspense
+          fallback={
+            <div
+              className="dbdata__sql-editor dbdata__sql-editor--loading"
+              aria-busy="true"
+            />
+          }
+        >
+          <SqlEditor
+            value={sql}
+            onChange={setSql}
+            onRun={handleRun}
+            tables={tables}
+            driver={tab.driver}
+            defaultTable={tab.table.table}
+            dark={dark}
+            ariaLabel={t('dataSql')}
+          />
+        </Suspense>
         <div className="dbdata__actions">
           {busy && <span className="card__meta">{t('loadingRows')}</span>}
           <button
             type="button"
             className="button button--sm"
             disabled={busy || !sql.trim()}
-            onClick={() => void fetchPage(1, true, pageSize)}
+            onClick={handleRun}
           >
             <Play size={13} strokeWidth={1.9} /> {t('run')}
           </button>

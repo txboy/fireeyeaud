@@ -353,13 +353,17 @@ export interface SyncResult {
 export async function syncDatasources({
   onEvent,
   signal,
-}: ChatHandlers): Promise<SyncResult> {
+  full = false,
+}: ChatHandlers & { full?: boolean }): Promise<SyncResult> {
   let result: SyncResult = { added: [], removed: [], updated: [], errors: [] };
-  const res = await safeFetch(`${baseUrl()}/datasources/sync`, {
-    method: 'POST',
-    headers: authHeaders(),
-    signal,
-  });
+  const res = await safeFetch(
+    `${baseUrl()}/datasources/sync${full ? '?full=true' : ''}`,
+    {
+      method: 'POST',
+      headers: authHeaders(),
+      signal,
+    },
+  );
   await consumeSse(res, (event) => {
     if (event.type === 'done') {
       const data = (event.data ?? {}) as Partial<SyncResult>;
@@ -676,6 +680,34 @@ export function runDbQuery(
   return request<DbQueryResult>(`/db/connections/${id}/query?scope=${scope}`, {
     method: 'POST',
     body: JSON.stringify(input),
+  });
+}
+
+export interface DbSqlDiagnostic {
+  message: string;
+  reason: string;
+  token?: string;
+  line: number;
+  col: number;
+  from: number;
+  to: number;
+}
+
+export interface DbSqlValidation {
+  ok: boolean;
+  errors: DbSqlDiagnostic[];
+}
+
+/** 纯语法校验：后端只解析，不连接 / 查询数据库。 */
+export function validateDbSql(
+  driver: DbDriver,
+  sql: string,
+  signal?: AbortSignal,
+): Promise<DbSqlValidation> {
+  return request<DbSqlValidation>('/db/validate-sql', {
+    method: 'POST',
+    body: JSON.stringify({ driver, sql }),
+    signal,
   });
 }
 

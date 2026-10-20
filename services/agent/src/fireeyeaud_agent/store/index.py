@@ -6,6 +6,9 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .fsutil import write_json_atomic
+from .lock import WORKSPACE_MUTATION_LOCK
+
 
 def _read(path: Path, default):
     if not path.exists():
@@ -17,8 +20,8 @@ def _read(path: Path, default):
 
 
 def _write(path: Path, data) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), "utf-8")
+    with WORKSPACE_MUTATION_LOCK:
+        write_json_atomic(path, data)
 
 
 def load_schema(path: Path) -> list[dict[str, Any]]:
@@ -30,18 +33,22 @@ def save_schema(path: Path, entries: list[dict[str, Any]]) -> None:
 
 
 def upsert_schema_entry(path: Path, entry: dict[str, Any]) -> None:
-    entries = [
-        e
-        for e in load_schema(path)
-        if (e.get("sourceId"), e.get("table"))
-        != (entry.get("sourceId"), entry.get("table"))
-    ]
-    entries.append(entry)
-    save_schema(path, entries)
+    with WORKSPACE_MUTATION_LOCK:
+        entries = [
+            e
+            for e in load_schema(path)
+            if (e.get("sourceId"), e.get("table"))
+            != (entry.get("sourceId"), entry.get("table"))
+        ]
+        entries.append(entry)
+        save_schema(path, entries)
 
 
 def remove_schema_entries(path: Path, source_id: str) -> None:
-    save_schema(path, [e for e in load_schema(path) if e.get("sourceId") != source_id])
+    with WORKSPACE_MUTATION_LOCK:
+        save_schema(
+            path, [e for e in load_schema(path) if e.get("sourceId") != source_id]
+        )
 
 
 def load_files(path: Path) -> list[dict[str, Any]]:
@@ -49,4 +56,5 @@ def load_files(path: Path) -> list[dict[str, Any]]:
 
 
 def save_files(path: Path, entries: list[dict[str, Any]]) -> None:
-    _write(path, entries)
+    with WORKSPACE_MUTATION_LOCK:
+        _write(path, entries)

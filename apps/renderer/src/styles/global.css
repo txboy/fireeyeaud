@@ -661,6 +661,100 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
+.dbdata__sql {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.dbdata__sql-diagnostic {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--danger);
+}
+
+.dbdata__sql-diagnostic-message {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dbdata__sql-diagnostic-count {
+  flex: 0 0 auto;
+  color: var(--text-3);
+}
+
+.dbdata__sql-editor--loading {
+  min-height: 88px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--editor-bg);
+}
+
+.dbdata__sql-editor .cm-editor {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--editor-bg);
+}
+
+.dbdata__sql-editor .cm-editor.cm-focused {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.dbdata__sql-editor .cm-scroller {
+  font-family: var(--font-mono);
+  line-height: 1.55;
+  max-height: 190px;
+}
+
+.dbdata__sql-editor .cm-content {
+  min-height: 64px;
+}
+
+.dbdata__sql-editor .cm-tooltip {
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 14%);
+}
+
+.sql-hover {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 340px;
+  padding: 7px 9px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.sql-hover__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.sql-hover__muted {
+  color: var(--text-2);
+  word-break: break-word;
+}
+
+.sql-hover__badge {
+  padding: 0 5px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 16px;
+  color: var(--text-2);
+}
+
 .dbdata__actions {
   display: flex;
   align-items: center;
@@ -1695,6 +1789,20 @@ textarea.searchbox {
   border-radius: 6px;
 }
 
+.datasource-chip--clickable {
+  cursor: pointer;
+}
+
+.datasource-chip--clickable:hover {
+  background: var(--hover);
+  border-color: var(--border-strong);
+}
+
+.datasource-chip--clickable:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .datasource-chip__name {
   flex: 1;
   overflow: hidden;
@@ -2073,6 +2181,42 @@ textarea.searchbox {
   font-size: 11.5px;
   font-weight: 600;
   color: var(--text-2);
+}
+
+.datasource-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.datasource-group__head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.datasource-group__head:hover {
+  color: var(--text-1);
+}
+
+.datasource-group__count {
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--hover);
+  color: var(--text-3);
+  font-size: 10.5px;
+  font-weight: 400;
+  line-height: 16px;
 }
 
 .datasource-list {

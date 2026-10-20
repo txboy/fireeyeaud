@@ -5,7 +5,9 @@
 - 文件已删除 → 移除数据源（DuckDB 表 + 登记，不动磁盘）；
 - 文件内容变化（SHA 变化）→ 替换数据源（保持 sourceId 与表名）。
 
-幂等、增量；单个文件失败不阻塞其余。
+`full=True` 时忽略指纹缓存，重新解析并覆盖全部表格文件，用于启动/手动刷新。
+
+幂等；单个文件失败不阻塞其余。
 """
 
 from __future__ import annotations
@@ -14,11 +16,14 @@ from pathlib import Path
 from typing import Callable
 
 from ..errors import ApiError
+from .duckdb import Database
 from .importer import _sha256, delete_source, import_source, replace_source
-from .index import load_files
+from .index import load_files, load_schema, save_files, save_schema
+from .lock import WORKSPACE_MUTATION_LOCK
 from .project import load_project
 
-TABLE_SUFFIXES = (".csv", ".txt", ".xlsx", ".xlsm")
+# `.txt` 是自由文本，不参与自动导入；需要分析的自由文本走 read_file / 预览。
+TABLE_SUFFIXES = (".csv", ".xlsx", ".xlsm")
 FILE_SOURCE_TYPES = ("csv", "excel")
 Progress = Callable[[str, int, int], None]
 
@@ -41,8 +46,23 @@ def scan_table_files(root: Path) -> list[Path]:
     return out
 
 
-def sync_sources(root: Path, *, progress: Progress | None = None) -> dict:
+def sync_sources(
+    root: Path,
+    *,
+    progress: Progress | None = None,
+    full: bool = False,
+) -> dict:
     root = Path(root)
+    with WORKSPACE_MUTATION_LOCK:
+        return _sync_sources_locked(root, progress=progress, full=full)
+
+
+def _sync_sources_locked(
+    root: Path,
+    *,
+    progress: Progress | None,
+    full: bool,
+) -> dict:
     fe = root / ".fireeye"
     project = load_project(fe) or {}
     sources = {
@@ -51,6 +71,7 @@ def sync_sources(root: Path, *, progress: Progress | None = None) -> dict:
         if s.get("type") in FILE_SOURCE_TYPES
     }
     files_path = fe / "index" / "files.json"
+    schema_path = fe / "index" / "schema.json"
     fingerprints = {str(f.get("path")): f for f in load_files(files_path)}
     scanned = {str(p): p for p in scan_table_files(root)}
 
@@ -68,7 +89,7 @@ def sync_sources(root: Path, *, progress: Progress | None = None) -> dict:
         if progress is not None:
             progress("sync", done, total)
 
-    # 删除：已登记但文件已不存在
+    # 删除：已登记但文件已不存在。
     for source_id, source in list(sources.items()):
         if str(source.get("path") or "") not in scanned:
             try:
@@ -76,26 +97,106 @@ def sync_sources(root: Path, *, progress: Progress | None = None) -> dict:
                 removed.append(source_id)
             except ApiError as exc:
                 errors.append({"sourceId": source_id, "code": exc.code})
-        step()
+            step()
 
-    # 新增 / 修改
+    # 同一路径可能存在历史重复登记：保留有表的那个，其余删除。
+    groups: dict[str, list[str]] = {}
+    for source_id, source in sources.items():
+        path_str = str(source.get("path") or "")
+        if path_str in scanned:
+            groups.setdefault(path_str, []).append(source_id)
+
+    by_path: dict[str, dict] = {}
+    for path_str, ids in groups.items():
+        keep_id = next(
+            (sid for sid in ids if sources[sid].get("tables")),
+            ids[0],
+        )
+        by_path[path_str] = sources[keep_id]
+        for source_id in ids:
+            if source_id == keep_id:
+                continue
+            try:
+                delete_source(root, source_id)
+                removed.append(source_id)
+            except ApiError as exc:
+                errors.append({"sourceId": source_id, "code": exc.code})
+            step()
+
+    # 新增 / 修改 / 全量重导。
     for path_str, path in scanned.items():
-        fingerprint = fingerprints.get(path_str)
+        source = by_path.get(path_str)
         try:
-            if fingerprint is None:
+            if source is None:
                 result = import_source(root, path)
-                added.append(result["sourceId"])
-            elif fingerprint.get("sha256") != _sha256(path):
-                source_id = str(fingerprint.get("sourceId"))
-                source = sources.get(source_id)
-                if source is None:
-                    result = import_source(root, path)
-                    added.append(result["sourceId"])
+                if result["sourceId"] in sources:
+                    updated.append(result["sourceId"])
                 else:
+                    added.append(result["sourceId"])
+            else:
+                changed = (
+                    full
+                    or path_str not in fingerprints
+                    or fingerprints[path_str].get("sha256") != _sha256(path)
+                )
+                if changed:
+                    source_id = str(source.get("id"))
                     replace_source(root, source, path)
                     updated.append(source_id)
         except ApiError as exc:
             errors.append({"path": path_str, "code": exc.code})
         step()
+
+    # 清理孤立指纹与 schema 条目，避免 project 重建后旧索引继续挡住导入。
+    project = load_project(fe) or {}
+    all_sources = project.get("dataSources", [])
+    all_ids = {str(s.get("id")) for s in all_sources}
+    file_ids = {
+        str(s.get("id"))
+        for s in all_sources
+        if s.get("type") in FILE_SOURCE_TYPES
+    }
+    valid_file_tables = {
+        str(table)
+        for s in all_sources
+        if s.get("type") in FILE_SOURCE_TYPES
+        for table in s.get("tables", [])
+    }
+
+    kept_files: list[dict] = []
+    seen_paths: set[str] = set()
+    for fingerprint in load_files(files_path):
+        path_str = str(fingerprint.get("path") or "")
+        source_id = str(fingerprint.get("sourceId") or "")
+        if path_str not in scanned or source_id not in file_ids:
+            continue
+        if path_str in seen_paths:
+            continue
+        seen_paths.add(path_str)
+        kept_files.append(fingerprint)
+    save_files(files_path, kept_files)
+
+    kept_schema: list[dict] = []
+    drop_tables: set[str] = set()
+    for entry in load_schema(schema_path):
+        source_id = str(entry.get("sourceId") or "")
+        table = str(entry.get("table") or "")
+        if source_id not in all_ids:
+            if table and not entry.get("connectionId"):
+                drop_tables.add(table)
+            continue
+        if source_id in file_ids and table not in valid_file_tables:
+            if table:
+                drop_tables.add(table)
+            continue
+        kept_schema.append(entry)
+    if drop_tables:
+        db = Database(fe / "workspace.duckdb")
+        try:
+            for table in drop_tables:
+                db.drop_table(table)
+        finally:
+            db.close()
+    save_schema(schema_path, kept_schema)
 
     return {"added": added, "removed": removed, "updated": updated, "errors": errors}
