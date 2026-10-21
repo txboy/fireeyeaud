@@ -75,7 +75,7 @@ class SqlChatMessage(BaseModel):
 
 
 class SqlChatBody(BaseModel):
-    """SQL 助手对话：自然语言 → 只读 SQL（不执行、不读数据）。"""
+    """SQL 助手对话：自然语言 → 只读 SQL（可读取样本行用于选表，不执行模型生成的 SQL）。"""
 
     scope: str = "global"
     connectionId: str
@@ -208,7 +208,8 @@ def _known_model_id(root, model_id: str | None) -> str | None:
 async def db_sql_chat(body: SqlChatBody) -> EventSourceResponse:
     """SQL 助手：自然语言 → 只读 SQL，流式返回。
 
-    只校验连接存在与驱动，不取密码、不连库、不执行 SQL、不回传表数据。
+    可按表名读取样本行（`SELECT ... LIMIT 5`，SQL 由服务端拼接），但不执行模型生成的
+    SQL、不返回全量数据；凭据只在服务端用于建连，不进提示词与事件。
     """
     root = workspace_manager.root
     if root is None:

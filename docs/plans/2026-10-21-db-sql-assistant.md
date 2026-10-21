@@ -513,13 +513,15 @@ async def db_sql_chat(body: SqlChatBody) -> EventSourceResponse:
     conn = db.get_connection(body.connectionId, body.scope, root)
     if conn is None:
         raise ApiError("E_NOT_FOUND", 404, "error.notFound", {"id": body.connectionId})
-    # 只校验驱动/表名，不取密码、不连库
+    # 校验连接存在 + 驱动；凭据仅在服务端用于读取样本行，绝不进入提示词
     return EventSourceResponse(stream_sql_assistant(root=root, body=body))
 ```
 
 要点：
 
-- 不调用 `db.get_secret`，不建立数据库连接。
+- 不调用 `db.get_secret` 读取模型可生成的内容；凭据只在服务端用于建立连接以读取样本行。
+- 只允许**读取样本行**（`SELECT * FROM <表> LIMIT 5`）：SQL 由服务端按表名拼接，
+  **不接受模型生成的 SQL**，因此不存在写入、注入或全表扫描的通道。
 - 连接存在性校验用于避免任意 connectionId 探测；驱动以服务端连接记录为准，
   与请求 `driver` 不一致时以服务端为准。
 - 429/503 等非流式错误在响应建立前返回；流内错误通过 `error` 事件返回。
@@ -544,6 +546,33 @@ async def db_sql_chat(body: SqlChatBody) -> EventSourceResponse:
 - 客户端断开时停止迭代（`EventSourceResponse` 会取消生成器）。
 - 模型调用使用 `build_chat_model(root, body.modelId)` + `astream(messages)`，
   逐 chunk 取文本增量；忽略空增量。
+
+### 样本行工具（B2）
+
+模型只能给**表名**，不能给 SQL。服务端据此拼接并执行：
+
+```python
+SELECT * FROM <quote_ident(driver, table)> LIMIT 5
+```
+
+| 约束 | 值 |
+|---|---|
+| 轮次上限 | 3（超过则停止调工具，直接出最终答复） |
+| 行 / 列 / 单元格 | 5 行 / 50 列 / 200 字符（超出加 `…`） |
+| 允许的表 | 请求上下文里已反射的表（含当前表）；其他表名返回 `ok:false`，不连库 |
+| 连接 | 只能是本路由的 `connectionId`，不接受参数切换 |
+| 授权 | 不调用 `check_authorization`（与表数据预览一致）；仅在 `/db/sql-chat` 内绑定 |
+| 凭据 | 路由取 secret 后以闭包传入执行器，不写进 `SqlChatBody`、不进提示词/事件 |
+| 失败 | 查询失败 → `tool_result` 的 `ok:false` + 摘要，流继续，由模型解释或改用其他表 |
+
+新增 SSE 事件（复用主 Agent 的命名与字段）：
+
+```json
+{"type":"tool_call","data":{"callId":"call_1","tool":"preview_table","params":{"table":"voucher"}}}
+{"type":"tool_result","data":{"callId":"call_1","summary":"voucher：5 行 × 8 列","ok":true}}
+```
+
+前端在助手消息内渲染这些步骤（默认展开），并在面板输入区上方明示「AI 会读取该表前 5 行样本」。
 
 ## 文案 key
 
@@ -590,7 +619,11 @@ async def db_sql_chat(body: SqlChatBody) -> EventSourceResponse:
 安全约束：
 
 - 上下文永远不包含密码、凭据引用、连接串。
-- 后端接口不执行 SQL、不读取数据、不返回表数据。
+- 后端**可以读取样本行**用于选表，但：只读、每表最多 5 行、SQL 由服务端按表名拼接，
+  **不执行模型生成的任何 SQL**；不返回全量数据、不导出、不落盘。
+- 样本行是真实数据：面板必须明示「AI 会读取样本行」，让用户知道数据会随提示词发出。
+- 走**预览通道**（与表数据预览一致），不套用审计用的表/字段授权；该 tool 只在
+  `/db/sql-chat` 内绑定，绝不注册进 `tools/registry.py`，避免审计流程借此绕过授权。
 - 模型输出视为不可信文本，经 `Markdown` 转义/高亮渲染。
 - 「直接运行」走现有只读校验，不新增执行通道。
 
@@ -614,7 +647,10 @@ async def db_sql_chat(body: SqlChatBody) -> EventSourceResponse:
 - 连接不存在 → 404。
 - 正常请求 → `text/event-stream`，事件顺序 `status → token* → done`。
 - 模型抛 `ApiError` → `error` 事件且 `messageKey` 正确。
-- 请求不触发 `db.get_secret` / `db_engine.run_query`（用 monkeypatch 断言未调用）。
+- 请求不把凭据 / 连接串写进提示词或任何 SSE 事件（断言 secret 不出现在输出里）。
+- 模型要求执行写语句或任意 SQL 时，实际执行的只有服务端拼接的 `SELECT ... LIMIT 5`
+  （断言 `run_query` 收到的 SQL 恒为 SELECT）。
+- 工具轮次超过上限后停止调用工具并产出最终答复。
 - `messages` 超限被截断而非 500。
 
 模型流用 monkeypatch 替换 `build_chat_model`，返回一个假 `astream` 异步生成器。
@@ -696,4 +732,5 @@ git diff --check
 - 对话仅内存保存，重启丢失；若需跨重启，可后续写入工作区 JSON 或本地存储。
 - 第一版不做模型选择器，使用系统默认模型。
 - 不做服务端 SQL 语法预校验；语法错误由现有编辑器诊断与运行错误覆盖。
-- 不做多轮自动执行（Agent 不直接查库），避免误执行与权限边界扩大。
+- 不做多轮自动执行（Agent 不直接执行模型生成的 SQL）。最多 3 轮「按表名读样本行」，
+  SQL 恒由服务端拼接为 `SELECT ... LIMIT 5`，避免误执行与权限边界扩大。
