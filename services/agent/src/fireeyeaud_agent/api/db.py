@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import json
+from typing import Any, Literal
+
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
+from sse_starlette.sse import EventSourceResponse
 
+from ..agent.sql_assistant import stream_sql_assistant
 from ..errors import ApiError
 from ..store import authorization, db, db_engine
 from ..store.workspace import workspace_manager
@@ -62,6 +67,24 @@ class ValidateSqlBody(BaseModel):
 
     driver: str
     sql: str
+
+
+class SqlChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+
+class SqlChatBody(BaseModel):
+    """SQL 助手对话：自然语言 → 只读 SQL（不执行、不读数据）。"""
+
+    scope: str = "global"
+    connectionId: str
+    table: str
+    driver: str
+    messages: list[SqlChatMessage] = []
+    context: dict[str, Any] = {}
+    locale: str | None = None
+    modelId: str | None = None
 
 
 class ConnectionPatch(BaseModel):
@@ -170,6 +193,45 @@ def reflect_connection(
 def validate_sql_syntax(body: ValidateSqlBody) -> dict:
     """编辑器实时语法检查：只解析，不访问数据库。"""
     return db_engine.validate_sql_syntax(body.sql, body.driver)
+
+
+@router.post("/db/sql-chat")
+async def db_sql_chat(body: SqlChatBody) -> EventSourceResponse:
+    """SQL 助手：自然语言 → 只读 SQL，流式返回。
+
+    只校验连接存在与驱动，不取密码、不连库、不执行 SQL、不回传表数据。
+    """
+    root = workspace_manager.root
+    if root is None:
+        raise ApiError("E_NO_WORKSPACE", 409, "error.noWorkspace")
+    conn = db.get_connection(body.connectionId, body.scope, root)
+    if conn is None:
+        raise ApiError("E_NOT_FOUND", 404, "error.notFound", {"id": body.connectionId})
+
+    # 驱动以服务端连接记录为准，避免前端谎报方言。
+    driver = str(conn.get("driver") or body.driver)
+    context = body.context if isinstance(body.context, dict) else {}
+    connection_ctx = context.get("connection")
+    context = {
+        **context,
+        "connection": {
+            **(connection_ctx if isinstance(connection_ctx, dict) else {}),
+            "id": conn.get("id", body.connectionId),
+            "name": conn.get("name") or "",
+            "driver": driver,
+            "database": conn.get("database"),
+        },
+    }
+    trusted = body.model_copy(update={"driver": driver, "context": context})
+
+    async def event_stream():
+        async for envelope in stream_sql_assistant(root=root, body=trusted):
+            yield {
+                "event": "message",
+                "data": json.dumps(envelope, ensure_ascii=False, default=str),
+            }
+
+    return EventSourceResponse(event_stream(), media_type="text/event-stream")
 
 
 @router.post("/db/connections/{connection_id}/query")
