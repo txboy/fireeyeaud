@@ -195,6 +195,15 @@ def validate_sql_syntax(body: ValidateSqlBody) -> dict:
     return db_engine.validate_sql_syntax(body.sql, body.driver)
 
 
+def _known_model_id(root, model_id: str | None) -> str | None:
+    """只接受已配置的模型 id；未知 id 返回 None（由 build_chat_model 取默认模型）。"""
+    if not model_id:
+        return None
+    from ..config.models import select_profile
+
+    return model_id if select_profile(root, model_id) is not None else None
+
+
 @router.post("/db/sql-chat")
 async def db_sql_chat(body: SqlChatBody) -> EventSourceResponse:
     """SQL 助手：自然语言 → 只读 SQL，流式返回。
@@ -223,6 +232,9 @@ async def db_sql_chat(body: SqlChatBody) -> EventSourceResponse:
         },
     }
     trusted = body.model_copy(update={"driver": driver, "context": context})
+
+    # modelId 只允许指向已配置的模型；未知 / 未配置一律回退默认模型（计划：v1 用默认模型）。
+    trusted = trusted.model_copy(update={"modelId": _known_model_id(root, body.modelId)})
 
     async def event_stream():
         async for envelope in stream_sql_assistant(root=root, body=trusted):

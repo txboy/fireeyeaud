@@ -249,3 +249,41 @@ test('null result and null error are passed through', () => {
   assert.equal(ctx.total, null);
   assert.equal(ctx.executedSql, null);
 });
+
+test('drops secret-named result columns before sending context', () => {
+  const ctx = buildDbSqlContext({
+    tab: tab(),
+    tables: [],
+    currentSql: '',
+    executedSql: null,
+    result: result(
+      [[1, 'hunter2', '10.0.0.9', 'ok']],
+      ['id', 'password', 'host', 'note'],
+    ),
+    error: null,
+    page: 1,
+    pageSize: 50,
+    total: 1,
+  });
+  assert.deepEqual(ctx.result?.columns, ['id', 'note']);
+  assert.deepEqual(ctx.result?.rows, [[1, 'ok']]);
+  assert.equal(ctx.resultTruncated, true);
+});
+
+test('caps a huge current SQL so the 60KB budget is enforceable', () => {
+  const huge = `SELECT '${'a'.repeat(300_000)}'`;
+  const ctx = buildDbSqlContext({
+    tab: tab(),
+    tables: [],
+    currentSql: huge,
+    executedSql: huge,
+    result: null,
+    error: null,
+    page: 1,
+    pageSize: 50,
+    total: null,
+  });
+  assert.ok(ctx.currentSql.length < 10_000);
+  assert.ok((ctx.executedSql ?? '').length < 10_000);
+  assert.ok(JSON.stringify(ctx).length <= 60_000);
+});

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -35,6 +36,18 @@ MAX_TABLES = 40
 MAX_HISTORY_MESSAGES = 40
 MAX_HISTORY_CHARS = 60_000
 MAX_MESSAGE_CHARS = 8_000
+# 单条 SQL / 错误文本上限：只裁结果与表结构无法压住超长 SQL。
+MAX_SQL_CHARS = 8_000
+MAX_ERROR_CHARS = 2_000
+# 整个请求（系统提示词 + 上下文 + 历史）的总字符上限。
+MAX_PROMPT_CHARS = 120_000
+
+# 自由文本里的连接串与主机:端口（列注释、表注释、错误信息都可能带）。
+# 注意：两段都必须「有序、无嵌套量词」——否则长文本上正则回溯退化成平方级
+# （曾用 [a-zA-Z0-9+.-]* 匹配 300KB 的 SQL 会卡死数分钟）。
+_URL_RE = re.compile(r"[a-zA-Z][a-zA-Z0-9+.-]{0,31}://[^\s\"',;]{0,2048}")
+_HOSTPORT_RE = re.compile(r"(?<![\d.])\d{1,3}(?:\.\d{1,3}){3}(?::\d{1,5})?(?![\d.])")
+_SECRET_VALUE = "***"
 
 _DIALECTS = {
     "sqlite": "SQLite",
@@ -77,6 +90,9 @@ SYSTEM_PROMPT = """你是「火眼审计助手」的数据库查询助手，帮�
 ## 语言
 - 使用与用户相同的语言回复（参考 locale：{locale}）。
 
+## 裁切说明
+{truncation}
+
 ## 上下文
 {context}"""
 
@@ -109,6 +125,12 @@ _SECRET_KEYS = frozenset(
 )
 
 
+def _scrub_text(text: str) -> str:
+    """自由文本脱敏：连接串整体替换，内网 IP:端口 只保留占位符。"""
+    cleaned = _URL_RE.sub(_SECRET_VALUE, text)
+    return _HOSTPORT_RE.sub(_SECRET_VALUE, cleaned)
+
+
 def _scrub(value: Any, depth: int = 0) -> Any:
     """递归剔除凭据类字段：上下文不允许把密码 / 凭据引用 / 连接串送给模型。"""
     if depth > 6:
@@ -117,11 +139,24 @@ def _scrub(value: Any, depth: int = 0) -> Any:
         return {
             k: _scrub(v, depth + 1)
             for k, v in value.items()
-            if str(k) not in _SECRET_KEYS
+            if str(k).lower() not in _SECRET_KEYS
         }
     if isinstance(value, list):
         return [_scrub(v, depth + 1) for v in value]
+    if isinstance(value, str):
+        return _scrub_text(value)
     return value
+
+
+def _scrub_result_columns(
+    columns: list[Any], rows: list[list[Any]]
+) -> tuple[list[Any], list[list[Any]], bool]:
+    """结果列名同样是数据：名为 password / host / token 的列整体丢弃。"""
+    keep = [i for i, name in enumerate(columns) if str(name).lower() not in _SECRET_KEYS]
+    dropped = len(keep) != len(columns)
+    kept_columns = [columns[i] for i in keep]
+    kept_rows = [[row[i] if i < len(row) else None for i in keep] for row in rows]
+    return kept_columns, kept_rows, dropped
 
 
 def _trim_rows(context: dict[str, Any]) -> dict[str, Any]:
@@ -146,9 +181,13 @@ def _trim_rows(context: dict[str, Any]) -> dict[str, Any]:
         values = list(row)[:MAX_RESULT_COLS]
         if len(list(row)) > MAX_RESULT_COLS:
             truncated = True
-        trimmed.append([_truncate(v) for v in values])
+        trimmed.append([_truncate(_scrub_text(v)) if isinstance(v, str) else _truncate(v) for v in values])
     # 每行按列数对齐，避免前端行列不齐导致误读
     trimmed = [[*r, *([None] * (len(columns) - len(r)))] for r in trimmed]
+
+    columns, trimmed, dropped = _scrub_result_columns(columns, trimmed)
+    if dropped:
+        truncated = True
 
     data["result"] = {**result, "columns": columns, "rows": trimmed}
     data["resultTruncated"] = truncated
@@ -189,6 +228,20 @@ def _serialize(context: dict[str, Any]) -> str:
     return json.dumps(context, ensure_ascii=False, default=str)
 
 
+def _cap_sql_fields(context: dict[str, Any]) -> dict[str, Any]:
+    """超长的当前 / 已执行 SQL 截断并打标记（否则只裁结果压不到预算）。"""
+    data = dict(context)
+    for field, flag in (("currentSql", "currentSqlTruncated"), ("executedSql", "executedSqlTruncated")):
+        value = data.get(field)
+        if isinstance(value, str) and len(value) > MAX_SQL_CHARS:
+            data[field] = value[:MAX_SQL_CHARS] + "\n-- …（已截断）"
+            data[flag] = True
+    error = data.get("error")
+    if isinstance(error, str) and len(error) > MAX_ERROR_CHARS:
+        data["error"] = error[:MAX_ERROR_CHARS] + "…"
+    return data
+
+
 def compact_context(context: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHARS) -> str:
     """按上限裁剪上下文并序列化。
 
@@ -199,7 +252,7 @@ def compact_context(context: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
     if not isinstance(context, dict):
         context = {}
 
-    data = _trim_rows(_trim_tables(_scrub(context)))
+    data = _cap_sql_fields(_trim_rows(_trim_tables(_scrub(context))))
     text = _serialize(data)
 
     def mark_tables() -> None:
@@ -214,14 +267,14 @@ def compact_context(context: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
         mark_tables()
         text = _serialize(data)
 
-    # 3) 结果行从尾部减少
+    # 3) 结果行从尾部减少（rows 为空时必须跳出，否则 rows[:0] 永远不变 → 死循环）
     while len(text) > max_chars:
         result = data.get("result")
         rows = list(result.get("rows") or []) if isinstance(result, dict) else []
         if not rows:
             break
-        rows = rows[: max(0, len(rows) - max(1, len(rows) // 4))]
-        data["result"] = {**result, "rows": rows}
+        keep = max(0, len(rows) - max(1, len(rows) // 4))
+        data["result"] = {**result, "rows": rows[:keep]}
         mark_result()
         text = _serialize(data)
 
@@ -246,8 +299,21 @@ def compact_context(context: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
         text = _serialize(data)
 
     if len(text) > max_chars:
-        # 兜底：整段硬截断，保证不把超长请求发给模型
-        text = text[:max_chars]
+        # 兜底：硬截断会把 JSON 截坏，改为整体降级为纯文本说明（模型仍能看懂）
+        minimal = {
+            "note": "上下文超出预算，已省略；请依据表结构与用户问题作答",
+            "connection": data.get("connection"),
+            "table": data.get("table"),
+            "tablesTruncated": True,
+            "result": None,
+            "resultTruncated": True,
+        }
+        text = _serialize(minimal)
+        if len(text) > max_chars:
+            text = json.dumps(
+                {"note": "上下文超出预算，已省略", "tablesTruncated": True},
+                ensure_ascii=False,
+            )
     return text
 
 
@@ -281,6 +347,18 @@ def normalize_history(history: list[dict[str, str]] | None) -> list[dict[str, st
     return kept
 
 
+def _truncation_note(context: dict[str, Any]) -> str:
+    """把裁剪标记写进提示词，让模型知道「列表/结果不完整」，别当全量数据下结论。"""
+    notes: list[str] = []
+    if context.get("tablesTruncated"):
+        notes.append("- 表结构列表或列数已截断，缺少的表/列不要猜测。")
+    if context.get("resultTruncated"):
+        notes.append("- 当前结果只是截断后的样本（行/列/敏感列已省略）。")
+    if context.get("currentSqlTruncated") or context.get("executedSqlTruncated"):
+        notes.append("- 编辑器中的 SQL 过长已截断，只可参考其结构。")
+    return "\n".join(notes) if notes else "- 无（上下文完整）。"
+
+
 def _dialect_of(context: dict[str, Any]) -> str:
     conn = context.get("connection") if isinstance(context.get("connection"), dict) else {}
     driver = str(conn.get("driver") or "").lower()
@@ -299,21 +377,49 @@ def build_sql_assistant_messages(
     history: list[dict[str, str]],
     locale: str | None,
 ) -> list[BaseMessage]:
-    """组装 [SystemMessage(含上下文), *历史消息]。"""
-    context_text = compact_context(context or {})
-    system = SYSTEM_PROMPT.format(
-        dialect=_dialect_of(context or {}),
-        ident_hint=_ident_hint_of(context or {}),
-        locale=locale or "zh-CN",
-        context=context_text,
-    )
-    messages: list[BaseMessage] = [SystemMessage(content=system)]
-    for item in normalize_history(history):
-        if item["role"] == "user":
-            messages.append(HumanMessage(content=item["content"]))
-        else:
-            messages.append(AIMessage(content=item["content"]))
-    return messages
+    """组装 [SystemMessage(含上下文), *历史消息]，并对**整个请求**施加总量上限。"""
+    messages: list[BaseMessage] = [SystemMessage(content="")]
+    context_budget = MAX_CONTEXT_CHARS
+    history = normalize_history(history)
+
+    # 整体超限：先收紧上下文预算，再把历史从最旧的开始丢弃。
+    while True:
+        context_text = compact_context(context or {}, max_chars=context_budget)
+        try:
+            flags = json.loads(context_text)
+        except (TypeError, ValueError):
+            flags = {}
+        system = SYSTEM_PROMPT.format(
+            dialect=_dialect_of(context or {}),
+            ident_hint=_ident_hint_of(context or {}),
+            locale=locale or "zh-CN",
+            truncation=_truncation_note(flags if isinstance(flags, dict) else {}),
+            context=context_text,
+        )
+        messages = [SystemMessage(content=system)]
+        for item in history:
+            if item["role"] == "user":
+                messages.append(HumanMessage(content=item["content"]))
+            else:
+                messages.append(AIMessage(content=item["content"]))
+
+        overflow = sum(len(str(m.content)) for m in messages) - MAX_PROMPT_CHARS
+        if overflow <= 0:
+            return messages
+
+        if history:
+            # 至少丢一条，丢的越多调用次数越少
+            drop = max(1, overflow // MAX_MESSAGE_CHARS + 1)
+            history = history[drop:]
+            # 历史被裁后若首条是助手消息，补上占位用户消息，保持对话结构合法
+            if history and history[0]["role"] == "assistant":
+                history = [{"role": "user", "content": "（更早的对话已省略）"}, *history]
+            continue
+
+        # 历史已空仍超限 → 收紧上下文预算后重试
+        if context_budget <= 1_000:
+            return messages
+        context_budget = max(1_000, context_budget // 2)
 
 
 def _envelope(kind: str, seq: int, data: dict[str, Any]) -> dict[str, Any]:

@@ -139,6 +139,34 @@ def test_context_never_carries_secrets() -> None:
         assert secret not in text
 
 
+def test_secret_named_result_columns_are_dropped() -> None:
+    """查询结果里名为 password / host / token 的列同属敏感数据，不得进入上下文。"""
+    context = _context()
+    context["result"] = {
+        "columns": ["id", "password", "host", "apiKey", "note"],
+        "rows": [[1, "hunter2", "10.0.0.9", "sk-live-xyz", "ok"]],
+    }
+    data = json.loads(compact_context(context))
+
+    assert data["result"]["columns"] == ["id", "note"]
+    assert data["result"]["rows"] == [[1, "ok"]]
+    text = _text_of(build_sql_assistant_messages(context=context, history=[], locale="zh-CN"))
+    for secret in ("hunter2", "10.0.0.9", "sk-live-xyz"):
+        assert secret not in text
+
+
+def test_host_like_values_and_connection_strings_are_masked() -> None:
+    """自由文本（列注释 / 表注释 / 错误信息）里的主机:端口与连接串也要脱敏。"""
+    context = _context()
+    context["table"]["columns"][1]["comment"] = "见 10.0.0.9:5432 库"
+    context["error"] = "could not connect: postgresql://admin:hunter2@10.0.0.9:5432/book"
+    text = _text_of(build_sql_assistant_messages(context=context, history=[], locale="zh-CN"))
+
+    assert "hunter2" not in text
+    assert "10.0.0.9" not in text
+    assert "postgresql://" not in text
+
+
 def test_compact_context_caps_result_rows() -> None:
     text = compact_context(_context(rows=21))
     data = json.loads(text)
@@ -180,6 +208,39 @@ def test_compact_context_respects_max_chars() -> None:
     assert len(text) <= 3000
 
 
+def test_compact_context_bounds_huge_sql() -> None:
+    """超长的当前 / 已执行 SQL 也必须受限：只裁结果与表结构永远压不下去。"""
+    context = _context()
+    context["currentSql"] = "SELECT '" + "a" * 300_000 + "'"
+    context["executedSql"] = "SELECT '" + "b" * 300_000 + "'"
+
+    # 第一步：SQL 字段先被截断（默认预算内就应生效）
+    data = json.loads(compact_context(context))
+    assert len(data["currentSql"]) < 10_000
+    assert data["currentSqlTruncated"] is True
+    assert data["executedSqlTruncated"] is True
+
+    # 第二步：极端小预算下仍不超过上限，且输出始终是合法 JSON
+    text = compact_context(context, max_chars=5000)
+    assert len(text) <= 5000
+    minimal = json.loads(text)
+    assert minimal["tablesTruncated"] is True
+    assert not minimal.get("currentSql")
+
+
+def test_build_messages_caps_the_whole_prompt() -> None:
+    """整体请求（提示词 + 上下文 + 历史）都要受上限约束，而不是只限制上下文。"""
+    context = _context()
+    context["currentSql"] = "SELECT '" + "c" * 200_000 + "'"
+    history = [
+        {"role": "user" if i % 2 == 0 else "assistant", "content": "h" * 8000}
+        for i in range(40)
+    ]
+    messages = build_sql_assistant_messages(context=context, history=history, locale="zh-CN")
+    total = sum(len(m.content) for m in messages)
+    assert total <= 120_000
+
+
 def test_compact_context_keeps_small_context_intact() -> None:
     context = _context()
     data = json.loads(compact_context(context))
@@ -187,6 +248,17 @@ def test_compact_context_keeps_small_context_intact() -> None:
     assert data["resultTruncated"] is False
     assert len(data["result"]["rows"]) == 2
     assert data["tables"] == context["tables"]
+
+
+def test_truncation_is_disclosed_to_the_model() -> None:
+    """裁剪后必须在提示词里说明「不完整」，否则模型会把样本当全量下结论。"""
+    context = _context(rows=30)
+    system = build_sql_assistant_messages(context=context, history=[], locale="zh-CN")[0]
+    assert "截断" in system.content
+    assert "样本" in system.content.split("## 上下文")[0]
+
+    clean = build_sql_assistant_messages(context=_context(), history=[], locale="zh-CN")[0]
+    assert "无（上下文完整）" in clean.content
 
 
 def test_normalize_history_caps_count_and_size() -> None:

@@ -14,6 +14,35 @@ const MAX_RESULT_ROWS = 20;
 const MAX_RESULT_COLS = 100;
 const MAX_CELL_CHARS = 500;
 const MAX_CONTEXT_CHARS = 60_000;
+/** 单条 SQL / 错误文本上限：只裁结果压不住超长 SQL。 */
+const MAX_SQL_CHARS = 8_000;
+const MAX_ERROR_CHARS = 2_000;
+
+/**
+ * 结果列名同样是数据：名为 password / host / token 的列不发给模型。
+ * 与后端 `sql_assistant._SECRET_KEYS` 保持一致（后端另有兜底）。
+ */
+const SECRET_KEYS = new Set([
+  'password',
+  'passwd',
+  'pwd',
+  'credref',
+  'secret',
+  'apikey',
+  'apikeyref',
+  'token',
+  'host',
+  'port',
+  'url',
+  'connectionstring',
+  'authorization',
+  'username',
+]);
+
+function capText(value: string | null, limit: number): string | null {
+  if (value == null) return null;
+  return value.length > limit ? `${value.slice(0, limit)}\n-- …（已截断）` : value;
+}
 
 export interface DbSqlContextInput {
   tab: DbDataTab;
@@ -66,7 +95,20 @@ function compactResult(
     if (row.length > MAX_RESULT_COLS) truncated = true;
     return values.map(truncateCell);
   });
-  return { result: { columns, rows: trimmedRows }, truncated };
+
+  // 敏感列名整体丢弃（列与对应单元格一起），否则「密码 / 主机」列会原样进入提示词。
+  const keep = columns
+    .map((name, index) => (SECRET_KEYS.has(String(name).toLowerCase()) ? -1 : index))
+    .filter((index) => index >= 0);
+  if (keep.length !== columns.length) {
+    truncated = true;
+    columns = keep.map((index) => columns[index]);
+    rows = trimmedRows.map((row) => keep.map((index) => row[index] ?? null));
+  } else {
+    rows = trimmedRows;
+  }
+
+  return { result: { columns, rows }, truncated };
 }
 
 /** 当前表始终保留；其余表按上限截断，超出的丢弃。 */
@@ -136,11 +178,11 @@ export function buildDbSqlContext(input: DbSqlContextInput): DbSqlChatContext {
     },
     tables: tables.slice(1),
     tablesTruncated,
-    currentSql: input.currentSql,
-    executedSql: input.executedSql,
+    currentSql: capText(input.currentSql, MAX_SQL_CHARS) ?? '',
+    executedSql: capText(input.executedSql, MAX_SQL_CHARS),
     result,
     resultTruncated,
-    error: input.error,
+    error: capText(input.error, MAX_ERROR_CHARS),
     page: input.page,
     pageSize: input.pageSize,
     total: input.total,

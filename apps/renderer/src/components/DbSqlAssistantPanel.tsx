@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CornerDownLeft, Send, Sparkles, Square, Trash2, X } from 'lucide-react';
 import type { DbQueryResult, DbTableSchema } from '@fireeyeaud/shared';
-import { streamDbSqlChat, type DbSqlChatMessage } from '../lib/api';
+import { streamDbSqlChat } from '../lib/api';
 import { buildDbSqlContext } from '../lib/dbSqlContext';
+import { buildSqlChatHistory } from '../lib/dbSqlHistory';
 import {
   abortThread,
   getThread,
@@ -14,9 +15,6 @@ import { useConfirmStore } from '../store/confirm';
 import type { DbDataTab } from '../store/ui';
 import { Markdown } from './Markdown';
 
-/** 随请求发送的历史消息上限（与后端保持一致：最近 20 条 / 总计 40KB）。 */
-const HISTORY_LIMIT = 20;
-const HISTORY_CHARS = 40_000;
 /** 用户停在底部附近时才自动跟随流式输出。 */
 const STICK_THRESHOLD = 48;
 
@@ -35,19 +33,6 @@ export interface DbSqlAssistantPanelProps {
   onInsert: (sql: string) => void;
   onRun: (sql: string) => void;
   onClose: () => void;
-}
-
-/** 取最近 N 条、总字符数不超限的历史消息。 */
-function recentHistory(messages: DbSqlChatMessage[]): DbSqlChatMessage[] {
-  const tail = messages.slice(-HISTORY_LIMIT);
-  const kept: DbSqlChatMessage[] = [];
-  let total = 0;
-  for (let i = tail.length - 1; i >= 0; i -= 1) {
-    total += tail[i].content.length;
-    if (total > HISTORY_CHARS) break;
-    kept.unshift(tail[i]);
-  }
-  return kept;
 }
 
 /**
@@ -86,6 +71,15 @@ export function DbSqlAssistantPanel(props: DbSqlAssistantPanelProps) {
     el.scrollTop = el.scrollHeight;
   }, [thread.messages, thread.busy]);
 
+  // 生成中关闭面板（或切走该 tab）即中断请求：保留已生成内容并标记「已停止生成」。
+  // 仍在运行的请求不会被 abort（清空 / 已完成），不会误伤。
+  useEffect(() => {
+    const tabId = tab.id;
+    return () => {
+      useDbSqlAssistantStore.getState().abortThread(tabId);
+    };
+  }, [tab.id]);
+
   const onScroll = () => {
     const el = listRef.current;
     if (!el) return;
@@ -94,9 +88,11 @@ export function DbSqlAssistantPanel(props: DbSqlAssistantPanelProps) {
 
   const send = async (text: string) => {
     const content = text.trim();
-    if (!content || thread.busy) return;
+    // 用 getState() 判断，而不是渲染闭包：同一 tick 里连按两次 Enter 时闭包的
+    // busy 仍是 false，会发出两个请求并让后一个 abort 掉前一个。
+    if (!content || getThread(tab.id).busy) return;
 
-    const history: DbSqlChatMessage[] = thread.messages
+    const history = getThread(tab.id).messages
       .filter((m) => m.content.trim().length > 0)
       .map((m) => ({ role: m.role, content: m.content }));
 
@@ -116,7 +112,7 @@ export function DbSqlAssistantPanel(props: DbSqlAssistantPanelProps) {
           connectionId: tab.connectionId,
           table: tab.table.table,
           driver: tab.driver,
-          messages: [...recentHistory(history), { role: 'user', content }],
+          messages: buildSqlChatHistory(history, content),
           context: buildDbSqlContext({
             tab,
             tables,

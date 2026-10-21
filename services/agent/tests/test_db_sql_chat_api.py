@@ -179,6 +179,39 @@ async def test_sql_chat_never_touches_the_database(tmp_path, monkeypatch) -> Non
     assert calls == []
 
 
+async def test_sql_chat_ignores_unknown_model_id(tmp_path, monkeypatch) -> None:
+    """modelId 只能指向已配置的模型；未知 id 回退默认模型，而不是把客户端给的任意值透传。"""
+    monkeypatch.setenv("FIREYEAUD_GLOBAL_DIR", str(tmp_path / "global"))
+    captured: dict = {}
+
+    class Capturing:
+        async def astream(self, messages):
+            captured["system"] = messages[0].content
+            yield AIMessageChunk(content="ok")
+
+    import fireeyeaud_agent.config.models as models_mod
+
+    seen: list = []
+
+    def build(root, model_id=None):
+        seen.append(model_id)
+        return Capturing()
+
+    monkeypatch.setattr(models_mod, "build_chat_model", build)
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        conn = await _open(client, tmp_path)
+        body = _body(conn["id"], modelId="not-a-real-model")
+        async with client.stream("POST", "/api/v1/db/sql-chat", json=body) as resp:
+            assert resp.status_code == 200
+            _ = "".join([chunk async for chunk in resp.aiter_text()])
+        await client.post("/api/v1/workspaces/close")
+
+    assert seen == [None]
+
+
 async def test_sql_chat_truncates_oversized_messages(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("FIREYEAUD_GLOBAL_DIR", str(tmp_path / "global"))
     seen: list = []

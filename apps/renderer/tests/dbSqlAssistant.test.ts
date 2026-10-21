@@ -87,6 +87,22 @@ test('fail records errorKey, clears busy and leaves content untouched', () => {
   assert.equal(thread.messages[0].content, '部分');
 });
 
+test('fail removes an empty assistant bubble but keeps partial output', () => {
+  const store = useDbSqlAssistantStore.getState();
+  // 尚未产出任何 token 就失败 → 不留空气泡
+  const empty = store.startAssistant(TAB);
+  store.fail(TAB, empty.id, 'error.llmUnavailable');
+  assert.deepEqual(getThread(TAB).messages, []);
+  assert.equal(getThread(TAB).errorKey, 'error.llmUnavailable');
+
+  // 已经流出一部分再失败 → 保留内容
+  const partial = store.startAssistant(TAB);
+  store.appendDelta(TAB, partial.id, '部分');
+  store.fail(TAB, partial.id, 'error.internal');
+  assert.equal(getThread(TAB).messages.length, 1);
+  assert.equal(getThread(TAB).messages[0].content, '部分');
+});
+
 test('threads are isolated per tab id', () => {
   const store = useDbSqlAssistantStore.getState();
   store.appendUser(TAB, 'a');
@@ -124,6 +140,21 @@ test('clearAll empties every thread and aborts in-flight requests', () => {
 
   assert.deepEqual(useDbSqlAssistantStore.getState().threads, {});
   assert.equal(controller.signal.aborted, true, 'clearAll must cancel generation');
+});
+
+test('abortThread cancels only that tab and keeps its history', () => {
+  const store = useDbSqlAssistantStore.getState();
+  store.appendUser(TAB, 'a');
+  const a = new AbortController();
+  const b = new AbortController();
+  abortThread(TAB, a);
+  abortThread(OTHER, b);
+
+  useDbSqlAssistantStore.getState().abortThread(TAB);
+
+  assert.equal(a.signal.aborted, true);
+  assert.equal(b.signal.aborted, false);
+  assert.equal(getThread(TAB).messages.length, 1, 'abort must not clear history');
 });
 
 test('clearThread aborts that thread request only', () => {

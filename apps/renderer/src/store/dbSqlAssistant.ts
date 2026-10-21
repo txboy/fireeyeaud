@@ -25,6 +25,8 @@ interface DbSqlAssistantState {
   fail: (tabId: string, messageId: string, errorKey: string) => void;
   clearThread: (tabId: string) => void;
   clearAll: () => void;
+  /** 中断某个 tab 进行中的生成（关闭面板 / 切换 tab 时用），不删除历史。 */
+  abortThread: (tabId: string) => void;
 }
 
 /** 进行中的请求：模块级 Map，不进 zustand state（AbortController 不应触发重渲染）。 */
@@ -105,8 +107,16 @@ export const useDbSqlAssistantStore = create<DbSqlAssistantState>((set) => {
         ),
       })),
 
-    fail: (tabId, _messageId, errorKey) =>
-      update(tabId, (thread) => ({ ...thread, busy: false, errorKey })),
+    fail: (tabId, messageId, errorKey) =>
+      update(tabId, (thread) => ({
+        ...thread,
+        busy: false,
+        errorKey,
+        // 失败且没有任何内容的助手气泡会留下一个空回复；把它移除，错误单独展示。
+        messages: thread.messages.filter(
+          (m) => !(m.id === messageId && m.role === 'assistant' && !m.content),
+        ),
+      })),
 
     clearThread: (tabId) => {
       controllers.get(tabId)?.abort();
@@ -126,6 +136,11 @@ export const useDbSqlAssistantStore = create<DbSqlAssistantState>((set) => {
       for (const controller of controllers.values()) controller.abort();
       controllers.clear();
       set({ threads: {} });
+    },
+
+    abortThread: (tabId) => {
+      controllers.get(tabId)?.abort();
+      controllers.delete(tabId);
     },
   };
 });
