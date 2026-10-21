@@ -1521,11 +1521,42 @@ textarea.searchbox {
   flex: 0 0 auto;
 }
 
+.statusbar__group {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.statusbar__group--left {
+  flex: 1 1 0;
+}
+
+.statusbar__group--right {
+  flex: 1 1 0;
+  justify-content: flex-end;
+}
+
+.statusbar__brand {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
 .statusbar__item {
   display: flex;
   align-items: center;
   gap: 6px;
   font-family: var(--font-mono);
+}
+
+.statusbar__item.statusbar__item--path {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .statusbar__dot {

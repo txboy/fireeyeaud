@@ -30,6 +30,7 @@ export default {
     engine: '引擎',
     model: '模型',
     version: '版本',
+    copyright: '© {{year}} 火眼审计助手',
     findings: '疑点',
     minimize: '最小化',
     maximize: '最大化',

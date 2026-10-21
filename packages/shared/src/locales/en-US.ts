@@ -30,6 +30,7 @@ export default {
     engine: 'Engine',
     model: 'Model',
     version: 'Version',
+    copyright: '© {{year}} FireEyeAud',
     findings: 'Findings',
     minimize: 'Minimize',
     maximize: 'Maximize',
