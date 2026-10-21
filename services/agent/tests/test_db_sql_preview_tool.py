@@ -82,27 +82,39 @@ async def _collect(body: SqlChatBody, *, model, preview):
 # ---- 纯函数：SQL 拼接 ----
 
 def test_build_preview_sql_is_always_a_single_select() -> None:
-    assert build_preview_sql("sqlite", "voucher") == 'SELECT * FROM "voucher" LIMIT 5'
-    assert build_preview_sql("mysql", "voucher") == "SELECT * FROM `voucher` LIMIT 5"
-    assert build_preview_sql("mssql", "voucher") == "SELECT * FROM [voucher] LIMIT 5"
-    assert build_preview_sql("access", "voucher") == "SELECT * FROM [voucher] LIMIT 5"
-    assert build_preview_sql("postgresql", "voucher") == 'SELECT * FROM "voucher" LIMIT 5'
+    assert build_preview_sql("sqlite", "voucher") == 'SELECT * FROM "voucher"'
+    assert build_preview_sql("mysql", "voucher") == "SELECT * FROM `voucher`"
+    assert build_preview_sql("mssql", "voucher") == "SELECT * FROM [voucher]"
+    assert build_preview_sql("access", "voucher") == "SELECT * FROM [voucher]"
+    assert build_preview_sql("postgresql", "voucher") == 'SELECT * FROM "voucher"'
+    assert build_preview_sql("oracle", "voucher") == 'SELECT * FROM "voucher"'
+
+
+def test_build_preview_sql_leaves_paging_to_run_query() -> None:
+    """行数限制由 run_query 按方言处理（LIMIT / TOP / OFFSET…FETCH / ROWNUM）。
+
+    硬拼 LIMIT 会让 SQL Server / Oracle 收到非法语法，并被当成「用户自带 LIMIT」
+    从而跳过方言分页。
+    """
+    for driver in ("sqlite", "postgresql", "mysql", "mssql", "oracle", "access"):
+        sql = build_preview_sql(driver, "voucher")
+        assert "LIMIT" not in sql.upper()
+        assert "TOP" not in sql.upper()
 
 
 def test_build_preview_sql_quotes_injection_in_table_name() -> None:
     """表名来自模型：引号必须被转义，绝不能拼出第二条语句。"""
     sql = build_preview_sql("sqlite", 'v"; DROP TABLE x; --')
-    assert sql == 'SELECT * FROM "v""; DROP TABLE x; --" LIMIT 5'
-    assert sql.count(";") == 2  # 都在字符串字面量里，仍是单条 SELECT
+    assert sql == 'SELECT * FROM "v""; DROP TABLE x; --"'
     assert sql.startswith("SELECT * FROM")
-    assert sql.endswith("LIMIT 5")
+    assert "DROP" in sql  # 但整段在标识符字面量里
 
-    assert build_preview_sql("mssql", "a]]; DROP TABLE x").endswith("LIMIT 5")
-
-
-def test_build_preview_sql_caps_limit() -> None:
-    assert "LIMIT 5" in build_preview_sql("sqlite", "t", limit=999)
-    assert "LIMIT 1" in build_preview_sql("sqlite", "t", limit=0)
+    assert build_preview_sql("mssql", "a]]; DROP TABLE x") == (
+        "SELECT * FROM [a]]]]; DROP TABLE x]"
+    )
+    assert build_preview_sql("mysql", "a`; DROP TABLE x") == (
+        "SELECT * FROM `a``; DROP TABLE x`"
+    )
 
 
 # ---- 纯函数：样本裁剪 ----
@@ -128,6 +140,35 @@ def test_compact_sample_keeps_small_sample_intact() -> None:
     payload, truncated = compact_sample(raw)
     assert truncated is False
     assert payload == {"columns": ["id"], "rows": [[1], [2]], "rowCount": 2}
+
+
+def test_compact_sample_redacts_secret_columns_and_values() -> None:
+    """样本行与上下文结果一样，必须脱敏：敏感列整列丢弃，自由文本里的连接串/IP 打码。"""
+    raw = {
+        "columns": ["id", "password", "host", "note"],
+        "rows": [[1, "hunter2", "10.0.0.9", "postgresql://u:p@10.0.0.9:5432/db"]],
+    }
+    payload, truncated = compact_sample(raw)
+
+    assert payload["columns"] == ["id", "note"]
+    assert payload["rows"] == [[1, "***"]]
+    assert truncated is True
+    flat = json.dumps(payload, ensure_ascii=False)
+    for secret in ("hunter2", "10.0.0.9", "postgresql://"):
+        assert secret not in flat
+
+
+def test_encode_tool_result_always_respects_the_cap_and_stays_valid_json() -> None:
+    """极端列名 / 长单元格下，输出仍需是合法 JSON 且不超过上限。"""
+    payload = {
+        "columns": ["列" * 400 for _ in range(50)],
+        "rows": [["x" * 200 for _ in range(50)] for _ in range(5)],
+        "rowCount": 5,
+    }
+    for cap in (500, 2_000, 60_000):
+        text = mod.encode_tool_result("t", payload, True, max_chars=cap)
+        assert len(text) <= cap, (cap, len(text))
+        json.loads(text)  # 必须是合法 JSON
 
 
 # ---- 循环：事件与边界 ----
@@ -200,9 +241,12 @@ async def test_tool_failure_does_not_break_the_stream() -> None:
     assert events[-1]["type"] == "done"
 
 
-async def test_tool_rounds_are_capped() -> None:
-    """模型反复要样本：调用次数被上限截断，最终仍会出 done。"""
-    model = _Scripted([_tool_call("ledger", f"call_{i}") for i in range(10)])
+async def test_tool_rounds_are_capped_and_still_produce_an_answer() -> None:
+    """模型反复要样本：调用次数被上限截断，最后一轮必须强制出正文。"""
+    model = _Scripted(
+        [_tool_call("ledger", f"call_{i}") for i in range(4)]
+        + [AIMessage(content="最终答复")]
+    )
     calls: list[str] = []
 
     def preview(table: str) -> dict:
@@ -214,6 +258,52 @@ async def test_tool_rounds_are_capped() -> None:
     assert len(calls) == mod.MAX_TOOL_ROUNDS
     assert events[-1]["type"] == "done"
     assert [e["type"] for e in events].count("tool_call") == mod.MAX_TOOL_ROUNDS
+    streamed = "".join(e["data"].get("delta", "") for e in events if e["type"] == "token")
+    assert streamed.strip(), "达到轮次上限后必须仍有正文，不能空答复"
+
+
+async def test_tool_calls_per_round_are_capped() -> None:
+    """一条消息里塞很多工具调用：单轮调用数受限，多余的明确失败且对话仍合法。"""
+    many = AIMessage(
+        content="",
+        tool_calls=[
+            {"name": "preview_table", "args": {"table": "ledger"}, "id": f"c{i}"}
+            for i in range(8)
+        ],
+    )
+    model = _Scripted([many, AIMessage(content="好的")])
+    calls: list[str] = []
+
+    def preview(table: str) -> dict:
+        calls.append(table)
+        return {"columns": ["id"], "rows": [[1]], "rowCount": 1}
+
+    events = await _collect(_body(), model=model, preview=preview)
+
+    assert len(calls) == mod.MAX_TOOL_CALLS_PER_ROUND
+    results = [e for e in events if e["type"] == "tool_result"]
+    assert len(results) == 8
+    assert sum(1 for r in results if r["data"]["ok"]) == mod.MAX_TOOL_CALLS_PER_ROUND
+    assert events[-1]["type"] == "done"
+
+
+async def test_fallback_call_ids_are_unique_within_a_round() -> None:
+    """模型没给 id 时，同一轮内的兜底 id 不能重复（前端用它当 key）。"""
+    no_id = AIMessage(
+        content="",
+        tool_calls=[
+            {"name": "preview_table", "args": {"table": "ledger"}, "id": None},
+            {"name": "preview_table", "args": {"table": "ledger"}, "id": None},
+        ],
+    )
+    model = _Scripted([no_id, AIMessage(content="好的")])
+    events = await _collect(
+        _body(), model=model, preview=lambda _t: {"columns": ["id"], "rows": [[1]]}
+    )
+
+    ids = [e["data"]["callId"] for e in events if e["type"] == "tool_call"]
+    assert len(ids) == 2
+    assert len(set(ids)) == 2
 
 
 async def test_tool_messages_stay_within_budget() -> None:
@@ -267,6 +357,18 @@ async def test_prompt_mentions_tool_only_when_bound() -> None:
     await _collect(_body(), model=_Capturing([AIMessage(content="ok")]), preview=None)
     assert "preview_table" not in seen[0]
     assert "不提供样本行工具" in seen[0]
+
+
+async def test_always_tool_calling_model_yields_explicit_error() -> None:
+    """模型永远只要工具、从不出正文：必须报可读错误，而不是静默空答复。"""
+    model = _Scripted([_tool_call("ledger", f"c{i}") for i in range(20)])
+
+    events = await _collect(
+        _body(), model=model, preview=lambda _t: {"columns": ["id"], "rows": [[1]]}
+    )
+
+    assert events[-1]["type"] == "error"
+    assert events[-1]["data"]["messageKey"] == "error.emptyResponse"
 
 
 async def test_no_preview_means_no_tools_bound() -> None:

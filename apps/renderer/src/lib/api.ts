@@ -742,6 +742,9 @@ export interface DbSqlSseEvent {
     tool?: string;
     ok?: boolean;
     summary?: string;
+    reason?: string;
+    rows?: number;
+    columnsCount?: number;
   };
 }
 

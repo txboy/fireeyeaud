@@ -1,4 +1,4 @@
-"""SQL 助手流式路由：事件顺序、错误透出、以及「不碰数据库」的边界。"""
+"""SQL 助手流式路由：事件顺序、错误透出、样本行工具的边界（只读、无 SQL 透传、凭据不外泄）。"""
 
 from __future__ import annotations
 
@@ -177,9 +177,11 @@ async def test_sql_chat_tool_reads_sample_without_leaking_secret(
     monkeypatch.setattr(db_store, "get_secret", lambda *_a, **_k: SECRET)
 
     executed: list[str] = []
+    limits: list[int] = []
 
     def run_query(_conn, sql, _password, limit=0, offset=0):
         executed.append(sql)
+        limits.append(limit)
         return {"columns": ["id"], "rows": [[1]], "rowCount": 1}
 
     monkeypatch.setattr(db_engine, "run_query", run_query)
@@ -195,8 +197,9 @@ async def test_sql_chat_tool_reads_sample_without_leaking_secret(
             text = "".join([chunk async for chunk in resp.aiter_text()])
         await client.post("/api/v1/workspaces/close")
 
-    # 只跑了一次，且是服务端拼接的单条 SELECT
-    assert executed == ['SELECT * FROM "ledger" LIMIT 5']
+    # 只跑了一次，且是服务端拼接的单条 SELECT；行数交给 run_query 按方言分页
+    assert executed == ['SELECT * FROM "ledger"']
+    assert limits == [5]
     assert executed[0].lstrip().upper().startswith("SELECT")
     # 凭据绝不外泄（SSE 正文里没有）
     assert SECRET not in text
@@ -256,7 +259,7 @@ async def test_sql_chat_ignores_model_supplied_sql(tmp_path, monkeypatch) -> Non
             _ = "".join([chunk async for chunk in resp.aiter_text()])
         await client.post("/api/v1/workspaces/close")
 
-    assert executed == ['SELECT * FROM "ledger" LIMIT 5']
+    assert executed == ['SELECT * FROM "ledger"']
 
 
 async def test_sql_chat_ignores_unknown_model_id(tmp_path, monkeypatch) -> None:

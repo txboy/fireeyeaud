@@ -10,6 +10,7 @@ import {
   getThread,
   releaseThread,
   useDbSqlAssistantStore,
+  type DbSqlStep,
 } from '../store/dbSqlAssistant';
 import { useConfirmStore } from '../store/confirm';
 import type { DbDataTab } from '../store/ui';
@@ -144,6 +145,13 @@ export function DbSqlAssistantPanel(props: DbSqlAssistantPanelProps) {
                 ok: Boolean(event.data.ok),
                 summary: event.data.summary ?? '',
                 ...(event.data.messageKey ? { messageKey: event.data.messageKey } : {}),
+                ...(event.data.reason
+                  ? { reason: event.data.reason as 'notAllowed' | 'tooMany' }
+                  : {}),
+                ...(typeof event.data.rows === 'number' ? { rows: event.data.rows } : {}),
+                ...(typeof event.data.columnsCount === 'number'
+                  ? { columnsCount: event.data.columnsCount }
+                  : {}),
               });
             } else if (event.type === 'error') {
               store
@@ -193,6 +201,23 @@ export function DbSqlAssistantPanel(props: DbSqlAssistantPanelProps) {
       event.preventDefault();
       void send(input);
     }
+  };
+
+  const stepLabel = (step: DbSqlStep): string => {
+    if (step.pending) return t('assistantToolPending', { table: step.table });
+    if (step.ok) {
+      return t('assistantToolOk', {
+        table: step.table,
+        rows: step.rows ?? 0,
+        columns: step.columnsCount ?? 0,
+      });
+    }
+    if (step.reason === 'notAllowed') return t('assistantToolNotAllowed', { table: step.table });
+    if (step.reason === 'tooMany') return t('assistantToolTooMany', { table: step.table });
+    if (step.messageKey) {
+      return `${step.table}：${terr(step.messageKey.replace(/^error\./, ''))}`;
+    }
+    return t('assistantToolFailed', { table: step.table });
   };
 
   const sqlActions = useMemo(
@@ -280,10 +305,7 @@ export function DbSqlAssistantPanel(props: DbSqlAssistantPanelProps) {
                       >
                         <Table2 size={11} strokeWidth={1.8} />
                         <span className="dbdata__assistant-step-text">
-                          {step.pending
-                            ? t('assistantToolPending', { table: step.table })
-                            : step.summary ||
-                              t('assistantToolFailed', { table: step.table })}
+                          {stepLabel(step)}
                         </span>
                       </div>
                     ))}

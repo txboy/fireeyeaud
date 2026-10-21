@@ -2,9 +2,8 @@
 
 设计要点（见 `docs/plans/2026-10-21-db-sql-assistant.md`）：
 - 只生成只读查询。可经 `preview_table` 工具按表名读取**样本行**（服务端拼接
-  `SELECT ... LIMIT 5`，不接受模型生成的 SQL），用于确认列含义与取值风格。
-- 上下文永不含密码、凭据引用、主机/连接串、授权信息。
-- 上下文永不含密码、凭据引用、主机/连接串、授权信息。
+  `SELECT ...`，行数由 `run_query` 按方言分页；不接受模型生成的 SQL）。
+- 上下文与样本行均不含密码、凭据引用、主机/连接串、授权信息。
 - 服务端不信任前端：历史消息与上下文再做一次上限兜底，超限截断而非报错。
 - 不引入会话概念；事件信封与 `graph.py` 的 SSE 结构一致。
 """
@@ -56,6 +55,7 @@ SAMPLE_ROWS = 5
 SAMPLE_COLS = 50
 SAMPLE_CELL_CHARS = 200
 MAX_TOOL_ROUNDS = 3
+MAX_TOOL_CALLS_PER_ROUND = 5
 # 单条工具结果上限：需大于一次完整采样（5×50×200 ≈ 50KB），否则编码会为了
 # 迁就预算把样本清空。
 MAX_TOOL_MESSAGE_CHARS = 60_000
@@ -407,13 +407,12 @@ def build_preview_sql(driver: str, table: str, limit: int = SAMPLE_ROWS) -> str:
 
     这是 B2 的安全核心——模型只能给表名，SQL 由服务端拼接，因此不存在写入、
     注入或全表聚合的通道。
+
+    行数限制**不拼进 SQL**：交给 `db_engine.run_query(limit=...)` 按方言处理
+    （LIMIT / TOP / OFFSET…FETCH / ROWNUM）。硬写 LIMIT 会让 SQL Server / Oracle
+    收到非法语法，并被判为「用户自带 LIMIT」而跳过方言分页。
     """
-    try:
-        size = int(limit)
-    except (TypeError, ValueError):
-        size = SAMPLE_ROWS
-    size = max(1, min(size, MAX_TOOL_LIMIT))
-    return f"SELECT * FROM {_quote_ident(driver, table)} LIMIT {size}"
+    return f"SELECT * FROM {_quote_ident(driver, table)}"
 
 
 def compact_sample(result: Any) -> tuple[dict[str, Any], bool]:
@@ -437,12 +436,18 @@ def compact_sample(result: Any) -> tuple[dict[str, Any], bool]:
             truncated = True
         cells: list[Any] = []
         for value in values:
-            if isinstance(value, str) and len(value) > SAMPLE_CELL_CHARS:
-                cells.append(value[:SAMPLE_CELL_CHARS] + "…")
-                truncated = True
-            else:
-                cells.append(value)
+            if isinstance(value, str):
+                value = _scrub_text(value)
+                if len(value) > SAMPLE_CELL_CHARS:
+                    value = value[:SAMPLE_CELL_CHARS] + "…"
+                    truncated = True
+            cells.append(value)
         trimmed.append(cells)
+
+    # 与上下文结果同等待遇：敏感列整列丢弃（样本行同样是真实数据）
+    columns, trimmed, dropped = _scrub_result_columns(columns, trimmed)
+    if dropped:
+        truncated = True
 
     payload = {
         "columns": columns,
@@ -528,17 +533,24 @@ def encode_tool_result(
 
     # 4) 兜底：合法 JSON 的占位，仍明确告知模型「有表但样本被省略」
     if len(text) > max_chars:
-        text = json.dumps(
-            {
-                "table": table[:80],
-                "columns": data["columns"][:5],
-                "rows": [],
-                "rowCount": 0,
-                "truncated": True,
-                "omitted": True,
-            },
-            ensure_ascii=False,
-        )
+        minimal: dict[str, Any] = {
+            "table": table[:40],
+            "rows": [],
+            "rowCount": 0,
+            "truncated": True,
+            "omitted": True,
+        }
+        text = json.dumps(minimal, ensure_ascii=False)
+        kept: list[str] = []
+        for column in data["columns"]:
+            trial = {**minimal, "columns": kept + [str(column)[:40]]}
+            candidate = json.dumps(trial, ensure_ascii=False)
+            if len(candidate) > max_chars:
+                break
+            kept.append(str(column)[:40])
+            text = candidate
+        if len(text) > max_chars:
+            text = json.dumps({"omitted": True, "truncated": True}, ensure_ascii=False)
     return text
 
 
@@ -573,6 +585,38 @@ def _preview_tool() -> Any:
 
 def _messages_chars(messages: list[BaseMessage]) -> int:
     return sum(len(str(m.content)) for m in messages)
+
+
+def _enforce_budget(messages: list[BaseMessage]) -> list[BaseMessage]:
+    """把请求压回 `MAX_PROMPT_CHARS` 以内。
+
+    工具结果可能很大：逐步收紧每条工具结果的预算；仍超限则把最旧的工具结果
+    替换成占位。循环直到达标（每步都严格变小，最多循环到没有工具消息）。
+    """
+    shrunk = list(messages)
+    budget = 2_000
+    while _messages_chars(shrunk) > MAX_PROMPT_CHARS and budget >= 200:
+        shrunk = [
+            _shrink_tool_message(item, max_chars=budget) if isinstance(item, ToolMessage) else item
+            for item in shrunk
+        ]
+        if _messages_chars(shrunk) <= MAX_PROMPT_CHARS:
+            break
+        budget //= 2
+        if budget < 200:
+            break
+
+    # 仍然超限：从最旧的工具结果开始换成占位（保留最近的样本）
+    while _messages_chars(shrunk) > MAX_PROMPT_CHARS:
+        index = next((i for i, m in enumerate(shrunk) if isinstance(m, ToolMessage)), None)
+        if index is None:
+            break
+        old = shrunk[index]
+        shrunk[index] = ToolMessage(
+            content=json.dumps({"omitted": True, "truncated": True}, ensure_ascii=False),
+            tool_call_id=old.tool_call_id,  # type: ignore[attr-defined]
+        )
+    return shrunk
 
 
 def _shrink_tool_message(message: ToolMessage, *, max_chars: int = 2_000) -> ToolMessage:
@@ -684,6 +728,8 @@ async def stream_sql_assistant(
 
     yield emit("status", {"phase": "thinking"})
 
+    streamed_any = False
+
     try:
         messages: list[BaseMessage] = build_sql_assistant_messages(
             context=body.context,
@@ -706,15 +752,27 @@ async def stream_sql_assistant(
                 ai = chunk if ai is None else ai + chunk
                 delta = chunk.content
                 if isinstance(delta, str) and delta:
+                    streamed_any = True
                     yield emit("token", {"delta": delta})
 
             tool_calls = list(getattr(ai, "tool_calls", []) or []) if ai is not None else []
-            if not tool_calls or preview is None or round_index >= MAX_TOOL_ROUNDS:
+            if not tool_calls or preview is None:
+                break
+
+            if round_index >= MAX_TOOL_ROUNDS:
+                # 已达轮次上限：不再执行工具，强制一次**不带工具**的最终答复，
+                # 否则模型继续要工具时会以空正文结束本轮。
+                async for chunk in chat.astream(messages):
+                    delta = chunk.content
+                    if isinstance(delta, str) and delta:
+                        streamed_any = True
+                        yield emit("token", {"delta": delta})
                 break
 
             messages.append(ai)
-            for call in tool_calls:
-                call_id = str(call.get("id") or f"call_{round_index + 1}")
+            for index, call in enumerate(tool_calls):
+                # 兜底 id 必须唯一（前端用它当 key / 匹配结果）
+                call_id = str(call.get("id") or f"call_{round_index + 1}_{index}")
                 name = str(call.get("name") or "")
                 args = call.get("args") or {}
                 table = str(args.get("table") or "")
@@ -726,13 +784,23 @@ async def stream_sql_assistant(
 
                 data: dict[str, Any]
                 content: str
-                if name != PREVIEW_TOOL_NAME:
+                if index >= MAX_TOOL_CALLS_PER_ROUND:
+                    data = {
+                        "callId": call_id,
+                        "ok": False,
+                        "reason": "tooMany",
+                        "summary": f"{table}：单轮工具调用超出上限",
+                    }
+                    content = json.dumps({"error": "too many tool calls"}, ensure_ascii=False)
+                elif name != PREVIEW_TOOL_NAME:
                     data = {"callId": call_id, "ok": False, "summary": f"未知工具：{name}"}
                     content = json.dumps({"error": "unknown tool"}, ensure_ascii=False)
                 elif table not in allowed:
                     data = {
                         "callId": call_id,
                         "ok": False,
+                        "reason": "notAllowed",
+                        "table": table,
                         "summary": f"{table or '（空表名）'}：不在可查看的表结构中",
                     }
                     content = json.dumps({"error": "table not available"}, ensure_ascii=False)
@@ -744,6 +812,7 @@ async def stream_sql_assistant(
                             "callId": call_id,
                             "ok": False,
                             "messageKey": exc.message_key,
+                            "table": table,
                             "summary": f"{table}：查询失败",
                         }
                         content = json.dumps({"error": exc.code}, ensure_ascii=False)
@@ -753,6 +822,7 @@ async def stream_sql_assistant(
                             "callId": call_id,
                             "ok": False,
                             "messageKey": "error.internal",
+                            "table": table,
                             "summary": f"{table}：查询失败",
                         }
                         content = json.dumps({"error": "internal"}, ensure_ascii=False)
@@ -760,6 +830,9 @@ async def stream_sql_assistant(
                         data = {
                             "callId": call_id,
                             "ok": True,
+                            "table": table,
+                            "rows": payload["rowCount"],
+                            "columnsCount": len(payload["columns"]),
                             "summary": (
                                 f"{table}：{payload['rowCount']} 行 × "
                                 f"{len(payload['columns'])} 列"
@@ -771,12 +844,7 @@ async def stream_sql_assistant(
                 yield emit("tool_result", data)
                 messages.append(ToolMessage(content=content, tool_call_id=call_id))
 
-            # 工具结果可能撑大请求：超预算就把工具结果重新编码成更小的合法 JSON
-            if _messages_chars(messages) > MAX_PROMPT_CHARS:
-                messages = [
-                    _shrink_tool_message(item) if isinstance(item, ToolMessage) else item
-                    for item in messages
-                ]
+            messages = _enforce_budget(messages)
     except ApiError as exc:
         yield emit(
             "error",
@@ -790,6 +858,11 @@ async def stream_sql_assistant(
     except Exception:  # noqa: BLE001 - 模型侧异常统一转 error 事件
         logger.exception("sql assistant stream failed")
         yield emit("error", {"messageKey": "error.internal"})
+        return
+
+    if not streamed_any:
+        # 模型只产出工具调用、始终没有正文：明确报错，避免静默空答复。
+        yield emit("error", {"messageKey": "error.emptyResponse"})
         return
 
     yield emit("done", {"usage": {}})

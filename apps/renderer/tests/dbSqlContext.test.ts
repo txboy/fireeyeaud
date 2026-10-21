@@ -294,6 +294,29 @@ test('when the budget is tight, least-related tables lose their columns first', 
   assert.ok(JSON.stringify(ctx).length <= 60_000);
 });
 
+test('a huge current table alone cannot blow the 60KB budget', () => {
+  const cols = Array.from({ length: 80 }, (_, i) => ({
+    name: `c${i}`,
+    type: 'TEXT',
+    comment: 'x'.repeat(1200),
+  }));
+  const ctx = buildDbSqlContext({
+    tab: tab({ table: { table: 'voucher', columns: cols } }),
+    tables: [],
+    currentSql: '',
+    executedSql: null,
+    result: null,
+    error: null,
+    page: 1,
+    pageSize: 50,
+    total: null,
+  });
+
+  assert.ok(JSON.stringify(ctx).length <= 60_000, '当前表注释也必须受预算约束');
+  assert.equal(ctx.tablesTruncated, true);
+  assert.equal(ctx.table.columns.length, 80, '列本身仍保留');
+});
+
 test('keeps the serialized context near the 60KB budget', () => {
   const columns = Array.from({ length: 100 }, (_, i) => `col${i}`);
   const rows = Array.from({ length: 20 }, () =>

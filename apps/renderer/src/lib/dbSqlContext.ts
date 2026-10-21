@@ -318,4 +318,23 @@ function fitBudget(ctx: DbSqlChatContext): void {
     ctx.tables = ctx.tables.slice(0, -1);
     ctx.tablesTruncated = true;
   }
+  if (size() <= MAX_CONTEXT_CHARS) return;
+
+  // 5) 当前表自身就过大（典型是超长列注释）：先截断注释，再整段丢弃注释。
+  //    列名与类型属于生成 SQL 的必需信息，始终保留。
+  while (size() > MAX_CONTEXT_CHARS && ctx.table.columns.some((c) => c.comment)) {
+    ctx.table.columns = ctx.table.columns.map((c) =>
+      c.comment && c.comment.length > 80 ? { ...c, comment: `${c.comment.slice(0, 80)}…` } : c,
+    );
+    ctx.tablesTruncated = true;
+    if (ctx.table.columns.every((c) => !c.comment || c.comment.length <= 81)) break;
+  }
+  while (size() > MAX_CONTEXT_CHARS && ctx.table.columns.some((c) => c.comment)) {
+    ctx.table.columns = ctx.table.columns.map((c) => {
+      if (!c.comment) return c;
+      const { comment: _dropped, ...rest } = c;
+      return rest;
+    });
+    ctx.tablesTruncated = true;
+  }
 }

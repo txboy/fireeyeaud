@@ -37,7 +37,8 @@ test('setOpen toggles only the given tab and keeps messages', () => {
 
 test('appendUser adds a user message and clears prior error', () => {
   const store = useDbSqlAssistantStore.getState();
-  store.fail(TAB, 'x', 'error.internal');
+  const failed = store.startAssistant(TAB);
+  store.fail(TAB, failed.id, 'error.internal');
   assert.equal(getThread(TAB).errorKey, 'error.internal');
 
   const msg = store.appendUser(TAB, '只看大于 100 万的');
@@ -163,6 +164,59 @@ test('fail removes an empty assistant bubble but keeps partial output', () => {
   assert.equal(getThread(TAB).messages[0].content, '部分');
 });
 
+test('fail keeps the bubble when it already carries tool steps', () => {
+  const store = useDbSqlAssistantStore.getState();
+  const assistant = store.startAssistant(TAB);
+  store.appendToolCall(TAB, assistant.id, {
+    callId: 'c1',
+    tool: 'preview_table',
+    table: 'ledger',
+  });
+  store.finishToolCall(TAB, assistant.id, { callId: 'c1', ok: true, summary: 'ok' });
+
+  store.fail(TAB, assistant.id, 'error.internal');
+
+  const messages = getThread(TAB).messages;
+  assert.equal(messages.length, 1, '读过样本的记录不能被清掉');
+  assert.equal(messages[0].steps?.length, 1);
+});
+
+test('interrupting resolves pending tool steps', () => {
+  const store = useDbSqlAssistantStore.getState();
+  const assistant = store.startAssistant(TAB);
+  store.appendToolCall(TAB, assistant.id, {
+    callId: 'c1',
+    tool: 'preview_table',
+    table: 'ledger',
+  });
+
+  store.finish(TAB, assistant.id, true);
+
+  const steps = getThread(TAB).messages[0].steps ?? [];
+  assert.equal(steps[0].pending, false, '中断后不能永远显示「正在读取…」');
+  assert.equal(steps[0].ok, false);
+});
+
+test('settling a cleared request does not touch a newer one', () => {
+  const store = useDbSqlAssistantStore.getState();
+  const old = store.startAssistant(TAB);
+  store.setOpen(TAB, true);
+
+  // 清空后立刻发新请求
+  store.clearThread(TAB);
+  const fresh = store.startAssistant(TAB);
+
+  // 旧请求迟到的 finish/fail 必须是无操作（messageId 已不存在）
+  store.finish(TAB, old.id);
+  store.fail(TAB, old.id, 'error.internal');
+
+  const thread = getThread(TAB);
+  assert.equal(thread.busy, true, '新请求不能被旧请求的收尾清掉');
+  assert.equal(thread.errorKey, null);
+  assert.equal(thread.messages.length, 1);
+  assert.equal(thread.messages[0].id, fresh.id);
+});
+
 test('threads are isolated per tab id', () => {
   const store = useDbSqlAssistantStore.getState();
   store.appendUser(TAB, 'a');
@@ -177,7 +231,8 @@ test('clearThread empties only that tab', () => {
   const store = useDbSqlAssistantStore.getState();
   store.appendUser(TAB, 'a');
   store.appendUser(OTHER, 'b');
-  store.fail(TAB, 'x', 'error.internal');
+  const failed = store.startAssistant(TAB);
+  store.fail(TAB, failed.id, 'error.internal');
 
   store.clearThread(TAB);
 

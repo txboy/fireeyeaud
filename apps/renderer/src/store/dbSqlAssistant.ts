@@ -10,6 +10,11 @@ export interface DbSqlStep {
   ok?: boolean;
   summary?: string;
   messageKey?: string;
+  /** 失败原因分类（不在白名单 / 单轮调用超限）。 */
+  reason?: 'notAllowed' | 'tooMany';
+  /** 成功时的样本规模，用于本地化展示。 */
+  rows?: number;
+  columnsCount?: number;
 }
 
 export interface DbSqlMessage {
@@ -43,7 +48,15 @@ interface DbSqlAssistantState {
   finishToolCall: (
     tabId: string,
     messageId: string,
-    step: { callId: string; ok: boolean; summary: string; messageKey?: string },
+    step: {
+      callId: string;
+      ok: boolean;
+      summary: string;
+      messageKey?: string;
+      reason?: 'notAllowed' | 'tooMany';
+      rows?: number;
+      columnsCount?: number;
+    },
   ) => void;
   finish: (tabId: string, messageId: string, interrupted?: boolean) => void;
   fail: (tabId: string, messageId: string, errorKey: string) => void;
@@ -153,6 +166,11 @@ export const useDbSqlAssistantStore = create<DbSqlAssistantState>((set) => {
                         ok: step.ok,
                         summary: step.summary,
                         ...(step.messageKey ? { messageKey: step.messageKey } : {}),
+                        ...(step.reason ? { reason: step.reason } : {}),
+                        ...(step.rows != null ? { rows: step.rows } : {}),
+                        ...(step.columnsCount != null
+                          ? { columnsCount: step.columnsCount }
+                          : {}),
                       }
                     : s,
                 ),
@@ -162,24 +180,47 @@ export const useDbSqlAssistantStore = create<DbSqlAssistantState>((set) => {
       })),
 
     finish: (tabId, messageId, interrupted = false) =>
-      update(tabId, (thread) => ({
-        ...thread,
-        busy: false,
-        messages: thread.messages.map((m) =>
-          m.id === messageId && interrupted ? { ...m, interrupted: true } : m,
-        ),
-      })),
+      update(tabId, (thread) => {
+        // 已被清空 / 换轮的旧请求：收尾必须无操作，否则会清掉新请求的 busy。
+        if (!thread.messages.some((m) => m.id === messageId)) return thread;
+        return {
+          ...thread,
+          busy: false,
+          messages: thread.messages.map((m) =>
+            m.id === messageId
+              ? {
+                  ...m,
+                  ...(interrupted ? { interrupted: true } : {}),
+                  // 中断时把仍未返回的步骤收尾，避免永远显示「正在读取…」
+                  ...(interrupted && m.steps
+                    ? {
+                        steps: m.steps.map((s) =>
+                          s.pending ? { ...s, pending: false, ok: false } : s,
+                        ),
+                      }
+                    : {}),
+                }
+              : m,
+          ),
+        };
+      }),
 
     fail: (tabId, messageId, errorKey) =>
-      update(tabId, (thread) => ({
-        ...thread,
-        busy: false,
-        errorKey,
+      update(tabId, (thread) => {
+        const target = thread.messages.find((m) => m.id === messageId);
+        if (!target) return thread;
         // 失败且没有任何内容的助手气泡会留下一个空回复；把它移除，错误单独展示。
-        messages: thread.messages.filter(
-          (m) => !(m.id === messageId && m.role === 'assistant' && !m.content),
-        ),
-      })),
+        // 但已经读过样本（有 steps）的记录必须保留。
+        const empty = target.role === 'assistant' && !target.content && !target.steps?.length;
+        return {
+          ...thread,
+          busy: false,
+          errorKey,
+          messages: empty
+            ? thread.messages.filter((m) => m.id !== messageId)
+            : thread.messages,
+        };
+      }),
 
     clearThread: (tabId) => {
       controllers.get(tabId)?.abort();
