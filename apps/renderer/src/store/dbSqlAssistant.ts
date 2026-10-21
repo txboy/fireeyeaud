@@ -1,0 +1,146 @@
+import { create } from 'zustand';
+
+export interface DbSqlMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: number;
+  interrupted?: boolean;
+}
+
+export interface DbSqlThread {
+  open: boolean;
+  messages: DbSqlMessage[];
+  busy: boolean;
+  errorKey: string | null;
+}
+
+interface DbSqlAssistantState {
+  threads: Record<string, DbSqlThread>;
+  setOpen: (tabId: string, open: boolean) => void;
+  appendUser: (tabId: string, content: string) => DbSqlMessage;
+  startAssistant: (tabId: string) => DbSqlMessage;
+  appendDelta: (tabId: string, messageId: string, delta: string) => void;
+  finish: (tabId: string, messageId: string, interrupted?: boolean) => void;
+  fail: (tabId: string, messageId: string, errorKey: string) => void;
+  clearThread: (tabId: string) => void;
+  clearAll: () => void;
+}
+
+/** 进行中的请求：模块级 Map，不进 zustand state（AbortController 不应触发重渲染）。 */
+const controllers = new Map<string, AbortController>();
+
+let counter = 0;
+const nextId = () => `q_${Date.now().toString(36)}_${(counter += 1)}`;
+
+const EMPTY_THREAD: DbSqlThread = {
+  open: false,
+  messages: [],
+  busy: false,
+  errorKey: null,
+};
+
+/**
+ * SQL 助手线程（按 tab 独立）。仅内存态：应用重启或切换工作区即清空。
+ * 关闭面板只改 `open`，不动消息，重新打开可继续。
+ */
+export const useDbSqlAssistantStore = create<DbSqlAssistantState>((set) => {
+  const update = (tabId: string, fn: (thread: DbSqlThread) => DbSqlThread) => {
+    set((state) => {
+      const current = state.threads[tabId] ?? EMPTY_THREAD;
+      return { threads: { ...state.threads, [tabId]: fn(current) } };
+    });
+  };
+
+  return {
+    threads: {},
+
+    setOpen: (tabId, open) => update(tabId, (thread) => ({ ...thread, open })),
+
+    appendUser: (tabId, content) => {
+      const message: DbSqlMessage = {
+        id: nextId(),
+        role: 'user',
+        content,
+        createdAt: Date.now(),
+      };
+      update(tabId, (thread) => ({
+        ...thread,
+        messages: [...thread.messages, message],
+        errorKey: null,
+      }));
+      return message;
+    },
+
+    startAssistant: (tabId) => {
+      const message: DbSqlMessage = {
+        id: nextId(),
+        role: 'assistant',
+        content: '',
+        createdAt: Date.now(),
+      };
+      update(tabId, (thread) => ({
+        ...thread,
+        messages: [...thread.messages, message],
+        busy: true,
+        errorKey: null,
+      }));
+      return message;
+    },
+
+    appendDelta: (tabId, messageId, delta) =>
+      update(tabId, (thread) => ({
+        ...thread,
+        messages: thread.messages.map((m) =>
+          m.id === messageId ? { ...m, content: m.content + delta } : m,
+        ),
+      })),
+
+    finish: (tabId, messageId, interrupted = false) =>
+      update(tabId, (thread) => ({
+        ...thread,
+        busy: false,
+        messages: thread.messages.map((m) =>
+          m.id === messageId && interrupted ? { ...m, interrupted: true } : m,
+        ),
+      })),
+
+    fail: (tabId, _messageId, errorKey) =>
+      update(tabId, (thread) => ({ ...thread, busy: false, errorKey })),
+
+    clearThread: (tabId) => {
+      controllers.get(tabId)?.abort();
+      controllers.delete(tabId);
+      set((state) => {
+        const current = state.threads[tabId];
+        const { [tabId]: _dropped, ...others } = state.threads;
+        return {
+          threads: current
+          ? { ...others, [tabId]: { ...EMPTY_THREAD, open: current.open } }
+          : others,
+        };
+      });
+    },
+
+    clearAll: () => {
+      for (const controller of controllers.values()) controller.abort();
+      controllers.clear();
+      set({ threads: {} });
+    },
+  };
+});
+
+/** 读取某个 tab 的线程（无则返回默认空线程）。 */
+export function getThread(tabId: string): DbSqlThread {
+  return useDbSqlAssistantStore.getState().threads[tabId] ?? EMPTY_THREAD;
+}
+
+/** 登记进行中的请求，供清空 / 关闭面板时中断。 */
+export function abortThread(tabId: string, controller: AbortController): void {
+  controllers.set(tabId, controller);
+}
+
+/** 请求结束后注销（避免清空时中断已完成的请求）。 */
+export function releaseThread(tabId: string, controller: AbortController): void {
+  if (controllers.get(tabId) === controller) controllers.delete(tabId);
+}
