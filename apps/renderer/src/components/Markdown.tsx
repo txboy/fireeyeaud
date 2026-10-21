@@ -15,6 +15,7 @@ import typescript from 'highlight.js/lib/languages/typescript';
 import xml from 'highlight.js/lib/languages/xml';
 import yaml from 'highlight.js/lib/languages/yaml';
 import { copyText } from '../lib/clipboard';
+import { isSqlLanguage } from '../lib/sqlLanguage';
 
 // 只注册会用到的语言，控制打包体积。
 hljs.registerLanguage('bash', bash);
@@ -74,10 +75,21 @@ function openExternal(url: string): void {
   window.open(url, '_blank', 'noopener,noreferrer');
 }
 
-function CodeBlock({ lang, code, plain }: { lang: string; code: string; plain: boolean }) {
+function CodeBlock({
+  lang,
+  code,
+  plain,
+  sqlActions,
+}: {
+  lang: string;
+  code: string;
+  plain: boolean;
+  sqlActions?: SqlActions;
+}) {
   const { t } = useTranslation('agent');
   const [copied, setCopied] = useState(false);
   const html = useMemo(() => (plain ? '' : highlight(code, lang)), [code, lang, plain]);
+  const sql = sqlActions && isSqlLanguage(lang) ? sqlActions : undefined;
 
   const onCopy = () => {
     void copyText(code).then((ok) => {
@@ -91,15 +103,37 @@ function CodeBlock({ lang, code, plain }: { lang: string; code: string; plain: b
     <div className="md-code">
       <div className="md-code__head">
         <span className="md-code__lang">{lang || 'text'}</span>
-        <button
-          type="button"
-          className="md-code__copy"
-          title={copied ? t('copied') : t('copyCode')}
-          aria-label={t('copyCode')}
-          onClick={onCopy}
-        >
-          {copied ? <Check size={13} strokeWidth={2} /> : <Copy size={13} strokeWidth={1.9} />}
-        </button>
+        <span className="md-code__actions">
+          {sql && (
+            <>
+              <button
+                type="button"
+                className="md-code__action"
+                title={sql.insertTitle ?? sql.insertLabel}
+                onClick={() => sql.onInsert(code)}
+              >
+                {sql.insertLabel}
+              </button>
+              <button
+                type="button"
+                className="md-code__action md-code__action--run"
+                title={sql.runTitle ?? sql.runLabel}
+                onClick={() => sql.onRun(code)}
+              >
+                {sql.runLabel}
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            className="md-code__copy"
+            title={copied ? t('copied') : t('copyCode')}
+            aria-label={t('copyCode')}
+            onClick={onCopy}
+          >
+            {copied ? <Check size={13} strokeWidth={2} /> : <Copy size={13} strokeWidth={1.9} />}
+          </button>
+        </span>
       </div>
       <pre className="md-code__pre">
         {plain ? (
@@ -112,13 +146,25 @@ function CodeBlock({ lang, code, plain }: { lang: string; code: string; plain: b
   );
 }
 
+/** SQL 代码块的双操作（仅 SQL 助手传入；普通聊天不传，行为不变）。 */
+export interface SqlActions {
+  insertLabel: string;
+  runLabel: string;
+  insertTitle?: string;
+  runTitle?: string;
+  onInsert: (sql: string) => void;
+  onRun: (sql: string) => void;
+}
+
 interface MarkdownProps {
   content: string;
   /** 流式未完时不调用高亮，避免逐 token 重复高亮的卡顿。 */
   plain?: boolean;
+  /** 传入时，SQL 族代码块额外显示「填入编辑器 / 直接运行」。 */
+  sqlActions?: SqlActions;
 }
 
-function MarkdownInner({ content, plain = false }: MarkdownProps) {
+function MarkdownInner({ content, plain = false, sqlActions }: MarkdownProps) {
   const components = useMemo<Components>(
     () => ({
       a({ href, children }) {
@@ -142,14 +188,14 @@ function MarkdownInner({ content, plain = false }: MarkdownProps) {
         )?.props;
         const lang = /language-([\w+#-]+)/.exec(codeProps?.className ?? '')?.[1] ?? '';
         const code = String(codeProps?.children ?? '').replace(/\n$/, '');
-        return <CodeBlock lang={lang} code={code} plain={plain} />;
+        return <CodeBlock lang={lang} code={code} plain={plain} sqlActions={sqlActions} />;
       },
       code({ className, children }) {
         const isBlock = /language-/.test(className ?? '');
         return <code className={isBlock ? className : 'md-inline-code'}>{children}</code>;
       },
     }),
-    [plain],
+    [plain, sqlActions],
   );
 
   return (

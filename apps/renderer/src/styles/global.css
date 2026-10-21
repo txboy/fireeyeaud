@@ -2612,6 +2612,41 @@ textarea.searchbox {
   color: var(--text-1);
 }
 
+/* SQL 助手：代码块头部的「填入编辑器 / 直接运行」 */
+.md-code__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.md-code__action {
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.md-code__action:hover {
+  background: var(--hover);
+  color: var(--text-1);
+}
+
+.md-code__action--run {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.md-code__action--run:hover {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
 .md-code__pre {
   margin: 0;
   padding: 10px 12px;
