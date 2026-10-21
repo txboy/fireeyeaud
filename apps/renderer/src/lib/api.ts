@@ -222,6 +222,14 @@ async function consumeSse(
   res: Response,
   onEvent: (event: SseEvent) => void,
 ): Promise<void> {
+  await consumeSseGeneric<SseEvent>(res, onEvent);
+}
+
+/**
+ * 通用 SSE 解析：读取 ReadableStream 并按 `\n\n` 切块，逐条回调已解析的 JSON。
+ * 非 2xx 统一抛 ApiError（保留 messageKey）。
+ */
+async function consumeSseGeneric<T>(res: Response, onEvent: (event: T) => void): Promise<void> {
   if (!res.ok || !res.body) throw await toApiError(res);
 
   const reader = res.body.getReader();
@@ -235,7 +243,7 @@ async function consumeSse(
       const payload = line.slice(5).trim();
       if (!payload) continue;
       try {
-        onEvent(JSON.parse(payload) as SseEvent);
+        onEvent(JSON.parse(payload) as T);
       } catch {
         /* 忽略无法解析的行 */
       }
@@ -709,6 +717,95 @@ export function validateDbSql(
     body: JSON.stringify({ driver, sql }),
     signal,
   });
+}
+
+// ---- SQL 助手（自然语言 → 只读 SQL） ----
+
+export interface DbSqlChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface DbSqlSseEvent {
+  type: 'status' | 'token' | 'done' | 'error';
+  seq: number;
+  ts: string;
+  data: {
+    phase?: string;
+    delta?: string;
+    messageKey?: string;
+    code?: string;
+    params?: Record<string, unknown>;
+    usage?: Record<string, unknown>;
+  };
+}
+
+/** 表 / 列结构（只含模型判断所需信息，不含凭据与连接串）。 */
+export interface DbSqlColumnInfo {
+  name: string;
+  type: string;
+  nullable?: boolean;
+  primaryKey?: boolean;
+  comment?: string | null;
+}
+
+export interface DbSqlTableInfo {
+  name: string;
+  /** 超预算时会被裁掉，只剩表名。 */
+  columns?: DbSqlColumnInfo[];
+  /** 列已按上限裁剪。 */
+  truncated?: boolean;
+}
+
+/** 发给 SQL 助手的上下文；构造见 `lib/dbSqlContext.ts`。 */
+export interface DbSqlChatContext {
+  connection: {
+    id: string;
+    name: string;
+    driver: DbDriver;
+    database: string | null;
+  };
+  table: { name: string; columns: DbSqlColumnInfo[] };
+  tables: DbSqlTableInfo[];
+  tablesTruncated: boolean;
+  currentSql: string;
+  executedSql: string | null;
+  result: { columns: string[]; rows: unknown[][] } | null;
+  resultTruncated: boolean;
+  error: string | null;
+  page: number;
+  pageSize: number;
+  total: number | null;
+}
+
+export interface DbSqlChatInput {
+  scope: ConfigScope;
+  connectionId: string;
+  table: string;
+  driver: DbDriver;
+  messages: DbSqlChatMessage[];
+  context: DbSqlChatContext;
+  locale?: string;
+  modelId?: string | null;
+}
+
+export interface DbSqlChatHandlers {
+  onEvent: (event: DbSqlSseEvent) => void;
+  signal?: AbortSignal;
+}
+
+/** 请求 SQL 助手流式生成；结果由 SSE 事件回调（不落库、不写入会话）。 */
+export async function streamDbSqlChat(
+  input: DbSqlChatInput,
+  { onEvent, signal }: DbSqlChatHandlers,
+): Promise<void> {
+  const res = await safeFetch(`${baseUrl()}/db/sql-chat`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(input),
+    signal,
+  });
+  await consumeSseGeneric<DbSqlSseEvent>(res, onEvent);
 }
 
 export interface KbProvidersPage {
