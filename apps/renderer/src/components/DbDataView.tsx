@@ -1,11 +1,13 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronLeft, ChevronRight, Copy, Check, Play } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Copy, Check, Play, Sparkles } from 'lucide-react';
 import type { DbDriver, DbQueryResult, DbTableSchema } from '@fireeyeaud/shared';
 import { runDbQuery } from '../lib/api';
 import { useDatabaseStore } from '../store/database';
+import { useDbSqlAssistantStore } from '../store/dbSqlAssistant';
 import { useSettingsStore } from '../store/settings';
 import type { DbDataTab } from '../store/ui';
+import { DbSqlAssistantPanel } from './DbSqlAssistantPanel';
 
 // CodeMirror / SQL 语言包按需加载，避免进入主包。
 const SqlEditor = lazy(() =>
@@ -64,6 +66,10 @@ export function DbDataView({ tab }: { tab: DbDataTab }) {
   const reflectByConn = useDatabaseStore((s) => s.reflectByConn);
   const dark = useSettingsStore((s) => s.theme === 'dark');
 
+  // SQL 助手面板开合按 tab 记录：切到别的表再回来保持原状态。
+  const assistantOpen = useDbSqlAssistantStore((s) => s.threads[tab.id]?.open ?? false);
+  const setAssistantOpen = useDbSqlAssistantStore((s) => s.setOpen);
+
   // 补全尽量使用整个连接的最新反射结果；尚未反射时回退到当前预览表。
   const tables = useMemo(() => {
     const byName = new Map<string, DbTableSchema>();
@@ -94,12 +100,19 @@ export function DbDataView({ tab }: { tab: DbDataTab }) {
     window.setTimeout(() => setCopied(false), 1500);
   };
 
-  const fetchPage = async (nextPage: number, includeTotal: boolean, size: number) => {
+  const fetchPage = async (
+    nextPage: number,
+    includeTotal: boolean,
+    size: number,
+    sqlOverride?: string,
+  ) => {
+    // 「AI 直接运行」不能依赖 setSql 后的异步 state，必须显式传入 SQL。
+    const execSql = sqlOverride ?? sql;
     setBusy(true);
     setErrorKey(null);
     try {
       const res = await runDbQuery(tab.connectionId, tab.scope, {
-        sql,
+        sql: execSql,
         limit: size,
         offset: (nextPage - 1) * size,
         includeTotal,
@@ -195,7 +208,7 @@ export function DbDataView({ tab }: { tab: DbDataTab }) {
   );
 
   return (
-    <div className="formtab dbdata">
+    <div className={`formtab dbdata${assistantOpen ? ' dbdata--with-assistant' : ''}`}>
       <div className="formtab__head">
         <Play size={14} strokeWidth={1.75} />
         <span className="formtab__title">
@@ -203,94 +216,128 @@ export function DbDataView({ tab }: { tab: DbDataTab }) {
         </span>
       </div>
 
-      <div className="dbdata__editor">
-        <Suspense
-          fallback={
-            <div
-              className="dbdata__sql-editor dbdata__sql-editor--loading"
-              aria-busy="true"
-            />
-          }
-        >
-          <SqlEditor
-            value={sql}
-            onChange={setSql}
-            onRun={handleRun}
-            tables={tables}
-            driver={tab.driver}
-            defaultTable={tab.table.table}
-            dark={dark}
-            ariaLabel={t('dataSql')}
-          />
-        </Suspense>
-        <div className="dbdata__actions">
-          {busy && <span className="card__meta">{t('loadingRows')}</span>}
-          <button
-            type="button"
-            className="button button--sm"
-            disabled={busy || !sql.trim()}
-            onClick={handleRun}
-          >
-            <Play size={13} strokeWidth={1.9} /> {t('run')}
-          </button>
-        </div>
-        {errorKey && (
-          <div className="panel-error">{terr(errorKey.replace(/^error\./, ''))}</div>
-        )}
-      </div>
-
-      {result && (
-        <>
-          <div className="dbdata__execsql">
-            <div className="dbdata__execsql-head">
-              <span className="card__meta">{t('executedSql')}</span>
-              <span className="spacer" />
+      <div className="dbdata__body">
+        <div className="dbdata__main">
+          <div className="dbdata__editor">
+            <Suspense
+              fallback={
+                <div
+                  className="dbdata__sql-editor dbdata__sql-editor--loading"
+                  aria-busy="true"
+                />
+              }
+            >
+              <SqlEditor
+                value={sql}
+                onChange={setSql}
+                onRun={handleRun}
+                tables={tables}
+                driver={tab.driver}
+                defaultTable={tab.table.table}
+                dark={dark}
+                ariaLabel={t('dataSql')}
+              />
+            </Suspense>
+            <div className="dbdata__actions">
+              {busy && <span className="card__meta">{t('loadingRows')}</span>}
               <button
                 type="button"
-                className="button button--sm button--ghost"
-                onClick={() => void copySql()}
+                className={`button button--sm button--ghost${
+                  assistantOpen ? ' button--active' : ''
+                }`}
+                aria-pressed={assistantOpen}
+                title={t('aiGenerateSql')}
+                onClick={() => setAssistantOpen(tab.id, !assistantOpen)}
               >
-                {copied ? (
-                  <Check size={13} strokeWidth={2} />
-                ) : (
-                  <Copy size={13} strokeWidth={1.75} />
-                )}{' '}
-                {copied ? t('copied') : t('copy')}
+                <Sparkles size={13} strokeWidth={1.9} /> {t('aiGenerateSql')}
+              </button>
+              <button
+                type="button"
+                className="button button--sm"
+                disabled={busy || !sql.trim()}
+                onClick={handleRun}
+              >
+                <Play size={13} strokeWidth={1.9} /> {t('run')}
               </button>
             </div>
-            <pre className="dbdata__sqltag">{result.sql}</pre>
-          </div>
-
-          <div className="dbdata__result">
-            {rows.length === 0 ? (
-              <div className="panel-empty">
-                <span>{t('noRows')}</span>
-              </div>
-            ) : (
-              <table className="dbdata__table">
-                <thead>
-                  <tr>
-                    {columns.map((c) => (
-                      <th key={c}>{c}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r, i) => (
-                    <tr key={i}>
-                      {r.map((v, j) => (
-                        <td key={j}>{formatCell(v)}</td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            {errorKey && (
+              <div className="panel-error">{terr(errorKey.replace(/^error\./, ''))}</div>
             )}
           </div>
 
-          {renderPager()}
-        </>
-      )}
+          {result && (
+            <>
+              <div className="dbdata__execsql">
+                <div className="dbdata__execsql-head">
+                  <span className="card__meta">{t('executedSql')}</span>
+                  <span className="spacer" />
+                  <button
+                    type="button"
+                    className="button button--sm button--ghost"
+                    onClick={() => void copySql()}
+                  >
+                    {copied ? (
+                      <Check size={13} strokeWidth={2} />
+                    ) : (
+                      <Copy size={13} strokeWidth={1.75} />
+                    )}{' '}
+                    {copied ? t('copied') : t('copy')}
+                  </button>
+                </div>
+                <pre className="dbdata__sqltag">{result.sql}</pre>
+              </div>
+
+              <div className="dbdata__result">
+                {rows.length === 0 ? (
+                  <div className="panel-empty">
+                    <span>{t('noRows')}</span>
+                  </div>
+                ) : (
+                  <table className="dbdata__table">
+                    <thead>
+                      <tr>
+                        {columns.map((c) => (
+                          <th key={c}>{c}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((r, i) => (
+                        <tr key={i}>
+                          {r.map((v, j) => (
+                            <td key={j}>{formatCell(v)}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+
+              {renderPager()}
+            </>
+          )}
+        </div>
+
+        {assistantOpen && (
+          <DbSqlAssistantPanel
+            tab={tab}
+            sql={sql}
+            tables={tables}
+            result={result}
+            error={errorKey ? terr(errorKey.replace(/^error\./, '')) : null}
+            page={page}
+            pageSize={pageSize}
+            total={total}
+            onInsert={(next) => setSql(next)}
+            onRun={(next) => {
+              setSql(next);
+              void fetchPage(1, true, pageSize, next);
+            }}
+            onClose={() => setAssistantOpen(tab.id, false)}
+          />
+        )}
+      </div>
     </div>
   );
 }

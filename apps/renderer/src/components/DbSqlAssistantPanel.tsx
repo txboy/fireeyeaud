@@ -1,0 +1,315 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { CornerDownLeft, Send, Sparkles, Square, Trash2, X } from 'lucide-react';
+import type { DbQueryResult, DbTableSchema } from '@fireeyeaud/shared';
+import { streamDbSqlChat, type DbSqlChatMessage } from '../lib/api';
+import { buildDbSqlContext } from '../lib/dbSqlContext';
+import {
+  abortThread,
+  getThread,
+  releaseThread,
+  useDbSqlAssistantStore,
+} from '../store/dbSqlAssistant';
+import { useConfirmStore } from '../store/confirm';
+import type { DbDataTab } from '../store/ui';
+import { Markdown } from './Markdown';
+
+/** 随请求发送的历史消息上限（与后端保持一致：最近 20 条 / 总计 40KB）。 */
+const HISTORY_LIMIT = 20;
+const HISTORY_CHARS = 40_000;
+/** 用户停在底部附近时才自动跟随流式输出。 */
+const STICK_THRESHOLD = 48;
+
+export interface DbSqlAssistantPanelProps {
+  tab: DbDataTab;
+  /** 当前编辑器中的 SQL。 */
+  sql: string;
+  /** 全部已反射的表结构（供模型理解关联关系）。 */
+  tables: DbTableSchema[];
+  result: DbQueryResult | null;
+  /** 已本地化的错误文本（不传 messageKey，避免模型看到 i18n key）。 */
+  error: string | null;
+  page: number;
+  pageSize: number;
+  total: number | null;
+  onInsert: (sql: string) => void;
+  onRun: (sql: string) => void;
+  onClose: () => void;
+}
+
+/** 取最近 N 条、总字符数不超限的历史消息。 */
+function recentHistory(messages: DbSqlChatMessage[]): DbSqlChatMessage[] {
+  const tail = messages.slice(-HISTORY_LIMIT);
+  const kept: DbSqlChatMessage[] = [];
+  let total = 0;
+  for (let i = tail.length - 1; i >= 0; i -= 1) {
+    total += tail[i].content.length;
+    if (total > HISTORY_CHARS) break;
+    kept.unshift(tail[i]);
+  }
+  return kept;
+}
+
+/**
+ * SQL 助手面板：自然语言 → 只读 SQL。
+ *
+ * 不直接执行 SQL：生成结果通过 `onInsert` / `onRun` 交给 `DbDataView`，
+ * 「直接运行」仍走现有只读校验通道。
+ */
+export function DbSqlAssistantPanel(props: DbSqlAssistantPanelProps) {
+  const { tab, tables, result, error, page, pageSize, total, onInsert, onRun, onClose } =
+    props;
+  const { t } = useTranslation('database');
+  const { t: terr } = useTranslation('error');
+  const { i18n } = useTranslation();
+  const confirm = useConfirmStore((s) => s.confirm);
+
+  const threads = useDbSqlAssistantStore((s) => s.threads);
+  const store = useDbSqlAssistantStore;
+  const thread = threads[tab.id] ?? getThread(tab.id);
+
+  const [input, setInput] = useState('');
+  const listRef = useRef<HTMLDivElement>(null);
+  const stickRef = useRef(true);
+  /** 本面板发出的请求；发新请求或停止时复用。 */
+  const controllerRef = useRef<AbortController | null>(null);
+
+  const examples = useMemo(
+    () => [t('assistantExample1'), t('assistantExample2'), t('assistantExample3')],
+    [t],
+  );
+
+  // 用户向上翻阅时不强制滚动，停在底部附近才跟随。
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el || !stickRef.current) return;
+    el.scrollTop = el.scrollHeight;
+  }, [thread.messages, thread.busy]);
+
+  const onScroll = () => {
+    const el = listRef.current;
+    if (!el) return;
+    stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight <= STICK_THRESHOLD;
+  };
+
+  const send = async (text: string) => {
+    const content = text.trim();
+    if (!content || thread.busy) return;
+
+    const history: DbSqlChatMessage[] = thread.messages
+      .filter((m) => m.content.trim().length > 0)
+      .map((m) => ({ role: m.role, content: m.content }));
+
+    setInput('');
+    stickRef.current = true;
+    store.getState().appendUser(tab.id, content);
+    const assistant = store.getState().startAssistant(tab.id);
+
+    const controller = new AbortController();
+    controllerRef.current = controller;
+    abortThread(tab.id, controller);
+
+    try {
+      await streamDbSqlChat(
+        {
+          scope: tab.scope,
+          connectionId: tab.connectionId,
+          table: tab.table.table,
+          driver: tab.driver,
+          messages: [...recentHistory(history), { role: 'user', content }],
+          context: buildDbSqlContext({
+            tab,
+            tables,
+            currentSql: props.sql,
+            executedSql: result?.sql ?? null,
+            result,
+            error,
+            page,
+            pageSize,
+            total,
+          }),
+          locale: i18n.language,
+          modelId: null,
+        },
+        {
+          signal: controller.signal,
+          onEvent: (event) => {
+            if (event.type === 'token') {
+              store.getState().appendDelta(tab.id, assistant.id, event.data.delta ?? '');
+            } else if (event.type === 'error') {
+              store
+                .getState()
+                .fail(tab.id, assistant.id, event.data.messageKey ?? 'error.internal');
+            }
+          },
+        },
+      );
+      store.getState().finish(tab.id, assistant.id);
+    } catch (err) {
+      if ((err as Error)?.name === 'AbortError') {
+        store.getState().finish(tab.id, assistant.id, true);
+      } else {
+        store
+          .getState()
+          .fail(
+            tab.id,
+            assistant.id,
+            (err as { messageKey?: string }).messageKey ?? 'error.internal',
+          );
+      }
+    } finally {
+      releaseThread(tab.id, controller);
+      if (controllerRef.current === controller) controllerRef.current = null;
+    }
+  };
+
+  const stop = () => {
+    // 中断后由 send 的 catch 分支标记「已停止生成」，保留已生成内容。
+    controllerRef.current?.abort();
+  };
+
+  const clear = async () => {
+    const ok = await confirm({
+      title: t('assistantClear'),
+      message: t('assistantClearConfirm'),
+      confirmLabel: t('assistantClear'),
+      cancelLabel: t('cancel'),
+      danger: true,
+    });
+    if (ok) store.getState().clearThread(tab.id);
+  };
+
+  const onKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+      event.preventDefault();
+      void send(input);
+    }
+  };
+
+  const sqlActions = useMemo(
+    () => ({
+      insertLabel: t('insertToEditor'),
+      runLabel: t('runSql'),
+      onInsert,
+      onRun,
+    }),
+    [t, onInsert, onRun],
+  );
+
+  return (
+    <aside className="dbdata__assistant" aria-label={t('assistantTitle')}>
+      <div className="dbdata__assistant-head">
+        <Sparkles size={13} strokeWidth={1.8} className="dbdata__assistant-icon" />
+        <span className="dbdata__assistant-title">{t('assistantTitle')}</span>
+        <span className="dbdata__assistant-table" title={tab.table.table}>
+          {tab.table.table}
+        </span>
+        <span className="spacer" />
+        <button
+          type="button"
+          className="icon-btn"
+          title={t('assistantClear')}
+          aria-label={t('assistantClear')}
+          disabled={thread.messages.length === 0 && !thread.errorKey}
+          onClick={() => void clear()}
+        >
+          <Trash2 size={13} strokeWidth={1.8} />
+        </button>
+        <button
+          type="button"
+          className="icon-btn"
+          title={t('assistantTitle')}
+          aria-label={t('assistantTitle')}
+          onClick={onClose}
+        >
+          <X size={14} strokeWidth={2} />
+        </button>
+      </div>
+
+      <div className="dbdata__assistant-list" ref={listRef} onScroll={onScroll}>
+        {thread.messages.length === 0 && (
+          <div className="dbdata__assistant-empty">
+            <p>{t('assistantEmpty')}</p>
+            <div className="dbdata__assistant-examples">
+              {examples.map((example) => (
+                <button
+                  key={example}
+                  type="button"
+                  className="dbdata__assistant-example"
+                  onClick={() => setInput(example)}
+                >
+                  <CornerDownLeft size={11} strokeWidth={1.8} />
+                  {example}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {thread.messages.map((message) => (
+          <div
+            key={message.id}
+            className={`dbdata__assistant-msg dbdata__assistant-msg--${message.role}`}
+          >
+            {message.role === 'user' ? (
+              <div className="dbdata__assistant-user">{message.content}</div>
+            ) : (
+              <div className="dbdata__assistant-reply">
+                {message.content ? (
+                  <Markdown
+                    content={message.content}
+                    plain={thread.busy && message.id === thread.messages.at(-1)?.id}
+                    sqlActions={sqlActions}
+                  />
+                ) : (
+                  thread.busy && <span className="dbdata__assistant-dots" aria-hidden="true" />
+                )}
+                {message.interrupted && (
+                  <div className="dbdata__assistant-note">{t('assistantInterrupted')}</div>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+
+        {thread.errorKey && (
+          <div className="dbdata__assistant-error">
+            {terr(thread.errorKey.replace(/^error\./, ''))}
+            {thread.errorKey === 'error.llmUnavailable' && (
+              <div className="dbdata__assistant-note">{t('assistantLlmMissing')}</div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="dbdata__assistant-input">
+        <textarea
+          className="dbdata__assistant-textarea"
+          value={input}
+          rows={3}
+          placeholder={t('assistantPlaceholder')}
+          aria-label={t('assistantPlaceholder')}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={onKeyDown}
+        />
+        <div className="dbdata__assistant-actions">
+          <span className="dbdata__assistant-hint">{t('assistantReadonlyHint')}</span>
+          {thread.busy ? (
+            <button type="button" className="button button--sm button--ghost" onClick={stop}>
+              <Square size={11} strokeWidth={2} /> {t('assistantStop')}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="button button--sm"
+              disabled={!input.trim()}
+              onClick={() => void send(input)}
+            >
+              <Send size={12} strokeWidth={1.9} /> {t('assistantSend')}
+            </button>
+          )}
+        </div>
+      </div>
+    </aside>
+  );
+}

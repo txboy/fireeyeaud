@@ -14,6 +14,7 @@ import { useSidecarStore } from './store/sidecar';
 import { useWorkspaceStore } from './store/workspace';
 import { useUiStore } from './store/ui';
 import { useChatStore } from './store/chat';
+import { useDbSqlAssistantStore } from './store/dbSqlAssistant';
 
 export default function App() {
   const init = useSidecarStore((s) => s.init);
@@ -21,6 +22,7 @@ export default function App() {
   const resetRightTabs = useUiStore((s) => s.resetRightTabs);
   const openSession = useUiStore((s) => s.openSession);
   const clearAllChats = useChatStore((s) => s.clearAllChats);
+  const clearDbSqlAssistant = useDbSqlAssistantStore((s) => s.clearAll);
   const loadSessions = useChatStore((s) => s.loadSessions);
 
   useEffect(() => {
@@ -35,6 +37,8 @@ export default function App() {
     void (async () => {
       resetRightTabs();
       clearAllChats();
+      // SQL 助手对话只在内存中；切换工作区后表结构/连接都变了，必须一并清空并中断生成。
+      clearDbSqlAssistant();
       await loadSessions();
       if (cancelled) return;
       const list = useChatStore.getState().sessions;
@@ -44,7 +48,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [workspace, resetRightTabs, clearAllChats, loadSessions, openSession]);
+  }, [workspace, resetRightTabs, clearAllChats, clearDbSqlAssistant, loadSessions, openSession]);
 
   return (
     <div className="app">

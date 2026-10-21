@@ -652,6 +652,32 @@ body {
   min-height: 0;
 }
 
+/* 主体：左（编辑器 + 结果）/ 右（SQL 助手）双栏。未开助手时仍为单列。 */
+.dbdata__body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+}
+
+.dbdata__main {
+  flex: 1 1 auto;
+  min-width: 0; /* 结果表格横向滚动，而不是挤压助手列 */
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.dbdata__assistant {
+  flex: 0 1 clamp(300px, 33%, 520px);
+  min-width: 300px;
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--panel-bg);
+}
+
 .dbdata__editor {
   flex: 0 0 auto;
   display: flex;
@@ -846,6 +872,211 @@ body {
   color: var(--text-2);
   font-weight: 500;
   z-index: 1;
+}
+
+/* ---- SQL 助手面板 ---- */
+.dbdata__assistant-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-2);
+}
+
+.dbdata__assistant-icon {
+  color: var(--accent);
+  flex: 0 0 auto;
+}
+
+.dbdata__assistant-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-1);
+  white-space: nowrap;
+}
+
+.dbdata__assistant-table {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.dbdata__assistant-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dbdata__assistant-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-2);
+}
+
+.dbdata__assistant-empty p {
+  margin: 0;
+}
+
+.dbdata__assistant-examples {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dbdata__assistant-example {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 11.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dbdata__assistant-example:hover {
+  background: var(--hover);
+  color: var(--text-1);
+}
+
+.dbdata__assistant-msg {
+  display: flex;
+  min-width: 0;
+}
+
+.dbdata__assistant-msg--user {
+  justify-content: flex-end;
+}
+
+.dbdata__assistant-user {
+  max-width: 88%;
+  padding: 6px 10px;
+  border-radius: 10px 10px 2px 10px;
+  background: var(--accent-weak);
+  color: var(--text-1);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.dbdata__assistant-reply {
+  min-width: 0;
+  max-width: 100%;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.dbdata__assistant-note {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.dbdata__assistant-error {
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--danger-weak);
+  color: var(--danger);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.dbdata__assistant-dots {
+  display: inline-block;
+  width: 18px;
+  height: 8px;
+  background:
+    radial-gradient(circle, var(--text-3) 2px, transparent 2px) 0 0 / 6px 8px repeat-x;
+  animation: dbdata-dots 1s steps(3, end) infinite;
+}
+
+@keyframes dbdata-dots {
+  from {
+    opacity: 0.35;
+  }
+
+  50% {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0.35;
+  }
+}
+
+.dbdata__assistant-input {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--border);
+}
+
+.dbdata__assistant-textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 56px;
+  max-height: 180px;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--editor-bg);
+  color: var(--text-1);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.dbdata__assistant-textarea:focus {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.dbdata__assistant-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dbdata__assistant-hint {
+  flex: 1;
+  min-width: 0;
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--text-3);
+}
+
+/* 助手列内的 Markdown 收紧排版（正文 12px，代码块不撑破栏宽）。 */
+.dbdata__assistant-reply .md {
+  font-size: 12px;
+}
+
+.dbdata__assistant-reply .md-code__pre {
+  padding: 8px 10px;
+}
+
+.dbdata__assistant-reply .md-code__code {
+  font-size: 11.5px;
 }
 
 .titlebar__btn {
@@ -2137,6 +2368,13 @@ textarea.searchbox {
   background: var(--hover);
   color: var(--text-1);
   border: 1px solid var(--border);
+}
+
+/* 切换类按钮的按下态（如「AI 生成 SQL」面板已展开）。 */
+.button--active {
+  background: var(--accent-weak);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .button--danger {
