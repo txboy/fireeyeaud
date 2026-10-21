@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { DbQueryResult, DbTableSchema } from '@fireeyeaud/shared';
 import type { DbDataTab } from '../src/store/ui.ts';
-import { buildDbSqlContext } from '../src/lib/dbSqlContext.ts';
+import { buildDbSqlContext, scoreRelatedTable } from '../src/lib/dbSqlContext.ts';
 
 const MAX_TABLES = 40;
 
@@ -184,6 +184,116 @@ test('caps result columns at 100 and truncates long cell strings with an ellipsi
   assert.equal(ctx.resultTruncated, true);
 });
 
+test('scores a table holding <current>_id as most related', () => {
+  const current = { table: 'voucher', columns: [{ name: 'id', type: 'INTEGER' }] };
+  const related = {
+    table: 'voucher_entry',
+    columns: [
+      { name: 'id', type: 'INTEGER' },
+      { name: 'voucher_id', type: 'INTEGER' },
+    ],
+  };
+  const unrelated = {
+    table: 'attendance',
+    columns: [{ name: 'id', type: 'INTEGER' }, { name: 'days', type: 'INTEGER' }],
+  };
+
+  assert.ok(scoreRelatedTable(current, related) > scoreRelatedTable(current, unrelated));
+  assert.ok(scoreRelatedTable(current, related) > 0);
+});
+
+test('scores a name-prefixed table as related', () => {
+  const current = { table: 'voucher', columns: [] };
+  const child = { table: 'voucher_items', columns: [] };
+  const stranger = { table: 'salary', columns: [] };
+  assert.ok(scoreRelatedTable(current, child) > scoreRelatedTable(current, stranger));
+});
+
+test('scores a parent table referenced by <table>_id on the current table', () => {
+  const current = {
+    table: 'voucher_entry',
+    columns: [{ name: 'voucher_id', type: 'INTEGER' }],
+  };
+  const parent = { table: 'voucher', columns: [{ name: 'id', type: 'INTEGER' }] };
+  const stranger = { table: 'employee', columns: [{ name: 'id', type: 'INTEGER' }] };
+  assert.ok(scoreRelatedTable(current, parent) > scoreRelatedTable(current, stranger));
+});
+
+test('column-name overlap adds a small bonus but never beats a real relation', () => {
+  const current = {
+    table: 'voucher',
+    columns: [
+      { name: 'amount', type: 'REAL' },
+      { name: 'date', type: 'TEXT' },
+    ],
+  };
+  const overlap = {
+    table: 'manual',
+    columns: [{ name: 'amount', type: 'REAL' }, { name: 'date', type: 'TEXT' }],
+  };
+  const fk = {
+    table: 'other',
+    columns: [{ name: 'voucher_id', type: 'INTEGER' }],
+  };
+  assert.ok(scoreRelatedTable(current, overlap) > 0);
+  assert.ok(scoreRelatedTable(current, fk) > scoreRelatedTable(current, overlap));
+});
+
+test('related tables survive the 40-table cap', () => {
+  const current = { table: 'voucher', columns: [{ name: 'id', type: 'INTEGER' }] };
+  const related = {
+    table: 'voucher_entry',
+    columns: [{ name: 'voucher_id', type: 'INTEGER' }],
+  };
+  // 填充 60 张无关表，把关联表放在最后
+  const filler = bigTables(60, 2);
+  const ctx = buildDbSqlContext({
+    tab: tab({ table: current }),
+    tables: [current, ...filler, related],
+    currentSql: '',
+    executedSql: null,
+    result: null,
+    error: null,
+    page: 1,
+    pageSize: 50,
+    total: null,
+  });
+
+  assert.ok(ctx.tables.some((t) => t.name === 'voucher_entry'), '关联表必须保留');
+  assert.ok(ctx.tables.length <= MAX_TABLES);
+});
+
+test('when the budget is tight, least-related tables lose their columns first', () => {
+  const current = { table: 'voucher', columns: [{ name: 'id', type: 'INTEGER' }] };
+  const cols = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({ name: `c${i}`, type: 'TEXT' }));
+  const related = { table: 'voucher_entry', columns: cols(40) };
+  const filler = Array.from({ length: 30 }, (_, i) => ({
+    table: `t${i}`,
+    columns: cols(40),
+  }));
+  const rows = Array.from({ length: 20 }, () =>
+    Array.from({ length: 100 }, () => 'z'.repeat(500)),
+  );
+  const ctx = buildDbSqlContext({
+    tab: tab({ table: current }),
+    tables: [current, related, ...filler],
+    currentSql: '',
+    executedSql: null,
+    result: result(rows),
+    error: null,
+    page: 1,
+    pageSize: 50,
+    total: 1,
+  });
+
+  const kept = ctx.tables.find((t) => t.name === 'voucher_entry');
+  assert.ok(kept, '关联表不该被整张丢掉');
+  assert.ok((kept?.columns?.length ?? 0) > 0, '关联表的列应保住');
+  assert.equal(ctx.table.columns.length, 1, '当前表结构永远保留');
+  assert.ok(JSON.stringify(ctx).length <= 60_000);
+});
+
 test('keeps the serialized context near the 60KB budget', () => {
   const columns = Array.from({ length: 100 }, (_, i) => `col${i}`);
   const rows = Array.from({ length: 20 }, () =>
@@ -205,7 +315,7 @@ test('keeps the serialized context near the 60KB budget', () => {
   assert.equal(ctx.tablesTruncated, true);
 });
 
-test('drops result rows before touching the current table schema when over budget', () => {
+test('budget trimming keeps the current table schema and the top related tables', () => {
   const rows = Array.from({ length: 20 }, () =>
     Array.from({ length: 100 }, () => 'z'.repeat(500)),
   );
@@ -222,12 +332,11 @@ test('drops result rows before touching the current table schema when over budge
   });
   // 当前表列永远优先保留
   assert.equal(ctx.table.columns.length, 2);
-  // 相关表被裁成只剩表名
-  assert.ok(ctx.tables.length > 0);
-  assert.ok(ctx.tables.every((t) => (t.columns?.length ?? 0) === 0));
+  // 前 5 张相关表保留列，其余被裁成只剩表名
+  assert.ok(ctx.tables.length > 5);
+  assert.ok(ctx.tables.slice(5).every((t) => (t.columns?.length ?? 0) === 0));
   assert.equal(ctx.tablesTruncated, true);
   assert.equal(ctx.resultTruncated, true);
-  // 结果优先保留行、最后才砍列
   assert.ok(ctx.result !== null);
   assert.ok(JSON.stringify(ctx).length <= 60_000);
 });

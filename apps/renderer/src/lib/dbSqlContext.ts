@@ -14,6 +14,8 @@ const MAX_RESULT_ROWS = 20;
 const MAX_RESULT_COLS = 100;
 const MAX_CELL_CHARS = 500;
 const MAX_CONTEXT_CHARS = 60_000;
+/** 预算紧张时，前 N 张相关表的列始终保留（其余先丢列）。 */
+const KEEP_RELATED_COLUMN_TABLES = 5;
 /** 单条 SQL / 错误文本上限：只裁结果压不住超长 SQL。 */
 const MAX_SQL_CHARS = 8_000;
 const MAX_ERROR_CHARS = 2_000;
@@ -74,6 +76,73 @@ function truncateCell(value: unknown): unknown {
   return value;
 }
 
+/** 单复数归一（够用即可：关系型表名大多只差一个 s/es）。 */
+function singular(name: string): string {
+  const lower = name.toLowerCase();
+  if (lower.endsWith('ies')) return lower.slice(0, -3) + 'y';
+  if (lower.endsWith('es')) return lower.slice(0, -2);
+  if (lower.endsWith('s')) return lower.slice(0, -1);
+  return lower;
+}
+
+/** 判断 `<x>_id` 中的 x 是否指向另一张表。 */
+function refersTo(stem: string, table: string): boolean {
+  const s = singular(stem);
+  const t = singular(table);
+  return s === t || t.startsWith(s) || s.startsWith(t);
+}
+
+/**
+ * 相关度打分（A）：用于在表很多 / 预算紧张时优先保留真正能 JOIN 的表。
+ *
+ * 权重：`<当前表>_id` 形式的外键 > 表名前缀/包含 > 反向外键（当前表有 `<他表>_id`）
+ * > 列名交集。分数只用于排序，不影响正确性。
+ */
+export function scoreRelatedTable(
+  current: DbTableSchema,
+  candidate: DbTableSchema,
+): number {
+  if (candidate.table === current.table) return Number.POSITIVE_INFINITY;
+
+  const currentName = current.table.toLowerCase();
+  const candidateName = candidate.table.toLowerCase();
+  let score = 0;
+
+  // 表名关系
+  if (candidateName.startsWith(`${currentName}_`) || candidateName.startsWith(`${currentName}`)) {
+    score += 40;
+  } else if (currentName.startsWith(`${candidateName}_`) || currentName.startsWith(candidateName)) {
+    score += 20;
+  }
+
+  // 候选表持有指向当前表的外键
+  for (const column of candidate.columns ?? []) {
+    const match = /^(.+?)_id$/i.exec(column.name);
+    if (match && refersTo(match[1], current.table)) score += 60;
+  }
+
+  // 当前表持有指向候选表的外键（反向）
+  for (const column of current.columns ?? []) {
+    const match = /^(.+?)_id$/i.exec(column.name);
+    if (match && refersTo(match[1], candidate.table)) score += 50;
+  }
+
+  // 列名交集（排除通用列）
+  const generic = new Set(['id', 'created_at', 'updated_at', 'deleted_at']);
+  const currentCols = new Set(
+    (current.columns ?? [])
+      .map((c) => c.name.toLowerCase())
+      .filter((n) => !generic.has(n)),
+  );
+  let overlap = 0;
+  for (const column of candidate.columns ?? []) {
+    if (currentCols.has(column.name.toLowerCase())) overlap += 1;
+  }
+  score += Math.min(20, overlap * 4);
+
+  return score;
+}
+
 function compactResult(
   result: DbQueryResult | null,
 ): { result: DbSqlChatContext['result']; truncated: boolean } {
@@ -132,10 +201,14 @@ function compactTables(
   };
 
   const seen = new Set([current.table]);
+  // A：按相关度排序，保证能 JOIN 的表先占名额（稳定排序，同分保持原顺序）
+  const ranked = tables
+    .filter((table) => !seen.has(table.table) && (seen.add(table.table), true))
+    .map((table, index) => ({ table, index, score: scoreRelatedTable(current, table) }))
+    .sort((a, b) => b.score - a.score || a.index - b.index);
+
   const others: DbSqlTableInfo[] = [];
-  for (const table of tables) {
-    if (seen.has(table.table)) continue;
-    seen.add(table.table);
+  for (const { table } of ranked) {
     if (others.length >= MAX_TABLES - 1) {
       truncated = true;
       continue;
@@ -202,12 +275,19 @@ function fitBudget(ctx: DbSqlChatContext): void {
 
   if (size() <= MAX_CONTEXT_CHARS) return;
 
-  if (ctx.tables.length) {
-    ctx.tables = ctx.tables.map((t) => ({ name: t.name }));
+  // 1) 从**最不相关**的表开始丢列（`tables` 已按相关度降序）；前 N 张相关表的列先保住。
+  while (size() > MAX_CONTEXT_CHARS) {
+    const victim = [...ctx.tables.slice(KEEP_RELATED_COLUMN_TABLES)]
+      .reverse()
+      .find((t) => (t.columns?.length ?? 0) > 0);
+    if (!victim) break;
+    victim.columns = [];
+    victim.truncated = true;
     ctx.tablesTruncated = true;
   }
   if (size() <= MAX_CONTEXT_CHARS) return;
 
+  // 2) 结果行从尾部减少
   if (ctx.result) {
     while (ctx.result.rows.length > 0 && size() > MAX_CONTEXT_CHARS) {
       const keep = Math.max(0, ctx.result.rows.length - Math.ceil(ctx.result.rows.length / 4));
@@ -217,6 +297,7 @@ function fitBudget(ctx: DbSqlChatContext): void {
   }
   if (size() <= MAX_CONTEXT_CHARS) return;
 
+  // 3) 结果列从尾部减少
   if (ctx.result) {
     while (ctx.result.columns.length > 0 && size() > MAX_CONTEXT_CHARS) {
       const keep = Math.max(
@@ -232,8 +313,9 @@ function fitBudget(ctx: DbSqlChatContext): void {
   }
   if (size() <= MAX_CONTEXT_CHARS) return;
 
-  if (ctx.tables.length) {
-    ctx.tables = [];
+  // 4) 丢掉最不相关的表（只保留表名会重复第 1 步，这里直接移除）
+  while (ctx.tables.length > 0 && size() > MAX_CONTEXT_CHARS) {
+    ctx.tables = ctx.tables.slice(0, -1);
     ctx.tablesTruncated = true;
   }
 }

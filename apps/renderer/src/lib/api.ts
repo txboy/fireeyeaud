@@ -727,7 +727,7 @@ export interface DbSqlChatMessage {
 }
 
 export interface DbSqlSseEvent {
-  type: 'status' | 'token' | 'done' | 'error';
+  type: 'status' | 'token' | 'done' | 'error' | 'tool_call' | 'tool_result';
   seq: number;
   ts: string;
   data: {
@@ -737,6 +737,11 @@ export interface DbSqlSseEvent {
     code?: string;
     params?: Record<string, unknown>;
     usage?: Record<string, unknown>;
+    /** tool_call / tool_result。 */
+    callId?: string;
+    tool?: string;
+    ok?: boolean;
+    summary?: string;
   };
 }
 

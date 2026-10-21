@@ -1032,6 +1032,55 @@ body {
   border-top: 1px solid var(--border);
 }
 
+/* 明确告知用户：样本行会被读取并随提示词发出。 */
+.dbdata__assistant-notice {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--text-3);
+}
+
+.dbdata__assistant-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 6px;
+}
+
+.dbdata__assistant-step {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--hover);
+  color: var(--text-2);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.dbdata__assistant-step--pending {
+  border-style: dashed;
+  color: var(--text-3);
+}
+
+.dbdata__assistant-step--failed {
+  border-color: var(--danger);
+  background: var(--danger-weak);
+  color: var(--danger);
+}
+
+.dbdata__assistant-step-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .dbdata__assistant-textarea {
   width: 100%;
   resize: vertical;

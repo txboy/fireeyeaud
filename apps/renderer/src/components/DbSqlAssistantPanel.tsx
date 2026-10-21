@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CornerDownLeft, Send, Sparkles, Square, Trash2, X } from 'lucide-react';
+import { CornerDownLeft, Send, Sparkles, Square, Table2, Trash2, X } from 'lucide-react';
 import type { DbQueryResult, DbTableSchema } from '@fireeyeaud/shared';
 import { streamDbSqlChat } from '../lib/api';
 import { buildDbSqlContext } from '../lib/dbSqlContext';
@@ -132,6 +132,19 @@ export function DbSqlAssistantPanel(props: DbSqlAssistantPanelProps) {
           onEvent: (event) => {
             if (event.type === 'token') {
               store.getState().appendDelta(tab.id, assistant.id, event.data.delta ?? '');
+            } else if (event.type === 'tool_call') {
+              store.getState().appendToolCall(tab.id, assistant.id, {
+                callId: event.data.callId ?? '',
+                tool: event.data.tool ?? '',
+                table: String(event.data.params?.table ?? ''),
+              });
+            } else if (event.type === 'tool_result') {
+              store.getState().finishToolCall(tab.id, assistant.id, {
+                callId: event.data.callId ?? '',
+                ok: Boolean(event.data.ok),
+                summary: event.data.summary ?? '',
+                ...(event.data.messageKey ? { messageKey: event.data.messageKey } : {}),
+              });
             } else if (event.type === 'error') {
               store
                 .getState()
@@ -251,6 +264,31 @@ export function DbSqlAssistantPanel(props: DbSqlAssistantPanelProps) {
               <div className="dbdata__assistant-user">{message.content}</div>
             ) : (
               <div className="dbdata__assistant-reply">
+                {(message.steps?.length ?? 0) > 0 && (
+                  <div className="dbdata__assistant-steps">
+                    {message.steps?.map((step) => (
+                      <div
+                        key={step.callId}
+                        className={`dbdata__assistant-step${
+                          step.pending
+                            ? ' dbdata__assistant-step--pending'
+                            : step.ok
+                              ? ''
+                              : ' dbdata__assistant-step--failed'
+                        }`}
+                        title={step.summary || undefined}
+                      >
+                        <Table2 size={11} strokeWidth={1.8} />
+                        <span className="dbdata__assistant-step-text">
+                          {step.pending
+                            ? t('assistantToolPending', { table: step.table })
+                            : step.summary ||
+                              t('assistantToolFailed', { table: step.table })}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {message.content ? (
                   <Markdown
                     content={message.content}
@@ -279,6 +317,10 @@ export function DbSqlAssistantPanel(props: DbSqlAssistantPanelProps) {
       </div>
 
       <div className="dbdata__assistant-input">
+        <div className="dbdata__assistant-notice">
+          <Table2 size={10} strokeWidth={1.8} />
+          {t('assistantSampleHint')}
+        </div>
         <textarea
           className="dbdata__assistant-textarea"
           value={input}

@@ -87,6 +87,66 @@ test('fail records errorKey, clears busy and leaves content untouched', () => {
   assert.equal(thread.messages[0].content, '部分');
 });
 
+test('tool steps are recorded on the assistant message and resolved', () => {
+  const store = useDbSqlAssistantStore.getState();
+  const assistant = store.startAssistant(TAB);
+
+  store.appendToolCall(TAB, assistant.id, {
+    callId: 'call_1',
+    tool: 'preview_table',
+    table: 'ledger',
+  });
+
+  const pending = getThread(TAB).messages[0].steps ?? [];
+  assert.equal(pending.length, 1);
+  assert.equal(pending[0].callId, 'call_1');
+  assert.equal(pending[0].table, 'ledger');
+  assert.equal(pending[0].pending, true);
+  assert.equal(pending[0].ok, undefined);
+
+  store.finishToolCall(TAB, assistant.id, {
+    callId: 'call_1',
+    ok: true,
+    summary: 'ledger：5 行 × 3 列',
+  });
+
+  const done = getThread(TAB).messages[0].steps ?? [];
+  assert.equal(done[0].pending, false);
+  assert.equal(done[0].ok, true);
+  assert.equal(done[0].summary, 'ledger：5 行 × 3 列');
+});
+
+test('a failed tool step keeps its messageKey and does not touch other steps', () => {
+  const store = useDbSqlAssistantStore.getState();
+  const assistant = store.startAssistant(TAB);
+  store.appendToolCall(TAB, assistant.id, { callId: 'c1', tool: 'preview_table', table: 'a' });
+  store.appendToolCall(TAB, assistant.id, { callId: 'c2', tool: 'preview_table', table: 'b' });
+
+  store.finishToolCall(TAB, assistant.id, {
+    callId: 'c1',
+    ok: false,
+    summary: 'a：查询失败',
+    messageKey: 'error.dbConn',
+  });
+
+  const steps = getThread(TAB).messages[0].steps ?? [];
+  assert.equal(steps[0].ok, false);
+  assert.equal(steps[0].messageKey, 'error.dbConn');
+  assert.equal(steps[1].pending, true);
+});
+
+test('unknown callId in finishToolCall is a no-op', () => {
+  const store = useDbSqlAssistantStore.getState();
+  const assistant = store.startAssistant(TAB);
+  store.appendToolCall(TAB, assistant.id, { callId: 'c1', tool: 'preview_table', table: 'a' });
+
+  store.finishToolCall(TAB, assistant.id, { callId: 'nope', ok: true, summary: 'x' });
+
+  const steps = getThread(TAB).messages[0].steps ?? [];
+  assert.equal(steps.length, 1);
+  assert.equal(steps[0].pending, true);
+});
+
 test('fail removes an empty assistant bubble but keeps partial output', () => {
   const store = useDbSqlAssistantStore.getState();
   // 尚未产出任何 token 就失败 → 不留空气泡

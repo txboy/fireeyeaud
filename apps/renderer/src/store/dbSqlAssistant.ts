@@ -1,11 +1,25 @@
 import { create } from 'zustand';
 
+export interface DbSqlStep {
+  callId: string;
+  tool: string;
+  /** 模型请求预览的表名。 */
+  table: string;
+  /** 结果尚未返回。 */
+  pending: boolean;
+  ok?: boolean;
+  summary?: string;
+  messageKey?: string;
+}
+
 export interface DbSqlMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   createdAt: number;
   interrupted?: boolean;
+  /** 本轮模型读取样本行的步骤（tool_call / tool_result）。 */
+  steps?: DbSqlStep[];
 }
 
 export interface DbSqlThread {
@@ -21,6 +35,16 @@ interface DbSqlAssistantState {
   appendUser: (tabId: string, content: string) => DbSqlMessage;
   startAssistant: (tabId: string) => DbSqlMessage;
   appendDelta: (tabId: string, messageId: string, delta: string) => void;
+  appendToolCall: (
+    tabId: string,
+    messageId: string,
+    step: { callId: string; tool: string; table: string },
+  ) => void;
+  finishToolCall: (
+    tabId: string,
+    messageId: string,
+    step: { callId: string; ok: boolean; summary: string; messageKey?: string },
+  ) => void;
   finish: (tabId: string, messageId: string, interrupted?: boolean) => void;
   fail: (tabId: string, messageId: string, errorKey: string) => void;
   clearThread: (tabId: string) => void;
@@ -95,6 +119,45 @@ export const useDbSqlAssistantStore = create<DbSqlAssistantState>((set) => {
         ...thread,
         messages: thread.messages.map((m) =>
           m.id === messageId ? { ...m, content: m.content + delta } : m,
+        ),
+      })),
+
+    appendToolCall: (tabId, messageId, step) =>
+      update(tabId, (thread) => ({
+        ...thread,
+        messages: thread.messages.map((m) =>
+          m.id === messageId
+            ? {
+                ...m,
+                steps: [
+                  ...(m.steps ?? []),
+                  { ...step, pending: true },
+                ],
+              }
+            : m,
+        ),
+      })),
+
+    finishToolCall: (tabId, messageId, step) =>
+      update(tabId, (thread) => ({
+        ...thread,
+        messages: thread.messages.map((m) =>
+          m.id === messageId
+            ? {
+                ...m,
+                steps: (m.steps ?? []).map((s) =>
+                  s.callId === step.callId
+                    ? {
+                        ...s,
+                        pending: false,
+                        ok: step.ok,
+                        summary: step.summary,
+                        ...(step.messageKey ? { messageKey: step.messageKey } : {}),
+                      }
+                    : s,
+                ),
+              }
+            : m,
         ),
       })),
 
