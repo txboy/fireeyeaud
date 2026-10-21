@@ -14,11 +14,17 @@ from __future__ import annotations
 import json
 import logging
 import re
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import (
+    AIMessage,
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+)
 
 from ..util import now_iso
 
@@ -43,6 +49,17 @@ MAX_SQL_CHARS = 8_000
 MAX_ERROR_CHARS = 2_000
 # 整个请求（系统提示词 + 上下文 + 历史）的总字符上限。
 MAX_PROMPT_CHARS = 120_000
+
+# ---- 样本行工具（B2）：只按表名取样，绝不执行模型生成的 SQL ----
+PREVIEW_TOOL_NAME = "preview_table"
+SAMPLE_ROWS = 5
+SAMPLE_COLS = 50
+SAMPLE_CELL_CHARS = 200
+MAX_TOOL_ROUNDS = 3
+# 单条工具结果上限：需大于一次完整采样（5×50×200 ≈ 50KB），否则编码会为了
+# 迁就预算把样本清空。
+MAX_TOOL_MESSAGE_CHARS = 60_000
+MAX_TOOL_LIMIT = 5
 
 # 自由文本里的连接串与主机:端口（列注释、表注释、错误信息都可能带）。
 # 注意：两段都必须「有序、无嵌套量词」——否则长文本上正则回溯退化成平方级
@@ -91,6 +108,9 @@ SYSTEM_PROMPT = """你是「火眼审计助手」的数据库查询助手，帮�
 
 ## 语言
 - 使用与用户相同的语言回复（参考 locale：{locale}）。
+
+## 样本行
+{tool_hint}
 
 ## 裁切说明
 {truncation}
@@ -373,13 +393,224 @@ def _ident_hint_of(context: dict[str, Any]) -> str:
     return _IDENT_HINT.get(driver, "按目标方言选择")
 
 
+def _quote_ident(driver: str, name: str) -> str:
+    """按驱动转义标识符（与前端 DbDataView.quoteIdent 对齐）。"""
+    if driver == "mysql":
+        return f"`{name.replace('`', '``')}`"
+    if driver in ("mssql", "access"):
+        return f"[{name.replace(']', ']]')}]"
+    return f'"{name.replace(chr(34), chr(34) * 2)}"'
+
+
+def build_preview_sql(driver: str, table: str, limit: int = SAMPLE_ROWS) -> str:
+    """样本行查询：恒为单条 SELECT，表名整体作为标识符转义。
+
+    这是 B2 的安全核心——模型只能给表名，SQL 由服务端拼接，因此不存在写入、
+    注入或全表聚合的通道。
+    """
+    try:
+        size = int(limit)
+    except (TypeError, ValueError):
+        size = SAMPLE_ROWS
+    size = max(1, min(size, MAX_TOOL_LIMIT))
+    return f"SELECT * FROM {_quote_ident(driver, table)} LIMIT {size}"
+
+
+def compact_sample(result: Any) -> tuple[dict[str, Any], bool]:
+    """把查询结果裁成样本：5 行 / 50 列 / 单元格 200 字符。"""
+    raw = result if isinstance(result, dict) else {}
+    columns = list(raw.get("columns") or [])
+    rows = [list(r) for r in (raw.get("rows") or [])]
+    truncated = False
+
+    if len(columns) > SAMPLE_COLS:
+        columns = columns[:SAMPLE_COLS]
+        truncated = True
+    if len(rows) > SAMPLE_ROWS:
+        rows = rows[:SAMPLE_ROWS]
+        truncated = True
+
+    trimmed: list[list[Any]] = []
+    for row in rows:
+        values = row[:SAMPLE_COLS]
+        if len(row) > SAMPLE_COLS:
+            truncated = True
+        cells: list[Any] = []
+        for value in values:
+            if isinstance(value, str) and len(value) > SAMPLE_CELL_CHARS:
+                cells.append(value[:SAMPLE_CELL_CHARS] + "…")
+                truncated = True
+            else:
+                cells.append(value)
+        trimmed.append(cells)
+
+    payload = {
+        "columns": columns,
+        "rows": trimmed,
+        "rowCount": len(trimmed),
+    }
+    return payload, truncated
+
+
+# 工具可用时注入的说明；未绑定工具时必须为空，否则模型会调用不存在的工具。
+TOOL_HINT = (
+    "- 需要确认列含义或取值风格时，可调用 `preview_table` 查看某张表的**前 5 行样本**"
+    "（只接受表名，不接受 SQL）。\n"
+    "- 样本只是取样，不代表全量数据；不要据此下统计结论。"
+)
+
+
+def _allowed_tables(context: dict[str, Any]) -> set[str]:
+    """模型可预览的表：仅请求上下文中已反射的当前表与相关表。"""
+    names: set[str] = set()
+    current = context.get("table")
+    if isinstance(current, dict) and current.get("name"):
+        names.add(str(current["name"]))
+    for entry in context.get("tables") or []:
+        if isinstance(entry, dict) and entry.get("name"):
+            names.add(str(entry["name"]))
+    return names
+
+
+def encode_tool_result(
+    table: str,
+    payload: dict[str, Any],
+    truncated: bool,
+    *,
+    max_chars: int = MAX_TOOL_MESSAGE_CHARS,
+) -> str:
+    """序列化工具结果，并保证**始终是合法 JSON** 且不超过上限。
+
+    超限时依次降级：收紧单元格 → 砍列 → 只留 1 行 → 占位。绝不按字符截断
+    （那会让模型收到半截 JSON）。
+    """
+    data: dict[str, Any] = {
+        "table": table,
+        "columns": list(payload.get("columns") or []),
+        "rows": [list(r) for r in (payload.get("rows") or [])],
+        "rowCount": int(payload.get("rowCount") or 0),
+        "truncated": truncated,
+    }
+
+    def dump() -> str:
+        return json.dumps(data, ensure_ascii=False, default=str)
+
+    text = dump()
+    if len(text) <= max_chars:
+        return text
+
+    # 1) 收紧单元格：按剩余预算反推每个单元格能占多少字符
+    cells = max(1, len(data["rows"]) * max(1, len(data["columns"])))
+    per_cell = max(12, (max_chars - 400) // cells - 8)
+    cap = min(SAMPLE_CELL_CHARS, per_cell)
+    data["rows"] = [
+        [
+            (cell[:cap] + "…" if isinstance(cell, str) and len(cell) > cap else cell)
+            for cell in row
+        ]
+        for row in data["rows"]
+    ]
+    data["truncated"] = True
+    text = dump()
+
+    # 2) 砍列（保留至少 2 列，模型才看得出结构）
+    while len(text) > max_chars and len(data["columns"]) > 2:
+        keep = max(2, len(data["columns"]) - max(1, len(data["columns"]) // 4))
+        data["columns"] = data["columns"][:keep]
+        data["rows"] = [row[:keep] for row in data["rows"]]
+        text = dump()
+
+    # 3) 砍行（至少留 1 行）
+    while len(text) > max_chars and len(data["rows"]) > 1:
+        data["rows"] = data["rows"][:-1]
+        data["rowCount"] = len(data["rows"])
+        text = dump()
+
+    # 4) 兜底：合法 JSON 的占位，仍明确告知模型「有表但样本被省略」
+    if len(text) > max_chars:
+        text = json.dumps(
+            {
+                "table": table[:80],
+                "columns": data["columns"][:5],
+                "rows": [],
+                "rowCount": 0,
+                "truncated": True,
+                "omitted": True,
+            },
+            ensure_ascii=False,
+        )
+    return text
+
+
+def _bind_tools(model: Any, tools: list[Any]) -> Any:
+    """模型不支持工具绑定时退回纯生成（例如未配置模型能力）。"""
+    try:
+        return model.bind_tools(tools)
+    except (AttributeError, NotImplementedError):
+        return model
+
+
+def _preview_tool() -> Any:
+    from langchain_core.tools import StructuredTool
+    from pydantic import BaseModel, Field
+
+    class PreviewTableArgs(BaseModel):
+        table: str = Field(description="要查看样本行的表名（必须出现在给定的表结构中）")
+
+    def _stub(**_kwargs: Any) -> dict[str, Any]:  # pragma: no cover - 仅提供 schema
+        return {}
+
+    return StructuredTool.from_function(
+        func=_stub,
+        name=PREVIEW_TOOL_NAME,
+        description=(
+            "查看某张表的样本行（最多 5 行），用于确认列含义与取值风格。"
+            "只能传表名，不接受 SQL；表必须出现在给定的表结构中。"
+        ),
+        args_schema=PreviewTableArgs,
+    )
+
+
+def _messages_chars(messages: list[BaseMessage]) -> int:
+    return sum(len(str(m.content)) for m in messages)
+
+
+def _shrink_tool_message(message: ToolMessage, *, max_chars: int = 2_000) -> ToolMessage:
+    """请求整体超预算时，把工具结果重新编码成更小的**合法 JSON**（不按字符截断）。"""
+    raw = str(message.content)
+    if len(raw) <= max_chars:
+        return message
+    try:
+        data = json.loads(raw)
+    except (TypeError, ValueError):
+        data = {"omitted": True, "truncated": True}
+    if isinstance(data, dict) and "columns" in data:
+        content = encode_tool_result(
+            str(data.get("table") or ""),
+            {
+                "columns": data.get("columns") or [],
+                "rows": data.get("rows") or [],
+                "rowCount": data.get("rowCount") or 0,
+            },
+            True,
+            max_chars=max_chars,
+        )
+    else:
+        content = json.dumps({"omitted": True, "truncated": True}, ensure_ascii=False)
+    return ToolMessage(content=content, tool_call_id=message.tool_call_id)
+
+
 def build_sql_assistant_messages(
     *,
     context: dict[str, Any],
     history: list[dict[str, str]],
     locale: str | None,
+    tool_hint: str = "",
 ) -> list[BaseMessage]:
-    """组装 [SystemMessage(含上下文), *历史消息]，并对**整个请求**施加总量上限。"""
+    """组装 [SystemMessage(含上下文), *历史消息]，并对**整个请求**施加总量上限。
+
+    `tool_hint` 仅在绑定了样本行工具时传入；为空时提示词不提及任何工具。
+    """
     messages: list[BaseMessage] = [SystemMessage(content="")]
     context_budget = MAX_CONTEXT_CHARS
     history = normalize_history(history)
@@ -395,6 +626,7 @@ def build_sql_assistant_messages(
             dialect=_dialect_of(context or {}),
             ident_hint=_ident_hint_of(context or {}),
             locale=locale or "zh-CN",
+            tool_hint=tool_hint or "- 本次不提供样本行工具，请仅依据表结构作答。",
             truncation=_truncation_note(flags if isinstance(flags, dict) else {}),
             context=context_text,
         )
@@ -432,34 +664,122 @@ async def stream_sql_assistant(
     *,
     root: Path | None,
     body: "SqlChatBody",
+    model: Any = None,
+    preview: "Callable[[str], dict[str, Any]] | None" = None,
 ) -> AsyncIterator[dict[str, Any]]:
-    """流式生成：status → token* → done，出错则 error。
+    """流式生成：status → (tool_call → tool_result)* → token* → done，出错则 error。
 
-    本函数只与模型通信；不查库、不取凭据。
+    `preview` 由路由注入：只接受表名，按服务端拼接的 `SELECT ... LIMIT 5` 取样本。
+    本模块不持有凭据；`preview` 为 None 时不绑定工具，退回纯生成。
     """
     from ..config.models import build_chat_model
     from ..errors import ApiError
 
     seq = 0
-    seq += 1
-    yield _envelope("status", seq, {"phase": "thinking"})
+
+    def emit(kind: str, data: dict[str, Any]) -> dict[str, Any]:
+        nonlocal seq
+        seq += 1
+        return _envelope(kind, seq, data)
+
+    yield emit("status", {"phase": "thinking"})
 
     try:
-        messages = build_sql_assistant_messages(
-            context=body.context, history=[m.model_dump() for m in body.messages], locale=body.locale
+        messages: list[BaseMessage] = build_sql_assistant_messages(
+            context=body.context,
+            history=[m.model_dump() for m in body.messages],
+            locale=body.locale,
+            tool_hint=TOOL_HINT if preview is not None else "",
         )
-        model = build_chat_model(root, body.modelId)
-        async for chunk in model.astream(messages):
-            delta = chunk.content
-            if not isinstance(delta, str) or not delta:
-                continue
-            seq += 1
-            yield _envelope("token", seq, {"delta": delta})
+        chat = model if model is not None else build_chat_model(root, body.modelId)
+        bound = _bind_tools(chat, [_preview_tool()]) if preview is not None else chat
+        allowed = _allowed_tables(body.context if isinstance(body.context, dict) else {})
+        driver = str(
+            (body.context.get("connection") or {}).get("driver")
+            if isinstance(body.context, dict)
+            else ""
+        ) or str(body.driver or "")
+
+        for round_index in range(MAX_TOOL_ROUNDS + 1):
+            ai: Any = None
+            async for chunk in bound.astream(messages):
+                ai = chunk if ai is None else ai + chunk
+                delta = chunk.content
+                if isinstance(delta, str) and delta:
+                    yield emit("token", {"delta": delta})
+
+            tool_calls = list(getattr(ai, "tool_calls", []) or []) if ai is not None else []
+            if not tool_calls or preview is None or round_index >= MAX_TOOL_ROUNDS:
+                break
+
+            messages.append(ai)
+            for call in tool_calls:
+                call_id = str(call.get("id") or f"call_{round_index + 1}")
+                name = str(call.get("name") or "")
+                args = call.get("args") or {}
+                table = str(args.get("table") or "")
+
+                yield emit(
+                    "tool_call",
+                    {"callId": call_id, "tool": name, "params": {"table": table}},
+                )
+
+                data: dict[str, Any]
+                content: str
+                if name != PREVIEW_TOOL_NAME:
+                    data = {"callId": call_id, "ok": False, "summary": f"未知工具：{name}"}
+                    content = json.dumps({"error": "unknown tool"}, ensure_ascii=False)
+                elif table not in allowed:
+                    data = {
+                        "callId": call_id,
+                        "ok": False,
+                        "summary": f"{table or '（空表名）'}：不在可查看的表结构中",
+                    }
+                    content = json.dumps({"error": "table not available"}, ensure_ascii=False)
+                else:
+                    try:
+                        payload, truncated = compact_sample(preview(table))
+                    except ApiError as exc:
+                        data = {
+                            "callId": call_id,
+                            "ok": False,
+                            "messageKey": exc.message_key,
+                            "summary": f"{table}：查询失败",
+                        }
+                        content = json.dumps({"error": exc.code}, ensure_ascii=False)
+                    except Exception:  # noqa: BLE001 - 查询失败不应中断整轮
+                        logger.exception("sql assistant preview failed")
+                        data = {
+                            "callId": call_id,
+                            "ok": False,
+                            "messageKey": "error.internal",
+                            "summary": f"{table}：查询失败",
+                        }
+                        content = json.dumps({"error": "internal"}, ensure_ascii=False)
+                    else:
+                        data = {
+                            "callId": call_id,
+                            "ok": True,
+                            "summary": (
+                                f"{table}：{payload['rowCount']} 行 × "
+                                f"{len(payload['columns'])} 列"
+                                + ("（已截断）" if truncated else "")
+                            ),
+                        }
+                        content = encode_tool_result(table, payload, truncated)
+
+                yield emit("tool_result", data)
+                messages.append(ToolMessage(content=content, tool_call_id=call_id))
+
+            # 工具结果可能撑大请求：超预算就把工具结果重新编码成更小的合法 JSON
+            if _messages_chars(messages) > MAX_PROMPT_CHARS:
+                messages = [
+                    _shrink_tool_message(item) if isinstance(item, ToolMessage) else item
+                    for item in messages
+                ]
     except ApiError as exc:
-        seq += 1
-        yield _envelope(
+        yield emit(
             "error",
-            seq,
             {
                 "code": exc.code,
                 "messageKey": exc.message_key,
@@ -469,9 +789,7 @@ async def stream_sql_assistant(
         return
     except Exception:  # noqa: BLE001 - 模型侧异常统一转 error 事件
         logger.exception("sql assistant stream failed")
-        seq += 1
-        yield _envelope("error", seq, {"messageKey": "error.internal"})
+        yield emit("error", {"messageKey": "error.internal"})
         return
 
-    seq += 1
-    yield _envelope("done", seq, {"usage": {}})
+    yield emit("done", {"usage": {}})

@@ -144,39 +144,119 @@ async def test_sql_chat_surfaces_api_error_as_event(tmp_path, monkeypatch) -> No
     assert events[-1]["data"]["messageKey"] == "error.llmUnavailable"
 
 
-async def test_sql_chat_never_touches_the_database(tmp_path, monkeypatch) -> None:
-    """安全边界：路由不取凭据、不连库、不查数。"""
+async def test_sql_chat_tool_reads_sample_without_leaking_secret(
+    tmp_path, monkeypatch
+) -> None:
+    """B2 边界：样本行可读，但凭据不得出现在任何事件里，且执行的 SQL 恒为 SELECT。"""
     monkeypatch.setenv("FIREYEAUD_GLOBAL_DIR", str(tmp_path / "global"))
-    fake = FakeChatModel(messages=iter([AIMessage(content="ok")]))
+    SECRET = "hunter2-topsecret"
+
     import fireeyeaud_agent.config.models as models_mod
 
-    monkeypatch.setattr(models_mod, "build_chat_model", lambda *_a, **_k: fake)
+    monkeypatch.setattr(
+        models_mod,
+        "build_chat_model",
+        lambda *_a, **_k: FakeChatModel(
+            messages=iter(
+                [
+                    AIMessage(
+                        content="",
+                        tool_calls=[
+                            {
+                                "name": "preview_table",
+                                "args": {"table": "ledger"},
+                                "id": "call_1",
+                            }
+                        ],
+                    ),
+                    AIMessage(content="```sql\nSELECT 1\n```"),
+                ]
+            )
+        ),
+    )
+    monkeypatch.setattr(db_store, "get_secret", lambda *_a, **_k: SECRET)
 
-    calls: list[str] = []
+    executed: list[str] = []
 
-    def secret(*_a, **_k):
-        calls.append("get_secret")
-        raise AssertionError("sql-chat must not read secrets")
+    def run_query(_conn, sql, _password, limit=0, offset=0):
+        executed.append(sql)
+        return {"columns": ["id"], "rows": [[1]], "rowCount": 1}
 
-    def run_query(*_a, **_k):
-        calls.append("run_query")
-        raise AssertionError("sql-chat must not run queries")
-
-    monkeypatch.setattr(db_store, "get_secret", secret)
     monkeypatch.setattr(db_engine, "run_query", run_query)
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
         conn = await _open(client, tmp_path)
-        async with client.stream(
-            "POST", "/api/v1/db/sql-chat", json=_body(conn["id"])
-        ) as resp:
+        body = _body(conn["id"])
+        body["context"]["tables"] = [{"name": "ledger", "columns": []}]
+        async with client.stream("POST", "/api/v1/db/sql-chat", json=body) as resp:
+            assert resp.status_code == 200
+            text = "".join([chunk async for chunk in resp.aiter_text()])
+        await client.post("/api/v1/workspaces/close")
+
+    # 只跑了一次，且是服务端拼接的单条 SELECT
+    assert executed == ['SELECT * FROM "ledger" LIMIT 5']
+    assert executed[0].lstrip().upper().startswith("SELECT")
+    # 凭据绝不外泄（SSE 正文里没有）
+    assert SECRET not in text
+    events = _parse_sse(text)
+    assert "tool_call" in [e["type"] for e in events]
+    assert events[-1]["type"] == "done"
+
+
+async def test_sql_chat_ignores_model_supplied_sql(tmp_path, monkeypatch) -> None:
+    """模型即便在参数里塞 SQL，也只会被执行服务端拼接的 SELECT。"""
+    monkeypatch.setenv("FIREYEAUD_GLOBAL_DIR", str(tmp_path / "global"))
+
+    import fireeyeaud_agent.config.models as models_mod
+
+    monkeypatch.setattr(
+        models_mod,
+        "build_chat_model",
+        lambda *_a, **_k: FakeChatModel(
+            messages=iter(
+                [
+                    AIMessage(
+                        content="",
+                        tool_calls=[
+                            {
+                                "name": "preview_table",
+                                "args": {
+                                    "table": "ledger",
+                                    "sql": "DELETE FROM ledger",
+                                },
+                                "id": "call_1",
+                            }
+                        ],
+                    ),
+                    AIMessage(content="好的"),
+                ]
+            )
+        ),
+    )
+    monkeypatch.setattr(db_store, "get_secret", lambda *_a, **_k: None)
+
+    executed: list[str] = []
+
+    def run_query(_conn, sql, _password, limit=0, offset=0):
+        executed.append(sql)
+        return {"columns": ["id"], "rows": [], "rowCount": 0}
+
+    monkeypatch.setattr(db_engine, "run_query", run_query)
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        conn = await _open(client, tmp_path)
+        body = _body(conn["id"])
+        body["context"]["tables"] = [{"name": "ledger", "columns": []}]
+        async with client.stream("POST", "/api/v1/db/sql-chat", json=body) as resp:
             assert resp.status_code == 200
             _ = "".join([chunk async for chunk in resp.aiter_text()])
         await client.post("/api/v1/workspaces/close")
 
-    assert calls == []
+    assert executed == ['SELECT * FROM "ledger" LIMIT 5']
 
 
 async def test_sql_chat_ignores_unknown_model_id(tmp_path, monkeypatch) -> None:

@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
-from ..agent.sql_assistant import stream_sql_assistant
+from ..agent.sql_assistant import SAMPLE_ROWS, build_preview_sql, stream_sql_assistant
 from ..errors import ApiError
 from ..store import authorization, db, db_engine
 from ..store.workspace import workspace_manager
@@ -237,8 +237,22 @@ async def db_sql_chat(body: SqlChatBody) -> EventSourceResponse:
     # modelId 只允许指向已配置的模型；未知 / 未配置一律回退默认模型（计划：v1 用默认模型）。
     trusted = trusted.model_copy(update={"modelId": _known_model_id(root, body.modelId)})
 
+    # 样本行工具：凭据只在本闭包内用于建连；SQL 恒由服务端按表名拼接。
+    # 走预览通道（与表数据预览一致），不套用审计用的表/字段授权。
+    password = db.get_secret(conn.get("credRef") or body.connectionId)
+
+    def preview(table: str) -> dict:
+        return db_engine.run_query(
+            conn,
+            build_preview_sql(driver, table),
+            password,
+            limit=SAMPLE_ROWS,
+        )
+
     async def event_stream():
-        async for envelope in stream_sql_assistant(root=root, body=trusted):
+        async for envelope in stream_sql_assistant(
+            root=root, body=trusted, preview=preview
+        ):
             yield {
                 "event": "message",
                 "data": json.dumps(envelope, ensure_ascii=False, default=str),
