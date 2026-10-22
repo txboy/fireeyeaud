@@ -1048,6 +1048,18 @@ export function deleteTemplateApi(
   });
 }
 
+/** 重新上传覆盖已有模板文件（保留 id / 名称 / 作用域 / 默认）。 */
+export function replaceTemplateFile(
+  id: string,
+  scope: ConfigScope,
+  path: string,
+): Promise<TemplateInfo> {
+  return request<TemplateInfo>(`/templates/${id}/replace?scope=${scope}`, {
+    method: 'POST',
+    body: JSON.stringify({ path }),
+  });
+}
+
 export function duplicateTemplateApi(
   id: string,
   scope: ConfigScope,

@@ -51,6 +51,10 @@ class InspectBody(BaseModel):
     kind: Literal["evidence-form", "report"]
 
 
+class ReplaceBody(BaseModel):
+    path: str
+
+
 @router.get("/templates")
 def list_all(
     kind: str | None = None,
@@ -166,6 +170,18 @@ def content(
         "size": len(data),
         "path": str(path) if path is not None else "",
     }
+
+
+@router.post("/templates/{template_id}/replace")
+def replace_file(
+    template_id: str,
+    body: ReplaceBody,
+    scope: Scope = Query(default="global"),
+) -> dict:
+    """重新上传覆盖已有模板文件（保留 id / 名称 / 作用域 / 默认）。"""
+    return templates_store.replace_template_file(
+        _root_or_none(), template_id, scope, Path(body.path)
+    )
 
 
 @router.post("/templates/{template_id}/duplicate", status_code=201)

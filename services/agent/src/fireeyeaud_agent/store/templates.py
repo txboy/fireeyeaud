@@ -709,6 +709,68 @@ def default_template(root: Path | None, kind: str) -> dict[str, Any] | None:
     )
 
 
+def replace_template_file(
+    root: Path | None,
+    template_id: str,
+    scope: str,
+    source: Path,
+) -> dict[str, Any]:
+    """用新 docx 覆盖已有模板文件：保留 id / 名称 / 作用域 / 默认标记。
+
+    编辑模板的常规流程：下载 → 本地改 → 重新上传覆盖。
+    写入用「临时文件 + os.replace」，避免中途失败留下半截文件。
+    """
+    if scope not in ("global", "project"):
+        raise ApiError("E_INVALID_SCOPE", 400, "error.internal")
+    if _is_sample_id(template_id):
+        raise ApiError(
+            "E_TEMPLATE_BUILTIN", 403, "error.templateBuiltinReadonly", {"id": template_id}
+        )
+    item = store.get_item(KIND, template_id, scope, root)
+    if item is None:
+        raise ApiError(
+            "E_NOT_FOUND", 404, "error.templateNotFound", {"id": template_id}
+        )
+
+    source = Path(source)
+    if not source.is_file():
+        raise ApiError(
+            "E_FILE_NOT_FOUND", 404, "error.fileNotFound", {"name": source.name}
+        )
+    if source.suffix.lower() != ".docx":
+        raise ApiError("E_FILE_TYPE", 400, "error.fileType", {"name": source.name})
+    size = source.stat().st_size
+    if size > MAX_BYTES:
+        raise ApiError(
+            "E_FILE_TOO_LARGE", 400, "error.fileTooLarge", {"name": source.name}
+        )
+
+    kind = str(item.get("kind") or "")
+    check = scan_docx(source, kind)
+    target = template_file(scope, root, kind, template_id)
+
+    with WORKSPACE_MUTATION_LOCK:
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            tmp = target.with_suffix(".docx.tmp")
+            shutil.copyfile(source, tmp)
+            tmp.replace(target)
+        except OSError as exc:
+            target.with_suffix(".docx.tmp").unlink(missing_ok=True)
+            raise ApiError(
+                "E_FILE_WRITE", 500, "error.opFailed", {"name": source.name}
+            ) from exc
+
+        updated = store.update_item(
+            KIND,
+            template_id,
+            scope,
+            {"fileName": target.name, "size": size, "check": check},
+            root,
+        )
+    return _decorate(updated, scope, root)
+
+
 def duplicate_template(
     root: Path | None,
     template_id: str,

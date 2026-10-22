@@ -374,6 +374,26 @@ function registerIpc() {
     shell.showItemInFolder(filePath);
     return { ok: true };
   });
+  // 另存为：把渲染器给的 base64 内容写到用户选择的位置（模板下载）。
+  ipcMain.handle('dialog:save-file', async (event, options) => {
+    const payload = options ?? {};
+    if (typeof payload.data !== 'string' || !payload.data) {
+      return { ok: false, code: 'E_OP_FAILED' };
+    }
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const { canceled, filePath } = await dialog.showSaveDialog(win, {
+      title: typeof payload.title === 'string' ? payload.title : undefined,
+      defaultPath: typeof payload.defaultName === 'string' ? payload.defaultName : undefined,
+      filters: Array.isArray(payload.filters) ? payload.filters : undefined,
+    });
+    if (canceled || !filePath) return { ok: false, canceled: true };
+    try {
+      await fs.promises.writeFile(filePath, Buffer.from(payload.data, 'base64'));
+      return { ok: true, path: filePath };
+    } catch {
+      return { ok: false, code: 'E_OP_FAILED' };
+    }
+  });
   ipcMain.handle('shell:open-external', (_event, url) => {
     if (typeof url !== 'string') return { ok: false };
     let parsed;

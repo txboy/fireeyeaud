@@ -499,6 +499,13 @@ export default {
     selectFile: 'Choose a docx file',
     noFile: 'No file selected',
     singleFileHint: 'One template per add',
+    replaceFile: 'Re-upload',
+    replaceHint:
+      'Uploads a new file over the existing one; name / scope / default are kept',
+    keepFile: 'Keeps the current file unless a new one is chosen',
+    download: 'Download',
+    downloaded: 'Template saved to the chosen location',
+    downloadFailed: 'Template download failed',
     moveHint: 'Changing scope moves the template; the original scope no longer keeps it',
     openHint: 'Click to edit (with preview)',
     templateKind: 'Template type',

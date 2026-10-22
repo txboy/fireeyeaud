@@ -11,6 +11,7 @@ import type {
 import {
   getTemplateContent,
   inspectTemplateFile,
+  replaceTemplateFile,
   type TemplateInspectResult,
 } from '../../lib/api';
 import { useTemplatesStore } from '../../store/templates';
@@ -88,9 +89,12 @@ export function TemplateForm({
 
   const [preview, setPreview] = useState<{ data: string; mime: string } | null>(null);
   const [check, setCheck] = useState<TemplateCheck | null>(entity?.check ?? null);
+  /** 编辑时选中的新文件（保存时覆盖原模板文件）。 */
+  const [replacement, setReplacement] = useState('');
 
   const editing = Boolean(entity);
-  const dirty = JSON.stringify(form) !== JSON.stringify(initialRef.current);
+  const dirty =
+    JSON.stringify(form) !== JSON.stringify(initialRef.current) || Boolean(replacement);
   const moved = editing && entity ? form.scope !== entity.scope : false;
 
   // 编辑已有模板：预览已保存的文件。
@@ -112,7 +116,7 @@ export function TemplateForm({
     };
   }, [entity?.id, entity?.scope]);
 
-  const pickFile = async () => {
+  const pickFile = async (mode: 'create' | 'replace') => {
     const api = window.fireeyeaud;
     if (!api?.openFiles) {
       setErrorKey('error.opFailed');
@@ -126,6 +130,10 @@ export function TemplateForm({
       const info: TemplateInspectResult = await inspectTemplateFile(path, form.kind);
       setPreview({ data: info.data, mime: info.mime });
       setCheck(info.check);
+      if (mode === 'replace') {
+        setReplacement(path);
+        return;
+      }
       setForm((prev) => ({
         ...prev,
         path,
@@ -148,6 +156,10 @@ export function TemplateForm({
     setErrorKey(null);
     try {
       if (editing && entity) {
+        // 先覆盖文件（在源作用域），再改元数据 / 搬家，避免把文件写到错误的作用域。
+        if (replacement) {
+          await replaceTemplateFile(entity.id, entity.scope, replacement);
+        }
         await edit(entity.id, entity.scope, {
           name,
           isDefault: form.isDefault,
@@ -223,24 +235,33 @@ export function TemplateForm({
         {t('setAsDefault')}
       </Checkbox>
 
-      {!editing && (
-        <div className="field">
-          <span className="field__label">{t('file')}</span>
-          <div className="tpl-form__file">
-            <button
-              type="button"
-              className="button button--sm button--ghost"
-              onClick={() => void pickFile()}
-            >
-              <Upload size={12} strokeWidth={1.9} /> {t('selectFile')}
-            </button>
-            <span className="card__meta">
-              {form.path ? form.path.split(/[\\/]/).pop() : t('noFile')}
-            </span>
-          </div>
-          <span className="card__meta">{t('singleFileHint')}</span>
+      <div className="field">
+        <span className="field__label">
+          {editing ? t('replaceFile') : t('file')}
+        </span>
+        <div className="tpl-form__file">
+          <button
+            type="button"
+            className="button button--sm button--ghost"
+            onClick={() => void pickFile(editing ? 'replace' : 'create')}
+          >
+            <Upload size={12} strokeWidth={1.9} />{' '}
+            {editing ? t('replaceFile') : t('selectFile')}
+          </button>
+          <span className="card__meta">
+            {editing
+              ? replacement
+                ? replacement.split(/[\\/]/).pop()
+                : t('keepFile')
+              : form.path
+                ? form.path.split(/[\\/]/).pop()
+                : t('noFile')}
+          </span>
         </div>
-      )}
+        <span className="card__meta">
+          {editing ? t('replaceHint') : t('singleFileHint')}
+        </span>
+      </div>
 
       {displayedError && (
         <FormError errorKey={displayedError.replace(/^error\./, '')} />

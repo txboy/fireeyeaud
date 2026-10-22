@@ -12,6 +12,13 @@ declare global {
         kind?: 'tables' | 'attachments' | 'all' | 'database' | 'templates',
         options?: { driver?: string },
       ) => Promise<string[]>;
+      /** 另存为对话框：把 base64 内容写到用户选择的位置。 */
+      saveFile: (options: {
+        data: string;
+        defaultName?: string;
+        title?: string;
+        filters?: { name: string; extensions: string[] }[];
+      }) => Promise<{ ok: boolean; path?: string; canceled?: boolean; code?: string }>;
       searchRun: (payload: {
         root: string;
         query: string;

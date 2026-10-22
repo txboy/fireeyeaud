@@ -271,3 +271,49 @@ async def test_inspect_rejects_missing_and_non_docx(tmp_path, monkeypatch):
             json={"path": str(bad), "kind": "report"},
         )
         assert wrong.status_code == 400
+
+
+async def test_replace_file_route(tmp_path, monkeypatch):
+    """编辑模板时重新上传，覆盖原文件但不换 id / 名称 / 作用域。"""
+    monkeypatch.setenv("FIREYEAUD_GLOBAL_DIR", str(tmp_path / "global"))
+    root = tmp_path / "project"
+    root.mkdir()
+    original = _docx(tmp_path / "old.docx")
+    replacement = tmp_path / "new.docx"
+    doc = Document()
+    doc.add_paragraph("{{项目名称}}")
+    doc.add_paragraph("{{报告编号}}")
+    doc.add_paragraph("{{取证单数量}}")
+    doc.save(replacement)
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        await client.post("/api/v1/workspaces/open", json={"path": str(root)})
+        item = (
+            await client.post(
+                "/api/v1/templates",
+                json={
+                    "kind": "report",
+                    "paths": [str(original)],
+                    "scope": "project",
+                    "name": "原名称",
+                },
+            )
+        ).json()["items"][0]
+
+        res = await client.post(
+            f"/api/v1/templates/{item['id']}/replace?scope=project",
+            json={"path": str(replacement)},
+        )
+        assert res.status_code == 200
+        body = res.json()
+        assert body["id"] == item["id"]
+        assert body["name"] == "原名称"
+        assert "取证单数量" in body["check"]["tags"]
+
+        content = (
+            await client.get(f"/api/v1/templates/{item['id']}/content?scope=project")
+        ).json()
+        assert base64.b64decode(content["data"])[:2] == b"PK"
+        await client.post("/api/v1/workspaces/close")

@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Modal, Radio, Segmented } from 'antd';
+import { Modal, Radio, Segmented, message } from 'antd';
 import {
   AlertTriangle,
   CheckCircle2,
   Copy,
+  Download,
   Pencil,
   Plus,
   Star,
   Trash2,
 } from 'lucide-react';
 import type { ConfigScope, TemplateInfo, TemplateKind } from '@fireeyeaud/shared';
+import { getTemplateContent } from '../../lib/api';
 import { ScopeBadge } from '../ScopeBadge';
 import { useTemplatesStore } from '../../store/templates';
 import { useUiStore } from '../../store/ui';
@@ -92,6 +94,42 @@ export function TemplatesPanel() {
       setDuplicating(null);
     } catch {
       // errorKey 已由 store 记录；保持弹窗打开让用户改选目标作用域。
+    }
+  };
+
+  /**
+   * 下载模板文件，供用户本地编辑后「重新上传」覆盖。
+   * 全局模板与示例都在项目目录外，因此必须先取 base64 再交给桌面端另存为。
+   */
+  const onDownload = async (item: TemplateInfo) => {
+    try {
+      const content = await getTemplateContent(item.id, item.scope);
+      if (!content.ok || content.kind !== 'base64') {
+        throw new Error('content');
+      }
+      const api = window.fireeyeaud;
+      if (api?.saveFile) {
+        const result = await api.saveFile({
+          data: content.data,
+          defaultName: item.fileName,
+          title: t('download'),
+          filters: [{ name: 'Word', extensions: ['docx'] }],
+        });
+        if (result.canceled) return;
+        if (!result.ok) throw new Error('save');
+        void message.success(t('downloaded'));
+        return;
+      }
+      // 浏览器兜底（非 Electron 环境）
+      const bytes = Uint8Array.from(atob(content.data), (c) => c.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes], { type: content.mime }));
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = item.fileName;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      void message.error(t('downloadFailed'));
     }
   };
 
@@ -268,6 +306,15 @@ export function TemplatesPanel() {
                           <Pencil size={13} strokeWidth={1.75} />
                         </button>
                       )}
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        title={t('download')}
+                        aria-label={t('download')}
+                        onClick={() => void onDownload(item)}
+                      >
+                        <Download size={13} strokeWidth={1.75} />
+                      </button>
                       <button
                         type="button"
                         className="icon-btn"

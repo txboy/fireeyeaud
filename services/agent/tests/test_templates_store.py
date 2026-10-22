@@ -14,6 +14,7 @@ from fireeyeaud_agent.store.templates import (
     get_template,
     list_templates,
     read_template_content,
+    replace_template_file,
     resolve_template,
     scan_docx,
     template_path,
@@ -499,6 +500,47 @@ def test_move_rejects_missing_file(tmp_path, monkeypatch):
     with pytest.raises(ApiError) as exc:
         update_template(root, item["id"], "project", target_scope="global")
     assert exc.value.code == "E_FILE_NOT_FOUND"
+
+
+# ---- 重新上传覆盖原文件 ----
+
+
+def test_replace_template_file_keeps_identity_and_updates_check(tmp_path, monkeypatch):
+    root = _env(tmp_path, monkeypatch)
+    item = upload_template(root, _docx(tmp_path / "old.docx"), kind="report", scope="project")
+    old_path = template_path(root, item["id"], "project")
+
+    new_src = Document()
+    new_src.add_paragraph("{{项目名称}}")
+    new_src.add_paragraph("{{报告编号}}")
+    new_src.add_paragraph("{{取证单数量}}")
+    new_path = tmp_path / "new.docx"
+    new_src.save(new_path)
+
+    replaced = replace_template_file(root, item["id"], "project", new_path)
+
+    assert replaced["id"] == item["id"], "覆盖文件不换 id"
+    assert replaced["name"] == item["name"], "覆盖文件不改名称"
+    assert replaced["scope"] == "project"
+    assert "取证单数量" in replaced["check"]["tags"]
+    assert template_path(root, item["id"], "project") == old_path
+    assert old_path.is_file()
+
+
+def test_replace_rejects_builtin_and_bad_files(tmp_path, monkeypatch):
+    root = _env(tmp_path, monkeypatch)
+    sample = next(i for i in list_templates(root, "report") if i.get("builtin"))
+    good = _docx(tmp_path / "g.docx")
+    with pytest.raises(ApiError) as exc:
+        replace_template_file(root, sample["id"], "global", good)
+    assert exc.value.code == "E_TEMPLATE_BUILTIN"
+
+    item = upload_template(root, _docx(tmp_path / "a.docx"), kind="report", scope="project")
+    bad = tmp_path / "x.txt"
+    bad.write_text("hi", "utf-8")
+    with pytest.raises(ApiError) as exc2:
+        replace_template_file(root, item["id"], "project", bad)
+    assert exc2.value.code == "E_FILE_TYPE"
 
 
 def test_template_path_rejects_path_traversal(tmp_path, monkeypatch):
