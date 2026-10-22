@@ -89,20 +89,40 @@ export interface Finding {
   ts: string;
   notes?: FindingNote[];
   reviews?: FindingReview[];
+  /** 人工创建者；Agent 创建时为空。 */
+  author?: string | null;
+  /** 软删除标记；列表接口不会返回已删除项。 */
+  deleted?: boolean;
 }
+
+export type EvidenceStep = 'tool_call' | 'tool_result' | 'manual';
+export type EvidenceSource = 'agent' | 'manual';
+export type EvidenceKind = 'file' | 'text' | 'record';
 
 export interface EvidenceItem {
   seq: number;
   id: string;
   sessionId: string;
   ts: string;
-  step: 'tool_call' | 'tool_result';
+  step: EvidenceStep;
+  /** 证据来源；Agent 记录缺省视为 agent。 */
+  source?: EvidenceSource;
+  /** 人工证据的形态。 */
+  kind?: EvidenceKind;
+  title?: string | null;
+  note?: string | null;
+  /** 工作区相对路径（POSIX），仅文件证据。 */
+  filePath?: string | null;
+  fileHash?: string | null;
   tool: string | null;
   params: Record<string, unknown>;
   resultSummary: string | null;
   artifactRef: string | null;
   durationMs?: number | null;
+  tokens?: number | null;
   lang?: string;
+  prevHash?: string;
+  hash?: string;
 }
 
 export interface DataSourceRef {
