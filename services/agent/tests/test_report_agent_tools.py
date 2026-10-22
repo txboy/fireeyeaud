@@ -108,11 +108,13 @@ def test_write_section_requires_approved_outline(tmp_path):
 class _FakeModel:
     def __init__(self) -> None:
         self.calls = 0
+        self.seen: list[list] = []
 
     def bind_tools(self, tools):  # noqa: ANN001
         return self
 
     async def astream(self, messages):  # noqa: ANN001
+        self.seen.append(list(messages))
         self.calls += 1
         if self.calls == 1:
             args = json.dumps(
@@ -172,6 +174,15 @@ async def test_stream_chat_runs_tools(tmp_path, monkeypatch):
     chat = report_docs.load_chat(root, "RPT-0001")
     assert chat[0]["role"] == "user"
     assert any(entry["role"] == "assistant" for entry in chat)
+
+    from langchain_core.messages import HumanMessage
+
+    first_turn = [
+        message.content
+        for message in fake.seen[0]
+        if isinstance(message, HumanMessage)
+    ]
+    assert first_turn.count("先给个大纲") == 1
 
 
 def test_system_prompt_has_source_rules():

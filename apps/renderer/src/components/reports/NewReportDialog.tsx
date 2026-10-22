@@ -24,7 +24,7 @@ export function NewReportDialog({
 
   const [templates, setTemplates] = useState<TemplateInfo[]>([]);
   const [templateId, setTemplateId] = useState('');
-  const [title, setTitle] = useState('项目审计报告');
+  const [title, setTitle] = useState(t('defaultTitle'));
   const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [errorKey, setErrorKey] = useState<string | null>(null);
@@ -39,7 +39,7 @@ export function NewReportDialog({
     setBusy(false);
     setErrorKey(null);
     setSelected(forms.map((form) => form.id));
-    setTitle('项目审计报告');
+    setTitle(t('defaultTitle'));
     void listTemplates('report')
       .then((page) => {
         setTemplates(page.items);
@@ -75,7 +75,7 @@ export function NewReportDialog({
       });
       await reloadReports();
       onCreated(doc.manifest.id, doc.body.title);
-      void message.success(t('saved'));
+      void message.success(t('created'));
       onClose();
     } catch (err) {
       setErrorKey((err as { messageKey?: string }).messageKey ?? 'error.internal');

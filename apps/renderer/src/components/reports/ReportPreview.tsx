@@ -63,7 +63,11 @@ export function ReportPreview({
     setErrorKey(null);
     try {
       const manifest = await exportReportDocument(doc.manifest.id);
-      void message.success(t('exported', { name: `${manifest.title}.docx` }));
+      if (manifest.exportWarnings && manifest.exportWarnings.length > 0) {
+        void message.warning(manifest.exportWarnings.join('；'));
+      } else {
+        void message.success(t('exported', { name: `${manifest.title}.docx` }));
+      }
       onRefresh();
     } catch (err) {
       const key = (err as { messageKey?: string }).messageKey ?? 'error.internal';
@@ -74,16 +78,14 @@ export function ReportPreview({
     }
   };
 
-  const docxPath = () => {
-    const fileName =
-      doc.manifest.files.find((file) => file === 'document.docx') ??
-      doc.manifest.files.find((file) => file.endsWith('.docx')) ??
-      'document.docx';
-    return `${wsPath}/${doc.manifest.artifactRef}/${fileName}`;
-  };
+  const hasCurrentDocx =
+    doc.manifest.status === 'saved' &&
+    doc.manifest.files.includes('document.docx');
+
+  const docxPath = () => `${wsPath}/${doc.manifest.artifactRef}/document.docx`;
 
   const openDocx = () => {
-    if (!wsPath) return;
+    if (!wsPath || !hasCurrentDocx) return;
     void openPreview(wsPath, docxPath(), `${doc.manifest.id}.docx`);
   };
 
@@ -112,7 +114,8 @@ export function ReportPreview({
           <button
             type="button"
             className="button button--sm button--ghost"
-            disabled={busy}
+            disabled={busy || !hasCurrentDocx}
+            title={hasCurrentDocx ? undefined : t('needExport')}
             onClick={openDocx}
           >
             <ExternalLink size={12} strokeWidth={1.9} /> {t('openDocx')}

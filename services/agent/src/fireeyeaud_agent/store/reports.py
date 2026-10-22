@@ -288,7 +288,10 @@ def list_reports(root: Path) -> list[dict[str, Any]]:
             continue
         if manifest.get("kind") == KIND:
             items.append(manifest)
-    items.sort(key=lambda i: str(i.get("createdAt") or ""), reverse=True)
+    items.sort(
+        key=lambda i: str(i.get("updatedAt") or i.get("createdAt") or ""),
+        reverse=True,
+    )
     return items
 
 

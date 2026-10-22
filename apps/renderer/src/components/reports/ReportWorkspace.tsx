@@ -4,6 +4,7 @@ import { FileText } from 'lucide-react';
 import { ReportChat } from './ReportChat';
 import { ReportPreview } from './ReportPreview';
 import { useReportDocStore } from '../../store/reportWorkspace';
+import { useReportsStore } from '../../store/reports';
 
 /** 报告写作台：左侧对话、右侧结构化预览。 */
 export function ReportWorkspace({ reportId }: { reportId: string }) {
@@ -14,6 +15,7 @@ export function ReportWorkspace({ reportId }: { reportId: string }) {
   const loading = useReportDocStore((s) => s.loading[reportId]);
   const errorKey = useReportDocStore((s) => s.errorKey);
   const load = useReportDocStore((s) => s.load);
+  const reloadReports = useReportsStore((s) => s.load);
 
   useEffect(() => {
     void load(reportId);
@@ -21,7 +23,8 @@ export function ReportWorkspace({ reportId }: { reportId: string }) {
 
   const refresh = useCallback(() => {
     void load(reportId);
-  }, [load, reportId]);
+    void reloadReports();
+  }, [load, reloadReports, reportId]);
 
   if (!doc) {
     return (

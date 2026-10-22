@@ -489,6 +489,8 @@ export interface ReportManifest {
   findingCount: number;
   artifactRef: string;
   files: string[];
+  /** 导出时被丢弃的模板固定内容提示。 */
+  exportWarnings?: string[];
 }
 
 // ---- 报告工作台（结构化正文） ----
@@ -569,7 +571,6 @@ export interface ReportDocument {
   body: ReportBody;
   skeleton: ReportSkeleton;
 }
-
 export interface ReportVerifyIssue {
   code: string;
   message: string;

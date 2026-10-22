@@ -26,7 +26,7 @@ from ..store import report_docs
 from ..store import reports as reports_store
 from ..store.report_verify import verify_report
 
-MAX_STEPS = 8
+MAX_STEPS = 12
 _CONTEXT_FORM_CHARS = 1500
 
 
@@ -297,6 +297,8 @@ async def stream_report_chat(
     doc = report_docs.get_document(root, report_id)
     title = str(doc["body"].get("title") or doc["manifest"].get("title") or report_id)
 
+    # 历史要在写入本轮用户消息之前取，否则同一句话会重复发给模型
+    history = _load_history(root, report_id)
     report_docs.append_chat(root, report_id, {"role": "user", "content": text})
     yield {"event": "status", "data": {"phase": "thinking"}}
 
@@ -308,7 +310,7 @@ async def stream_report_chat(
 
         messages: list[BaseMessage] = [
             SystemMessage(content=system_prompt(title, locale)),
-            *_load_history(root, report_id),
+            *history,
             HumanMessage(content=text),
         ]
 

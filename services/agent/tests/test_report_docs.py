@@ -329,7 +329,7 @@ def test_verify_requires_approved_outline_and_blocks(tmp_path):
     assert exc.value.code == "E_VERIFY_FAILED"
 
 
-def test_verify_warns_on_untraceable_amount(tmp_path):
+def test_verify_errors_on_untraceable_amount(tmp_path):
     root, template_id = _workspace(tmp_path)
     form_id = _form(root)
     _create(root, template_id, [form_id])
@@ -352,8 +352,210 @@ def test_verify_warns_on_untraceable_amount(tmp_path):
         ],
     )
     check = verify_report(root, "RPT-0001")
-    assert check["ok"] is True
-    assert any(w["code"] == "W_AMOUNT_UNTRACED" for w in check["warnings"])
+    assert check["ok"] is False
+    assert any(e["code"] == "E_AMOUNT_UNTRACED" for e in check["errors"])
+
+
+def test_amount_tracing_handles_units_and_ignores_years(tmp_path):
+    root, template_id = _workspace(tmp_path)
+    form_id = _form(root, amount="1.2")
+    # 描述里写「1.2万元」，报告写「12000元」应视为同一笔；「2026元」不应被年份蒙混过关
+    directory = evidence_forms.forms_dir(root) / form_id
+    manifest = json.loads((directory / "manifest.json").read_text("utf-8"))
+    manifest["findingsSnapshot"][0]["description"] = "采购费用1.2万元，发生于2026年。"
+    (directory / "manifest.json").write_text(
+        json.dumps(manifest, ensure_ascii=False), "utf-8"
+    )
+    created = report_docs.create_report(
+        root,
+        template_id=template_id,
+        template_scope="project",
+        form_ids=[form_id],
+        header={"reportTitle": "金额测试"},
+    )
+    rid = created["manifest"]["id"]
+    report_docs.set_outline(
+        root,
+        rid,
+        [{"id": "S1", "title": "一、基本情况", "level": 1}],
+        approved=True,
+    )
+    report_docs.write_section(
+        root,
+        rid,
+        "S1",
+        [
+            {
+                "type": "paragraph",
+                "text": "采购费用12000元，发生于2026年。",
+                "sourceRefs": [form_id],
+            }
+        ],
+    )
+    check = verify_report(root, rid)
+    assert check["ok"] is True, check["errors"]
+
+    report_docs.write_section(
+        root,
+        rid,
+        "S1",
+        [
+            {
+                "type": "paragraph",
+                "text": "采购费用2026元。",
+                "sourceRefs": [form_id],
+            }
+        ],
+    )
+    check = verify_report(root, rid)
+    assert any(e["code"] == "E_AMOUNT_UNTRACED" for e in check["errors"])
+
+
+def test_outline_ids_never_hang_on_collision(tmp_path):
+    root, template_id = _workspace(tmp_path)
+    form_id = _form(root)
+    _create(root, template_id, [form_id])
+    body = report_docs.set_outline(
+        root,
+        "RPT-0001",
+        [
+            {"title": "A", "id": "S3"},
+            {"title": "B", "id": "S4"},
+            {"title": "C"},
+            {"title": "D", "id": "S3"},
+        ],
+        approved=True,
+    )
+    ids = [section["id"] for section in body["sections"]]
+    assert len(ids) == len(set(ids)) == 4
+
+
+def test_editing_after_export_marks_report_draft_again(tmp_path):
+    root, template_id = _workspace(tmp_path)
+    form_id = _form(root)
+    _create(root, template_id, [form_id])
+    _fill_all(root, form_id)
+    report_docs.export_report(root, "RPT-0001")
+    assert report_docs._load_manifest(root, "RPT-0001")["status"] == "saved"
+
+    report_docs.write_section(
+        root,
+        "RPT-0001",
+        "S1",
+        [{"type": "paragraph", "text": "改一行。", "sourceRefs": [form_id]}],
+    )
+    assert report_docs._load_manifest(root, "RPT-0001")["status"] == "draft"
+
+
+def test_export_preserves_leading_template_table(tmp_path):
+    root, _template_id = _workspace(tmp_path)
+    # 再注册一个带「红头表格」的模板
+    doc = Document()
+    normal = doc.styles["Normal"]
+    normal.font.name = "仿宋"
+    normal.font.size = Pt(16)
+    _east_asia(normal, "仿宋_GB2312")
+    table = doc.add_table(rows=1, cols=1)
+    table.rows[0].cells[0].text = "广西全灌高速公路有限公司文件"
+    title = doc.add_paragraph()
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = title.add_run("审计报告")
+    run.font.size = Pt(22)
+    run.font.name = "小标宋"
+    _east_asia(run, "小标宋")
+    doc.add_paragraph("一、基本情况", style=doc.styles.add_style("标题 1", 1))
+    doc.add_paragraph("占位。")
+
+    item = config_store.create_item(
+        "templates",
+        {
+            "scope": "project",
+            "kind": "report",
+            "name": "红头模板",
+            "fileName": "leading.docx",
+        },
+        root,
+    )
+    target = templates_store.templates_root("project", root) / "report" / "leading.docx"
+    doc.save(str(target))
+
+    form_id = _form(root)
+    created = report_docs.create_report(
+        root,
+        template_id=item["id"],
+        template_scope="project",
+        form_ids=[form_id],
+        title="红头报告",
+    )
+    rid = created["manifest"]["id"]
+    report_docs.set_outline(
+        root, rid, [{"id": "S1", "title": "一、基本情况", "level": 1}], approved=True
+    )
+    report_docs.write_section(
+        root,
+        rid,
+        "S1",
+        [{"type": "paragraph", "text": "正文。", "sourceRefs": [form_id]}],
+    )
+    report_docs.export_report(root, rid)
+    exported = Document(str(report_docs._dir(root, rid) / "document.docx"))
+    assert exported.tables
+    assert "广西全灌" in exported.tables[0].rows[0].cells[0].text
+
+
+def test_export_applies_at_least_line_spacing(tmp_path):
+    root, _template_id = _workspace(tmp_path)
+    from docx.enum.text import WD_LINE_SPACING
+
+    doc = Document()
+    normal = doc.styles["Normal"]
+    normal.font.name = "仿宋"
+    normal.font.size = Pt(16)
+    _east_asia(normal, "仿宋_GB2312")
+    normal.paragraph_format.line_spacing = Pt(28)
+    normal.paragraph_format.line_spacing_rule = WD_LINE_SPACING.AT_LEAST
+    title = doc.add_paragraph()
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = title.add_run("审计报告")
+    run.font.size = Pt(22)
+    doc.add_paragraph("占位正文内容。")
+
+    item = config_store.create_item(
+        "templates",
+        {
+            "scope": "project",
+            "kind": "report",
+            "name": "最小行距模板",
+            "fileName": "atleast.docx",
+        },
+        root,
+    )
+    target = templates_store.templates_root("project", root) / "report" / "atleast.docx"
+    doc.save(str(target))
+
+    form_id = _form(root)
+    created = report_docs.create_report(
+        root,
+        template_id=item["id"],
+        template_scope="project",
+        form_ids=[form_id],
+        title="行距报告",
+    )
+    rid = created["manifest"]["id"]
+    report_docs.set_outline(
+        root, rid, [{"id": "S1", "title": "一、基本情况", "level": 1}], approved=True
+    )
+    report_docs.write_section(
+        root,
+        rid,
+        "S1",
+        [{"type": "paragraph", "text": "正文。", "sourceRefs": [form_id]}],
+    )
+    report_docs.export_report(root, rid)
+    exported = Document(str(report_docs._dir(root, rid) / "document.docx"))
+    para = next(p for p in exported.paragraphs if p.text == "正文。")
+    assert para.paragraph_format.line_spacing_rule == WD_LINE_SPACING.AT_LEAST
+    assert round(para.paragraph_format.line_spacing.pt) == 28
 
 
 def test_user_origin_skips_citation_requirement(tmp_path):

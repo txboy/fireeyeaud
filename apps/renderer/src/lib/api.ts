@@ -45,6 +45,7 @@ import type {
   WorkspaceInfo,
 } from '@fireeyeaud/shared';
 import { useSidecarStore } from '../store/sidecar';
+import { parseSseBuffer } from './reportSse';
 
 export class ApiError extends Error {
   constructor(
@@ -1322,29 +1323,13 @@ export async function streamReportChat(
   for (;;) {
     const { value, done } = await reader.read();
     if (done) break;
-    buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
-    let index = buffer.indexOf('\n\n');
-    while (index >= 0) {
-      const chunk = buffer.slice(0, index);
-      buffer = buffer.slice(index + 2);
-      let name = 'message';
-      const dataLines: string[] = [];
-      for (const line of chunk.split('\n')) {
-        if (line.startsWith('event:')) name = line.slice(6).trim();
-        else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
-      }
-      if (dataLines.length > 0) {
-        let data: Record<string, unknown> = {};
-        try {
-          data = JSON.parse(dataLines.join('\n')) as Record<string, unknown>;
-        } catch {
-          data = {};
-        }
-        onEvent({ event: name, data });
-      }
-      index = buffer.indexOf('\n\n');
-    }
+    buffer += decoder.decode(value, { stream: true });
+    const parsed = parseSseBuffer(buffer);
+    buffer = parsed.rest;
+    for (const event of parsed.events) onEvent(event);
   }
+  const tail = parseSseBuffer(buffer, true);
+  for (const event of tail.events) onEvent(event);
 }
 
 /** 新增模板时的本地文件检查 + 预览（只读，不保存）。 */

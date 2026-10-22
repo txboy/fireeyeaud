@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 from pathlib import Path
@@ -131,7 +132,7 @@ def create_report(
         (title or "").strip()
         or str(header.get("reportTitle") or "").strip()
         or (f"{project_name}审计报告" if project_name else "项目报告")
-    )
+    )[:200]
 
     skeleton_sections = skeleton.get("sections") or []
     raw_outline = (
@@ -192,6 +193,7 @@ def create_report(
                     "header": form.get("header") or {},
                     "receipt": form.get("receipt"),
                     "findings": form.get("findingsSnapshot") or [],
+                    "findingCount": len(form.get("findingsSnapshot") or []),
                 }
                 for form in forms
             ],
@@ -234,10 +236,11 @@ def _normalize_outline(
     by_id = {str(item.get("id")): item for item in existing}
     used: set[str] = set()
     out: list[dict[str, Any]] = []
-    for index, raw in enumerate(sections or []):
+    counter = 1
+    for raw in sections or []:
         if not isinstance(raw, dict):
             continue
-        title = str(raw.get("title") or "").strip()
+        title = str(raw.get("title") or "").strip()[:200]
         if not title:
             continue
         try:
@@ -247,23 +250,32 @@ def _normalize_outline(
         level = min(max(level, 1), 3)
         section_id = str(raw.get("id") or "")
         if not section_id or section_id in used:
-            section_id = f"S{index + 1}"
-            while section_id in used:
-                section_id = f"S{index + 2}"
+            while f"S{counter}" in used:
+                counter += 1
+            section_id = f"S{counter}"
         used.add(section_id)
+        suffix = section_id[1:]
+        if section_id.startswith("S") and suffix.isdigit():
+            counter = max(counter, int(suffix) + 1)
         previous = by_id.get(section_id) or {}
         out.append(
             {
                 "id": section_id,
                 "title": title,
                 "level": level,
-                "goal": str(raw.get("goal") or previous.get("goal") or "").strip(),
+                "goal": str(raw.get("goal") or previous.get("goal") or "").strip()[:500],
                 "blocks": list(previous.get("blocks") or []),
             }
         )
         if len(out) >= 30:
             break
     return out
+
+
+def _mark_draft(manifest: dict[str, Any]) -> None:
+    """正文一改，已导出的 docx 就过期了。"""
+    if manifest.get("status") == _STATUS_SAVED:
+        manifest["status"] = _STATUS_DRAFT
 
 
 def set_outline(
@@ -283,6 +295,7 @@ def set_outline(
         body["outlineApproved"] = bool(approved)
         _save_body(root, report_id, body)
         manifest = _load_manifest(root, report_id)
+        _mark_draft(manifest)
         _save_manifest(root, report_id, manifest)
     return body
 
@@ -368,13 +381,15 @@ def write_section(
         target["blocks"] = _normalize_blocks(blocks)
         target["status"] = "written" if target["blocks"] else "empty"
         _save_body(root, report_id, body)
-        _save_manifest(root, report_id, _load_manifest(root, report_id))
+        manifest = _load_manifest(root, report_id)
+        _mark_draft(manifest)
+        _save_manifest(root, report_id, manifest)
     return target
 
 
 def set_title(root: Path, report_id: str, title: str) -> dict[str, Any]:
     root = Path(root)
-    name = (title or "").strip()
+    name = (title or "").strip()[:200]
     if not name:
         raise ApiError("E_INVALID_TITLE", 400, "error.outlineEmpty")
     with WORKSPACE_MUTATION_LOCK:
@@ -383,6 +398,7 @@ def set_title(root: Path, report_id: str, title: str) -> dict[str, Any]:
         _save_body(root, report_id, body)
         manifest = _load_manifest(root, report_id)
         manifest["title"] = name
+        _mark_draft(manifest)
         _save_manifest(root, report_id, manifest)
     return body
 
@@ -410,11 +426,18 @@ def _apply_style(paragraph: Any, style: dict[str, Any], document: Any) -> None:
 
     spacing = style.get("lineSpacing")
     if isinstance(spacing, (int, float)):
-        if str(style.get("lineRule") or "").upper() == "EXACTLY":
+        rule = str(style.get("lineRule") or "").upper()
+        if rule == "EXACTLY":
             pf.line_spacing = Pt(float(spacing))
             pf.line_spacing_rule = WD_LINE_SPACING.EXACTLY
+        elif rule == "AT_LEAST":
+            pf.line_spacing = Pt(float(spacing))
+            pf.line_spacing_rule = WD_LINE_SPACING.AT_LEAST
         else:
-            pf.line_spacing = float(spacing)
+            # MULTIPLE 存的是倍数；没有规则时按固定磅值处理更安全
+            pf.line_spacing = (
+                float(spacing) if rule == "MULTIPLE" else Pt(float(spacing))
+            )
 
     for key, setter in (
         ("firstLineIndent", "first_line_indent"),
@@ -457,12 +480,38 @@ def _add_text(
     return paragraph
 
 
-def _clear_body(document: Any) -> None:
+def _clear_body(document: Any, keep_until: set[str]) -> list[str]:
+    """保留标题之前的固定内容（红头 / 封面表格），清空标题之后。
+
+    返回被清掉的非空固定文字，供导出时提示用户哪些内容不会保留。
+    """
     body = document.element.body
-    for child in list(body.iterchildren()):
-        if child.tag.endswith("}sectPr"):
-            continue
+    children = [
+        child for child in list(body.iterchildren()) if not child.tag.endswith("}sectPr")
+    ]
+    title_index = None
+    for index, child in enumerate(children):
+        if child.tag.endswith("}p") and _element_text(child) in keep_until:
+            title_index = index
+            break
+
+    if title_index is None:
+        lost = [text for text in (_element_text(c) for c in children) if text]
+        for child in children:
+            body.remove(child)
+        return lost
+
+    lost: list[str] = []
+    for child in children[title_index:]:
+        text = _element_text(child)
+        if text:
+            lost.append(text)
         body.remove(child)
+    return lost
+
+
+def _element_text(element: Any) -> str:
+    return "".join(node.text or "" for node in element.iter(qn("w:t"))).strip()
 
 
 def _heading_style(skeleton: dict[str, Any], level: int) -> dict[str, Any]:
@@ -490,16 +539,17 @@ def export_report(root: Path, report_id: str, *, title: str | None = None) -> di
     root = Path(root)
     from .report_verify import verify_report
 
-    check = verify_report(root, report_id)
-    if not check["ok"]:
-        raise ApiError(
-            "E_VERIFY_FAILED",
-            409,
-            "error.reportVerifyFailed",
-            {"count": len(check["errors"])},
-        )
-
     with WORKSPACE_MUTATION_LOCK:
+        # 校验与写入同一把锁：避免校验通过后又插入未校验内容
+        check = verify_report(root, report_id)
+        if not check["ok"]:
+            raise ApiError(
+                "E_VERIFY_FAILED",
+                409,
+                "error.reportVerifyFailed",
+                {"count": len(check["errors"])},
+            )
+
         directory = _dir(root, report_id)
         manifest = _load_manifest(root, report_id)
         body = _load_body(root, report_id)
@@ -513,7 +563,34 @@ def export_report(root: Path, report_id: str, *, title: str | None = None) -> di
         except Exception as exc:  # noqa: BLE001
             raise ApiError("E_FILE_TYPE", 400, "error.fileType", {"name": "template.docx"}) from exc
 
-        _clear_body(document)
+        final_title = (title or body.get("title") or manifest.get("title") or report_id).strip()[:200]
+        keep_until = {
+            str((skeleton.get("title") or {}).get("text") or "").strip(),
+            str(manifest.get("title") or "").strip(),
+            str(body.get("title") or "").strip(),
+            final_title,
+        } - {""}
+        lost = _clear_body(document, keep_until)
+
+        expected = {
+            *keep_until,
+            final_title,
+            *[str(item.get("title") or "") for item in skeleton.get("sections") or []],
+            *[
+                str(text)
+                for item in skeleton.get("sections") or []
+                for text in item.get("sampleText") or []
+            ],
+            *[str(text) for text in skeleton.get("preamble") or []],
+        }
+        unexpected = [text for text in lost if text not in expected]
+        export_warnings: list[str] = []
+        if unexpected:
+            sample = "、".join(dict.fromkeys(unexpected))[:120]
+            export_warnings.append(
+                f"模板中标题之后的固定内容不会保留：{sample}"
+            )
+
         body_style = dict(skeleton.get("body") or {})
         title_style = dict((skeleton.get("title") or {}).get("style") or {})
         if not title_style:
@@ -527,7 +604,6 @@ def export_report(root: Path, report_id: str, *, title: str | None = None) -> di
         title_style["align"] = "center"
         title_style["firstLineIndent"] = 0
 
-        final_title = (title or body.get("title") or manifest.get("title") or report_id).strip()
         _add_text(document, final_title, title_style)
 
         for section in body.get("sections") or []:
@@ -569,13 +645,17 @@ def export_report(root: Path, report_id: str, *, title: str | None = None) -> di
                             _apply_style(cell.paragraphs[0], {**cell_style, "bold": False}, document)
                             _apply_run(run, {**cell_style, "bold": False})
 
+        tmp_path = directory / "document.tmp.docx"
         try:
-            document.save(str(directory / "document.docx"))
+            document.save(str(tmp_path))
+            os.replace(tmp_path, directory / "document.docx")
         except OSError as exc:
+            tmp_path.unlink(missing_ok=True)
             raise ApiError("E_FILE_WRITE", 500, "error.opFailed") from exc
 
         manifest["title"] = final_title
         manifest["status"] = _STATUS_SAVED
+        manifest["exportWarnings"] = export_warnings
         manifest["findingCount"] = sum(
             len(form.get("findings") or [])
             for form in manifest.get("formsSnapshot") or []
@@ -607,6 +687,7 @@ def append_chat(root: Path, report_id: str, entry: dict[str, Any]) -> None:
 
 
 def load_chat(root: Path, report_id: str, limit: int = 40) -> list[dict[str, Any]]:
+    _validate_id(report_id)
     path = _dir(Path(root), report_id) / "chat.jsonl"
     if not path.is_file():
         return []
