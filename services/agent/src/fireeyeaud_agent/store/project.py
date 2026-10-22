@@ -28,6 +28,8 @@ def _default_project(root: Path) -> dict[str, Any]:
             "dataSource": 0,
             "connection": 0,
             "workingPaper": 0,
+            "evidenceForm": 0,
+            "report": 0,
         },
         "dataSources": [],
     }

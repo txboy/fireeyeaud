@@ -28,6 +28,8 @@ _COUNTERS = [
     "dataSource",
     "connection",
     "workingPaper",
+    "evidenceForm",
+    "report",
 ]
 
 

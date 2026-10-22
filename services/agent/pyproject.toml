@@ -33,6 +33,7 @@ dependencies = [
   "httpx>=0.28.1",
   "access-parser>=0.0.6",
   "mcp>=2.0.0",
+  "docxtpl>=0.20.2",
 ]
 
 [dependency-groups]

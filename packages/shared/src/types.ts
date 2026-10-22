@@ -399,6 +399,83 @@ export interface DbQueryResult {
 
 export type KbProviderType = 'dify' | 'ragflow';
 
+// ---- 取证单与项目报告（P3） ----
+
+export interface FindingSnapshot {
+  id: string;
+  title: string;
+  description: string;
+  severity: string;
+  status: string;
+  subjects: string[];
+  amount: string | null;
+  currency: string;
+  evidence: string[];
+}
+
+export interface ReceiptInfo {
+  /** 工作区相对路径（POSIX 分隔符），如 `回执单/QZ-0001_客户签收.pdf`。 */
+  path: string;
+  name: string;
+  uploadedAt: string;
+}
+
+export interface EvidenceFormManifest {
+  id: string;
+  kind: 'evidence-form';
+  title: string;
+  templateId: string;
+  /** 生成时使用的模板作用域；全局模板不随项目归档。 */
+  templateScope: ConfigScope;
+  templateName: string;
+  createdAt: string;
+  createdBy: string;
+  header: Record<string, string>;
+  findingIds: string[];
+  findingsSnapshot: FindingSnapshot[];
+  evidenceIds: string[];
+  receipt: ReceiptInfo | null;
+  artifactRef: string;
+  /** document.docx + 原始模板快照 template.docx。 */
+  files: string[];
+}
+
+export interface ReportFormSnapshot {
+  id: string;
+  title: string;
+  createdAt: string;
+  findingCount: number;
+  receipt: ReceiptInfo | null;
+  findings: FindingSnapshot[];
+}
+
+export interface ReportManifest {
+  id: string;
+  kind: 'report';
+  title: string;
+  templateId: string;
+  templateScope: ConfigScope;
+  templateName: string;
+  createdAt: string;
+  createdBy: string;
+  header: Record<string, string>;
+  formIds: string[];
+  formsSnapshot: ReportFormSnapshot[];
+  findingCount: number;
+  artifactRef: string;
+  files: string[];
+}
+
+export interface ArtifactPreview {
+  token: string;
+  kind: 'evidence-form' | 'report';
+  fileName: string;
+  /** 工作区相对路径，POSIX 分隔符。 */
+  relPath: string;
+  suggestedTitle: string;
+  warnings: string[];
+}
+
 export type TemplateKind = 'evidence-form' | 'report';
 
 export interface TemplateCheck {
