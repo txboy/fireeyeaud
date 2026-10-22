@@ -1636,6 +1636,387 @@ body {
   min-width: 0;
 }
 
+/* ---- 项目报告工作台 ---- */
+.reports-split {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.reports-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 50%;
+}
+
+.reports-pane + .reports-pane {
+  border-top: 1px solid var(--border);
+}
+
+.reports-pane__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 2px;
+}
+
+.reports-pane__title {
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.reports-pane__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.report-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 2px;
+  border-bottom: 1px solid var(--border);
+}
+
+.report-row__main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+}
+
+.report-row__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.report-row__date {
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.report-status {
+  font-size: 11px;
+  color: var(--text-3);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+.report-status--draft {
+  color: #b25b00;
+  border-color: #e7c08a;
+  background: #fff7ea;
+}
+
+.report-form-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 2px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.report-form-row:hover {
+  background: var(--hover);
+}
+
+.report-form-row__title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.report-form-picker {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.report-workspace {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+}
+
+.report-chat {
+  display: flex;
+  flex-direction: column;
+  width: 40%;
+  min-width: 300px;
+  max-width: 520px;
+  min-height: 0;
+  border-right: 1px solid var(--border);
+}
+
+.report-chat__head {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.report-chat__title {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.report-chat__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.report-chat__empty {
+  color: var(--text-3);
+  font-size: 12px;
+  padding: 12px 0;
+}
+
+.report-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.report-msg__role {
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.report-msg__text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.report-msg--user .report-msg__text {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.report-msg--error .report-msg__text {
+  color: #b42318;
+}
+
+.report-chat__tool {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.report-chat__composer {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.report-chat__input {
+  flex: 1;
+  resize: none;
+  font-family: inherit;
+}
+
+.report-chat__send {
+  white-space: nowrap;
+}
+
+.report-preview {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.report-preview__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.report-preview__heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.report-preview__title {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.report-preview__actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.report-preview__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 18px 22px 40px;
+  background: #fff;
+}
+
+.report-outline-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+  margin: 10px 14px 0;
+  padding: 10px 12px;
+  border: 1px solid #e7c08a;
+  border-radius: 8px;
+  background: #fff8ec;
+}
+
+.report-outline-banner__title {
+  font-weight: 600;
+  font-size: 12px;
+  color: #8a4b00;
+}
+
+.report-verify {
+  margin: 10px 14px 0;
+  padding: 8px 10px;
+  border: 1px solid #f0c2bc;
+  border-radius: 8px;
+  background: #fff5f4;
+  font-size: 12px;
+}
+
+.report-verify--ok {
+  border-color: #bcd8c2;
+  background: #f4fbf6;
+}
+
+.report-verify__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.report-verify__issue {
+  margin-top: 4px;
+  padding-left: 18px;
+  color: #b42318;
+}
+
+.report-verify__issue--warn {
+  color: #8a5a00;
+}
+
+.report-section {
+  margin-bottom: 18px;
+}
+
+.report-section__title {
+  font-family: "SimHei", "黑体", sans-serif;
+  font-size: 16px;
+  margin: 0 0 8px;
+}
+
+.report-section__title--l2 {
+  font-size: 14px;
+}
+
+.report-section__para {
+  margin: 0 0 8px;
+  text-align: justify;
+  text-indent: 2em;
+  line-height: 1.9;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.report-section__list {
+  margin: 0 0 8px;
+  padding-left: 2em;
+  line-height: 1.9;
+  font-size: 14px;
+}
+
+.report-section__empty {
+  color: var(--text-3);
+  font-size: 12px;
+  padding: 4px 0 8px;
+}
+
+.report-table-wrap {
+  margin: 6px 0 12px;
+  overflow-x: auto;
+}
+
+.report-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+}
+
+.report-table th,
+.report-table td {
+  border: 1px solid #cfd4dc;
+  padding: 5px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.report-table th {
+  background: #f4f6f9;
+  font-weight: 600;
+}
+
+.report-refs {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.report-ref {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 4px;
+  color: var(--text-3);
+}
+
 .titlebar__btn {
   display: inline-flex;
   align-items: center;
@@ -2098,6 +2479,18 @@ body {
   flex: 1;
   overflow: auto;
   padding: 14px;
+}
+
+.results__body--split {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0 14px;
+}
+
+.results__body--split .reports-split {
+  flex: 1;
+  min-height: 0;
 }
 
 /* ---- Right area (tab container) ---- */

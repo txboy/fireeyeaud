@@ -474,11 +474,14 @@ export interface ReportFormSnapshot {
 export interface ReportManifest {
   id: string;
   kind: 'report';
+  /** 草稿未导出；旧版本报告没有该字段，视为已保存。 */
+  status?: 'draft' | 'saved';
   title: string;
   templateId: string;
   templateScope: ConfigScope;
   templateName: string;
   createdAt: string;
+  updatedAt?: string;
   createdBy: string;
   header: Record<string, string>;
   formIds: string[];
@@ -486,6 +489,106 @@ export interface ReportManifest {
   findingCount: number;
   artifactRef: string;
   files: string[];
+}
+
+// ---- 报告工作台（结构化正文） ----
+
+export type ReportBlockOrigin = 'form' | 'user' | 'model';
+
+export interface ReportBlockParagraph {
+  type: 'paragraph';
+  text: string;
+  sourceRefs: string[];
+  origin?: ReportBlockOrigin;
+}
+
+export interface ReportBlockBullets {
+  type: 'bullets';
+  items: string[];
+  sourceRefs: string[];
+  origin?: ReportBlockOrigin;
+}
+
+export interface ReportBlockTable {
+  type: 'table';
+  columns: string[];
+  rows: string[][];
+  sourceRefs: string[];
+  origin?: ReportBlockOrigin;
+}
+
+export type ReportBlock = ReportBlockParagraph | ReportBlockBullets | ReportBlockTable;
+
+export interface ReportSection {
+  id: string;
+  title: string;
+  level: number;
+  goal: string;
+  blocks: ReportBlock[];
+  status?: 'empty' | 'written';
+}
+
+export interface ReportBody {
+  schemaVersion: number;
+  reportId: string;
+  title: string;
+  outlineApproved: boolean;
+  selectedFormIds: string[];
+  sections: ReportSection[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ReportSkeleton {
+  schemaVersion?: number;
+  source?: string;
+  confidence?: 'high' | 'medium' | 'low';
+  page?: Record<string, number | null>;
+  title?: { text: string; style: Record<string, unknown> } | null;
+  body?: Record<string, unknown>;
+  headings?: Array<{ level: number; style: Record<string, unknown> }>;
+  sections?: Array<{
+    title: string;
+    level: number;
+    sampleText: string[];
+    style?: Record<string, unknown>;
+  }>;
+  tables?: Array<{
+    columns: number;
+    rows: number;
+    headers: string[];
+    styleName?: string | null;
+    cellStyle?: Record<string, unknown>;
+  }>;
+  preamble?: string[];
+  warnings?: string[];
+}
+
+export interface ReportDocument {
+  manifest: ReportManifest;
+  body: ReportBody;
+  skeleton: ReportSkeleton;
+}
+
+export interface ReportVerifyIssue {
+  code: string;
+  message: string;
+  sectionId?: string;
+  ref?: string;
+  amount?: string;
+}
+
+export interface ReportVerifyResult {
+  ok: boolean;
+  errors: ReportVerifyIssue[];
+  warnings: ReportVerifyIssue[];
+  stats: { sectionCount: number; blockCount: number; charCount: number };
+}
+
+export interface ReportChatEntry {
+  at?: string;
+  role: 'user' | 'assistant';
+  content: string;
 }
 
 export interface ArtifactPreview {

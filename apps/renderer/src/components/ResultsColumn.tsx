@@ -34,7 +34,11 @@ export function ResultsColumn() {
           </button>
         ))}
       </div>
-      <div className="results__body">
+      <div
+        className={`results__body${
+          resultsTab === 'report' ? ' results__body--split' : ''
+        }`}
+      >
         {resultsTab === 'findings' ? (
           <FindingsView />
         ) : resultsTab === 'evidence-form' ? (

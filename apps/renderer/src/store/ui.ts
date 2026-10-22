@@ -112,6 +112,14 @@ export interface KbQueryTab {
   knowledgeName?: string;
 }
 
+/** 右侧区「报告写作台」tab（每份报告一个，左对话右预览）。 */
+export interface ReportTab {
+  id: string;
+  kind: 'report';
+  reportId: string;
+  name: string;
+}
+
 export type RightTab =
   | SessionTab
   | PreviewTab
@@ -121,7 +129,8 @@ export type RightTab =
   | DbSchemaTab
   | DbDataTab
   | KbBrowseTab
-  | KbQueryTab;
+  | KbQueryTab
+  | ReportTab;
 
 /**
  * 离开当前右侧 tab 前的守卫（用于未保存确认）。
@@ -163,6 +172,7 @@ interface UiState {
     },
   ) => Promise<void>;
   openSession: (sessionId: string) => Promise<void>;
+  openReport: (reportId: string, name: string) => Promise<void>;
   openSettings: () => Promise<void>;
   openRuleRun: (ruleId: string, name: string) => Promise<void>;
   openDbSchema: (input: {
@@ -273,8 +283,20 @@ export const useUiStore = create<UiState>((set, get) => {
       });
     },
 
-    openSettings: async () => {
-      const tab: SettingsTab = { id: 'settings', kind: 'settings' };
+    openReport: async (reportId, name) => {
+      const id = `report:${reportId}`;
+      if (!(await allowLeave(id))) return;
+      const tab: ReportTab = { id, kind: 'report', reportId, name };
+      set((state) => {
+        const exists = state.rightTabs.some((item) => item.id === id);
+        const rightTabs = exists
+          ? state.rightTabs.map((item) => (item.id === id ? tab : item))
+          : [...state.rightTabs, tab];
+        return { rightTabs, activeRightTabId: id };
+      });
+    },
+
+    openSettings: async () => {      const tab: SettingsTab = { id: 'settings', kind: 'settings' };
       if (!(await allowLeave(tab.id))) return;
       set((state) => {
         const exists = state.rightTabs.some((t) => t.id === tab.id);

@@ -3,6 +3,7 @@ import {
   BookOpen,
   Database,
   File as FileIcon,
+  FileCheck2,
   MessageSquare,
   Play,
   Search,
@@ -18,6 +19,7 @@ import {
   type KbBrowseTab,
   type KbQueryTab,
   type PreviewTab,
+  type ReportTab,
   type RightTab,
   type RuleRunTab,
   type SessionTab,
@@ -34,6 +36,7 @@ import { DbDataView } from './DbDataView';
 import { KbBrowseView } from './KbBrowseView';
 import { KbQueryView } from './KbQueryView';
 import { SettingsPanel } from './panels/SettingsPanel';
+import { ReportWorkspace } from './reports/ReportWorkspace';
 import { FORM_DOMAIN_ICON, useFormTitle } from './forms/meta';
 
 /** 「会话」tab：对话栏 + 成果栏一体（左对话、右成果）。 */
@@ -72,15 +75,17 @@ export function RightArea() {
   const labelOf = (tab: RightTab) =>
     tab.kind === 'session'
       ? sessionLabel(tab)
-      : tab.kind === 'form'
-        ? formTitle(tab)
-        : tab.kind === 'settings'
-          ? ts('title')
-          : tab.kind === 'dbData'
-            ? `${tab.name} / ${tab.table.table}`
-            : tab.kind === 'kbQuery' && tab.knowledgeName
-              ? `${tab.name} / ${tab.knowledgeName}`
-              : tab.name;
+      : tab.kind === 'report'
+        ? tab.name
+        : tab.kind === 'form'
+          ? formTitle(tab)
+          : tab.kind === 'settings'
+            ? ts('title')
+            : tab.kind === 'dbData'
+              ? `${tab.name} / ${tab.table.table}`
+              : tab.kind === 'kbQuery' && tab.knowledgeName
+                ? `${tab.name} / ${tab.knowledgeName}`
+                : tab.name;
 
   const handleClose = async (tab: RightTab) => {
     // 关闭正在生成的会话 tab：先警告并中止生成（保留已生成部分）。
@@ -96,21 +101,23 @@ export function RightArea() {
           const Icon =
             tab.kind === 'session'
               ? MessageSquare
-              : tab.kind === 'form'
-                ? FORM_DOMAIN_ICON[tab.domain]
-                : tab.kind === 'settings'
-                  ? Settings
-                  : tab.kind === 'ruleRun'
-                    ? Play
-                    : tab.kind === 'dbSchema'
-                      ? Database
-                      : tab.kind === 'dbData'
-                        ? Table2
-                        : tab.kind === 'kbBrowse'
-                          ? BookOpen
-                          : tab.kind === 'kbQuery'
-                            ? Search
-                            : FileIcon;
+              : tab.kind === 'report'
+                ? FileCheck2
+                : tab.kind === 'form'
+                  ? FORM_DOMAIN_ICON[tab.domain]
+                  : tab.kind === 'settings'
+                    ? Settings
+                    : tab.kind === 'ruleRun'
+                      ? Play
+                      : tab.kind === 'dbSchema'
+                        ? Database
+                        : tab.kind === 'dbData'
+                          ? Table2
+                          : tab.kind === 'kbBrowse'
+                            ? BookOpen
+                            : tab.kind === 'kbQuery'
+                              ? Search
+                              : FileIcon;
           const label = labelOf(tab);
           return (
             <div
@@ -148,6 +155,8 @@ export function RightArea() {
           </div>
         ) : active.kind === 'session' ? (
           <SessionView sessionId={active.sessionId} />
+        ) : active.kind === 'report' ? (
+          <ReportWorkspace key={active.id} reportId={(active as ReportTab).reportId} />
         ) : active.kind === 'form' ? (
           <FormTabView key={active.id} tab={active as FormTab} />
         ) : active.kind === 'ruleRun' ? (

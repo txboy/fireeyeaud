@@ -27,7 +27,13 @@ import type {
   McpServer,
   McpTransport,
   ModelProfile,
+  ReportBlock,
+  ReportBody,
+  ReportChatEntry,
+  ReportDocument,
   ReportManifest,
+  ReportSection,
+  ReportVerifyResult,
   RuleRunResult,
   Skill,
   TemplateCheck,
@@ -1215,6 +1221,130 @@ export function listReports(): Promise<{ items: ReportManifest[] }> {
 
 export function deleteReport(id: string): Promise<{ ok: boolean }> {
   return request<{ ok: boolean }>(`/reports/${id}`, { method: 'DELETE' });
+}
+
+// ---- 报告工作台（结构化正文 + 对话） ----
+
+export interface CreateReportDraftInput {
+  templateId: string;
+  templateScope: ConfigScope;
+  formIds: string[];
+  header?: Record<string, string>;
+  title?: string;
+}
+
+export function createReportDraft(
+  input: CreateReportDraftInput,
+): Promise<ReportDocument> {
+  return request<ReportDocument>('/reports/drafts', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function getReportDocument(id: string): Promise<ReportDocument> {
+  return request<ReportDocument>(`/reports/${id}/doc`);
+}
+
+export function setReportOutline(
+  id: string,
+  sections: Array<{ id?: string; title: string; level?: number; goal?: string }>,
+  approved: boolean,
+): Promise<ReportBody> {
+  return request<ReportBody>(`/reports/${id}/outline`, {
+    method: 'PUT',
+    body: JSON.stringify({ sections, approved }),
+  });
+}
+
+export function writeReportSection(
+  id: string,
+  sectionId: string,
+  blocks: ReportBlock[],
+): Promise<ReportSection> {
+  return request<ReportSection>(`/reports/${id}/sections/${sectionId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ blocks }),
+  });
+}
+
+export function setReportTitleApi(id: string, title: string): Promise<ReportBody> {
+  return request<ReportBody>(`/reports/${id}/title`, {
+    method: 'PUT',
+    body: JSON.stringify({ title }),
+  });
+}
+
+export function verifyReportDocument(id: string): Promise<ReportVerifyResult> {
+  return request<ReportVerifyResult>(`/reports/${id}/verify`, { method: 'POST' });
+}
+
+export function exportReportDocument(
+  id: string,
+  title?: string,
+): Promise<ReportManifest> {
+  return request<ReportManifest>(`/reports/${id}/export`, {
+    method: 'POST',
+    body: JSON.stringify({ title }),
+  });
+}
+
+export function listReportMessages(
+  id: string,
+): Promise<{ items: ReportChatEntry[] }> {
+  return request<{ items: ReportChatEntry[] }>(`/reports/${id}/messages`);
+}
+
+export interface ReportStreamEvent {
+  event: string;
+  data: Record<string, unknown>;
+}
+
+/** 报告对话流：POST + SSE，逐事件回调。 */
+export async function streamReportChat(
+  id: string,
+  input: { message: string; locale?: string; modelId?: string },
+  onEvent: (event: ReportStreamEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const res = await safeFetch(`${baseUrl()}/reports/${id}/chat`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(input),
+    signal,
+  });
+  if (!res.ok) throw await toApiError(res);
+  if (!res.body) throw new ApiError('E_INTERNAL', res.status, 'error.internal');
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
+    let index = buffer.indexOf('\n\n');
+    while (index >= 0) {
+      const chunk = buffer.slice(0, index);
+      buffer = buffer.slice(index + 2);
+      let name = 'message';
+      const dataLines: string[] = [];
+      for (const line of chunk.split('\n')) {
+        if (line.startsWith('event:')) name = line.slice(6).trim();
+        else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
+      }
+      if (dataLines.length > 0) {
+        let data: Record<string, unknown> = {};
+        try {
+          data = JSON.parse(dataLines.join('\n')) as Record<string, unknown>;
+        } catch {
+          data = {};
+        }
+        onEvent({ event: name, data });
+      }
+      index = buffer.indexOf('\n\n');
+    }
+  }
 }
 
 /** 新增模板时的本地文件检查 + 预览（只读，不保存）。 */
