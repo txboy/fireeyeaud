@@ -1210,6 +1210,10 @@ body {
   color: var(--text-3);
 }
 
+.tpl-row__detail--warn {
+  color: var(--warning);
+}
+
 .tpl-badge {
   flex: 0 0 auto;
   padding: 1px 5px;

@@ -36,12 +36,13 @@ export function UploadTemplateDialog({
 
   useEffect(() => {
     if (!open) return;
-    setScope(defaultScope === 'global' ? 'global' : 'project');
+    // 没有工作区时不能选「本项目」：直接落到全局，避免提交后 409。
+    setScope(hasWorkspace ? (defaultScope === 'global' ? 'global' : 'project') : 'global');
     setPaths([]);
     setIsDefault(false);
     setErrorKey(null);
     setBusy(false);
-  }, [open, defaultScope]);
+  }, [open, defaultScope, hasWorkspace]);
 
   const pickFiles = async () => {
     const api = window.fireeyeaud;

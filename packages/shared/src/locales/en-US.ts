@@ -527,6 +527,7 @@ export default {
     missing: 'Missing required fields: {{fields}}',
     loops: 'Loops: {{fields}}',
     noLoop: 'No loop markers found',
+    unclosed: 'Unclosed loops: {{fields}}',
     uploadFailed: 'Template upload failed',
     sampleCopied: 'Copied as an editable template',
     previewFailed: 'Template preview failed',

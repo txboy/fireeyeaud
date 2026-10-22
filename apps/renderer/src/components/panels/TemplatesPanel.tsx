@@ -63,11 +63,16 @@ export function TemplatesPanel() {
   );
 
   const hasTwoDefaults = useMemo(() => {
-    const defaults = items.filter((i) => i.isDefault && !i.builtin);
-    return (
-      defaults.some((i) => i.scope === 'project') &&
-      defaults.some((i) => i.scope === 'global')
-    );
+    // 默认是「作用域 + 类型」维度的：只有同一 kind 在两个作用域都有默认才提示。
+    return KIND_ORDER.some((kind) => {
+      const defaults = items.filter(
+        (i) => i.kind === kind && i.isDefault && !i.builtin,
+      );
+      return (
+        defaults.some((i) => i.scope === 'project') &&
+        defaults.some((i) => i.scope === 'global')
+      );
+    });
   }, [items]);
 
   const uploadDefaultScope: ConfigScope =
@@ -82,7 +87,8 @@ export function TemplatesPanel() {
       cancelLabel: tc('cancel'),
     });
     if (name == null || !name.trim()) return;
-    await rename(item.id, item.scope, name.trim());
+    // store 已记录 errorKey，这里只需吞掉 rejection（避免未处理 Promise）。
+    await rename(item.id, item.scope, name.trim()).catch(() => undefined);
   };
 
   const onDelete = async (item: TemplateInfo) => {
@@ -93,21 +99,37 @@ export function TemplatesPanel() {
       cancelLabel: tc('cancel'),
       danger: true,
     });
-    if (ok) await remove(item.id, item.scope);
+    if (ok) await remove(item.id, item.scope).catch(() => undefined);
   };
 
   const onDuplicate = async () => {
     if (!duplicating) return;
-    await duplicate(duplicating.id, duplicating.scope, duplicateScope);
-    setDuplicating(null);
+    try {
+      await duplicate(duplicating.id, duplicating.scope, duplicateScope);
+      setDuplicating(null);
+    } catch {
+      // errorKey 已由 store 记录；保持弹窗打开让用户改选目标作用域。
+    }
   };
 
   const renderCheck = (item: TemplateInfo) => {
     const { check } = item;
-    if (check.ok && check.loops.length > 0) {
+    const unclosed = check.unclosed ?? [];
+    if (check.ok) {
       return (
         <span className="tpl-row__check tpl-row__check--ok">
-          <CheckCircle2 size={11} strokeWidth={2} /> {t('checkOk')}
+          <CheckCircle2 size={11} strokeWidth={2} />
+          <span>
+            {t('checkOk')}
+            {check.loops.length === 0 && (
+              <span className="tpl-row__detail">{t('noLoop')}</span>
+            )}
+            {unclosed.length > 0 && (
+              <span className="tpl-row__detail tpl-row__detail--warn">
+                {t('unclosed', { fields: unclosed.join('、') })}
+              </span>
+            )}
+          </span>
         </span>
       );
     }
@@ -115,7 +137,7 @@ export function TemplatesPanel() {
       <span className="tpl-row__check tpl-row__check--warn">
         <AlertTriangle size={11} strokeWidth={2} />
         <span>
-          {check.ok ? t('checkOk') : t('checkWarn')}
+          {t('checkWarn')}
           {check.unknown.length > 0 && (
             <span className="tpl-row__detail">
               {t('unknown', { fields: check.unknown.join('、') })}
@@ -124,6 +146,11 @@ export function TemplatesPanel() {
           {check.missing.length > 0 && (
             <span className="tpl-row__detail">
               {t('missing', { fields: check.missing.join('、') })}
+            </span>
+          )}
+          {unclosed.length > 0 && (
+            <span className="tpl-row__detail">
+              {t('unclosed', { fields: unclosed.join('、') })}
             </span>
           )}
           {check.loops.length > 0 ? (
@@ -232,7 +259,10 @@ export function TemplatesPanel() {
                         title={t('duplicate')}
                         onClick={() => {
                           setDuplicating(item);
-                          setDuplicateScope(item.scope === 'project' ? 'global' : 'project');
+                          // 目标默认取「相反作用域」；没有工作区时只能复制到全局。
+                          setDuplicateScope(
+                            !path ? 'global' : item.scope === 'project' ? 'global' : 'project',
+                          );
                         }}
                       >
                         <Copy size={13} strokeWidth={1.75} />
@@ -286,7 +316,13 @@ export function TemplatesPanel() {
           >
             {tc('cancel')}
           </button>,
-          <button key="ok" type="button" className="button" onClick={() => void onDuplicate()}>
+          <button
+            key="ok"
+            type="button"
+            className="button"
+            disabled={duplicateScope === 'project' && !path}
+            onClick={() => void onDuplicate()}
+          >
             {t('duplicateTarget')}
           </button>,
         ]}

@@ -328,12 +328,109 @@ def test_sample_documents_contain_expected_markers(tmp_path, monkeypatch):
     assert "疑点" in form["loops"]
     assert form["missing"] == []
     assert form["unknown"] == []
+    assert form["unclosed"] == []
 
     report = scan_docx(samples / "report.docx", "report")
     assert "报告编号" in report["tags"]
     assert "取证单" in report["loops"]
     assert report["missing"] == []
     assert report["unknown"] == []
+    # 报告附录的顶层 `疑点` 循环必须有结束标记，否则 P3 渲染会报 Jinja 语法错
+    assert report["unclosed"] == []
+    assert report["balanced"] is True
+
+
+def test_scan_docx_detects_unclosed_loop(tmp_path):
+    doc = Document()
+    doc.add_paragraph("{{项目名称}} {{报告编号}}")
+    table = doc.add_table(rows=2, cols=2)
+    table.cell(0, 0).text = "{{#疑点}}"
+    table.cell(0, 1).text = "{{疑点.标题}}"
+    path = tmp_path / "unclosed.docx"
+    doc.save(path)
+
+    check = scan_docx(path, "report")
+    assert check["unclosed"] == ["疑点"]
+    assert check["balanced"] is False
+
+
+def test_scan_docx_reads_all_header_footer_variants(tmp_path):
+    doc = Document()
+    section = doc.sections[0]
+    section.first_page_header.paragraphs[0].text = "{{被审计单位}}"
+    section.even_page_footer.paragraphs[0].text = "{{复核人}}"
+    section.first_page_footer.paragraphs[0].text = "{{编制人}}"
+    path = tmp_path / "hf2.docx"
+    doc.save(path)
+
+    check = scan_docx(path, "report")
+    assert {"被审计单位", "复核人", "编制人"} <= set(check["tags"])
+
+
+def test_corrupt_sample_does_not_break_list(tmp_path, monkeypatch):
+    """示例文件损坏/为空时，列表仍要可用（用户无法在 UI 里修复示例）。"""
+    root = _env(tmp_path, monkeypatch)
+    ensure_samples(root)
+    broken = tmp_path / "global" / "templates" / "samples" / "report.docx"
+    broken.write_bytes(b"")
+
+    items = list_templates(root, "report")  # 不能抛异常
+    assert isinstance(items, list)
+
+
+def test_resolve_sample_with_explicit_global_scope(tmp_path, monkeypatch):
+    """列表把示例标为 scope=global，显式作用域解析必须也能拿到它（P3 依赖）。"""
+    root = _env(tmp_path, monkeypatch)
+    sample = next(i for i in list_templates(root, "report") if i.get("builtin"))
+
+    assert get_template(root, sample["id"], "global")["id"] == sample["id"]
+    assert resolve_template(root, sample["id"], "global")["id"] == sample["id"]
+    # 示例只存在于全局作用域
+    assert get_template(root, sample["id"], "project") is None
+
+
+def test_clearing_last_default_promotes_another(tmp_path, monkeypatch):
+    root = _env(tmp_path, monkeypatch)
+    first = upload_template(root, _docx(tmp_path / "1.docx"), kind="report", scope="project")
+    second = upload_template(root, _docx(tmp_path / "2.docx"), kind="report", scope="project")
+    update_template(root, second["id"], "project", is_default=True)
+
+    update_template(root, second["id"], "project", is_default=False)
+
+    items = [
+        i for i in list_templates(root, "report") if i["scope"] == "project" and not i.get("builtin")
+    ]
+    defaults = [i["id"] for i in items if i["isDefault"]]
+    assert defaults == [first["id"]], "同一作用域/类型必须始终有一个默认"
+
+
+def test_delete_global_default_keeps_project_default(tmp_path, monkeypatch):
+    root = _env(tmp_path, monkeypatch)
+    g = upload_template(root, _docx(tmp_path / "g.docx"), kind="report", scope="global")
+    p = upload_template(root, _docx(tmp_path / "p.docx"), kind="report", scope="project")
+    assert default_template(root, "report")["id"] == p["id"]
+
+    delete_template(root, g["id"], "global")
+
+    assert default_template(root, "report")["id"] == p["id"]
+
+
+def test_default_template_skips_missing_files(tmp_path, monkeypatch):
+    root = _env(tmp_path, monkeypatch)
+    first = upload_template(root, _docx(tmp_path / "1.docx"), kind="report", scope="project")
+    second = upload_template(root, _docx(tmp_path / "2.docx"), kind="report", scope="project")
+    # 外部删掉默认项的文件
+    template_path(root, first["id"], "project").unlink()
+
+    assert default_template(root, "report")["id"] == second["id"]
+
+
+def test_delete_template_rejects_unknown_scope(tmp_path, monkeypatch):
+    root = _env(tmp_path, monkeypatch)
+    item = upload_template(root, _docx(tmp_path / "a.docx"), kind="report", scope="project")
+    with pytest.raises(ApiError) as exc:
+        delete_template(root, item["id"], "bogus")
+    assert exc.value.code == "E_INVALID_SCOPE"
 
 
 def test_template_path_rejects_path_traversal(tmp_path, monkeypatch):

@@ -406,6 +406,10 @@ export interface TemplateCheck {
   loops: string[];
   unknown: string[];
   missing: string[];
+  /** 有开始标记但没有结束标记的循环（P3 渲染会失败）。 */
+  unclosed?: string[];
+  /** unclosed 为空。 */
+  balanced?: boolean;
   /** 没有 unknown 且没有 missing。 */
   ok: boolean;
 }

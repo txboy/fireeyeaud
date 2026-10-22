@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import shutil
 from datetime import datetime, timezone
@@ -24,6 +25,8 @@ from ..config import store
 from ..errors import ApiError
 from ..util import now_iso
 from .lock import WORKSPACE_MUTATION_LOCK
+
+logger = logging.getLogger(__name__)
 
 KIND = "templates"
 MAX_BYTES = 20 * 1024 * 1024
@@ -41,6 +44,7 @@ SAMPLE_IDS = {
 
 TAG_RE = re.compile(r"\{\{\s*([^{}#/][^{}]*?)\s*\}\}")
 LOOP_RE = re.compile(r"\{\{\s*#\s*([^{}]+?)\s*\}\}")
+LOOP_END_RE = re.compile(r"\{\{\s*/\s*([^{}]+?)\s*\}\}")
 
 _COMMON = {"项目名称", "项目编号", "被审计单位", "审计期间", "编制人", "复核人", "日期"}
 
@@ -140,7 +144,16 @@ def _iter_paragraphs(document: Any):
                         for nested_cell in nested_row.cells:
                             yield from nested_cell.paragraphs
     for section in document.sections:
-        for part in (section.header, section.footer):
+        # 默认 / 首页 / 偶数页 三种页眉页脚都要看：封面页常用独立页眉。
+        parts = (
+            section.header,
+            section.footer,
+            section.first_page_header,
+            section.first_page_footer,
+            section.even_page_header,
+            section.even_page_footer,
+        )
+        for part in parts:
             for paragraph in part.paragraphs:
                 yield paragraph
             for table in part.tables:
@@ -168,6 +181,7 @@ def scan_docx(path: Path, kind: str) -> dict[str, Any]:
 
     tags: set[str] = set()
     loops: set[str] = set()
+    ends: set[str] = set()
     for paragraph in _iter_paragraphs(document):
         text = paragraph.text or ""
         for match in TAG_RE.finditer(text):
@@ -178,16 +192,24 @@ def scan_docx(path: Path, kind: str) -> dict[str, Any]:
             name = match.group(1).strip()
             if name:
                 loops.add(name)
+        for match in LOOP_END_RE.finditer(text):
+            name = match.group(1).strip()
+            if name:
+                ends.add(name)
 
     known = _KNOWN.get(kind, set())
     required = _REQUIRED.get(kind, set())
     unknown = sorted(t for t in tags if t not in known)
     missing = sorted(r for r in required if r not in tags)
+    # 有开始没结束的循环：P3 会渲染失败，必须显式提示（用户上传时也可能犯）
+    unclosed = sorted(loops - ends)
     return {
         "tags": sorted(tags),
         "loops": sorted(loops),
         "unknown": unknown,
         "missing": missing,
+        "unclosed": unclosed,
+        "balanced": not unclosed,
         "ok": not unknown and not missing,
     }
 
@@ -243,11 +265,19 @@ def list_templates(
 ) -> list[dict[str, Any]]:
     """合并生效模板（项目覆盖全局），并追加全局内置示例。"""
     out: list[dict[str, Any]] = []
+    # 作用域以「项来自哪份清单」为准，不信任项里的 scope 字段（手改/同步可能写脏）。
+    project_ids: set[str] = set()
+    if root is not None:
+        project_ids = {
+            str(item.get("id"))
+            for item in store.list_items(KIND, "project", root)
+            if item.get("id")
+        }
     for item in store.load_effective(KIND, root):
         item_kind = str(item.get("kind") or "")
         if kind is not None and item_kind != kind:
             continue
-        scope = str(item.get("scope") or "global")
+        scope = "project" if str(item.get("id")) in project_ids else "global"
         out.append(_decorate(item, scope, root))
 
     for sample in ensure_samples(root):
@@ -260,13 +290,30 @@ def list_templates(
 
 
 def ensure_samples(root: Path | None) -> list[dict[str, Any]]:
-    """确保示例 docx 存在，返回其虚拟项（不写任何 templates.json）。"""
+    """确保示例 docx 存在，返回其虚拟项（不写任何 templates.json）。
+
+    示例损坏（空文件 / 半截写入）时尝试重建一次；仍失败就跳过该示例，
+    绝不让一个坏文件把整个模板列表打挂（用户没有修复示例的入口）。
+    """
     out: list[dict[str, Any]] = []
     for template_id, kind in SAMPLE_IDS.items():
         path = _sample_path(kind)
-        if not path.is_file():
-            create_sample(root, kind)
-        out.append(_sample_item(template_id, kind, path))
+        for attempt in range(2):
+            if not path.is_file():
+                try:
+                    create_sample(root, kind)
+                except (ApiError, OSError):
+                    logger.warning("template sample generation failed: %s", kind)
+                    break
+            try:
+                out.append(_sample_item(template_id, kind, path))
+                break
+            except (ApiError, OSError):
+                logger.warning("template sample unreadable, regenerating: %s", kind)
+                if attempt == 0:
+                    path.unlink(missing_ok=True)
+                    continue
+                break
     return out
 
 
@@ -301,7 +348,12 @@ def get_template(
         raise ApiError("E_INVALID_SCOPE", 400, "error.internal")
     sample_kind = _kind_of_sample(template_id)
     if sample_kind is not None:
-        return None
+        # 示例是全局虚拟项：列表里带 scope=global，显式作用域解析必须也能拿到（P3 依赖）。
+        if scope != "global":
+            return None
+        ensure_samples(root)
+        path = _sample_path(sample_kind)
+        return _sample_item(template_id, sample_kind, path) if path.is_file() else None
     item = store.get_item(KIND, template_id, scope, root)
     if item is None:
         return None
@@ -364,6 +416,33 @@ def read_template_content(
 
 
 # ---- 写入 ----
+
+
+def _same_scope_kind(
+    root: Path | None, scope: str, kind: str, *, exclude: str | None = None
+) -> list[dict[str, Any]]:
+    items = [
+        item
+        for item in store.list_items(KIND, scope, root)
+        if item.get("kind") == kind and item.get("id") != exclude
+    ]
+    items.sort(
+        key=lambda item: (
+            str(item.get("createdAt") or ""),
+            str(item.get("id") or ""),
+        )
+    )
+    return items
+
+
+def _promote_default(root: Path | None, scope: str, kind: str) -> None:
+    """保证同作用域/类型至少有一个默认（只影响该作用域）。"""
+    items = _same_scope_kind(root, scope, kind)
+    if not items or any(item.get("isDefault") for item in items):
+        return
+    store.update_item(
+        KIND, str(items[0]["id"]), scope, {"isDefault": True}, root
+    )
 
 
 def _set_default(
@@ -432,8 +511,18 @@ def upload_template(
         try:
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source, target)
+            updated = store.update_item(
+                KIND,
+                str(created["id"]),
+                scope,
+                {"fileName": target.name, "size": size, "check": check},
+                root,
+            )
+            if make_default:
+                updated = _set_default(root, updated, scope)
         except OSError as exc:
-            # 半成品回滚：删掉刚创建的元数据，不动旧默认
+            # 半成品回滚：删掉刚创建的元数据与文件，不动旧默认
+            target.unlink(missing_ok=True)
             try:
                 store.delete_item(KIND, str(created["id"]), scope, root)
             except ApiError:
@@ -441,16 +530,14 @@ def upload_template(
             raise ApiError(
                 "E_FILE_WRITE", 500, "error.opFailed", {"name": source.name}
             ) from exc
-
-        updated = store.update_item(
-            KIND,
-            str(created["id"]),
-            scope,
-            {"fileName": target.name, "size": size, "check": check},
-            root,
-        )
-        if make_default:
-            updated = _set_default(root, updated, scope)
+        except ApiError:
+            # 元数据写入失败：同样回滚文件，避免留下无主 docx
+            target.unlink(missing_ok=True)
+            try:
+                store.delete_item(KIND, str(created["id"]), scope, root)
+            except ApiError:
+                pass
+            raise
         return _decorate(updated, scope, root)
 
 
@@ -482,10 +569,15 @@ def update_template(
             current = store.update_item(
                 KIND, template_id, scope, {"isDefault": False}, root
             )
+            # 不允许把该作用域/类型清成「没有默认」：自动提升下一条，与删除一致。
+            _promote_default(root, scope, str(current.get("kind") or ""))
+            current = store.get_item(KIND, template_id, scope, root) or current
     return _decorate(current, scope, root)
 
 
 def delete_template(root: Path | None, template_id: str, scope: str) -> bool:
+    if scope not in ("global", "project"):
+        raise ApiError("E_INVALID_SCOPE", 400, "error.internal")
     if _is_sample_id(template_id):
         raise ApiError(
             "E_TEMPLATE_BUILTIN", 403, "error.templateBuiltinReadonly", {"id": template_id}
@@ -527,8 +619,15 @@ def delete_template(root: Path | None, template_id: str, scope: str) -> bool:
 
 
 def default_template(root: Path | None, kind: str) -> dict[str, Any] | None:
-    """解析默认模板：项目默认 → 全局默认 → 项目首条 → 全局首条 → 示例。"""
-    items = [i for i in list_templates(root, kind) if not i.get("builtin")]
+    """解析默认模板：项目默认 → 全局默认 → 项目首条 → 全局首条 → 示例。
+
+    跳过文件已丢失的项：它有元数据但不可用，不该压过健康的模板。
+    """
+    items = [
+        i
+        for i in list_templates(root, kind)
+        if not i.get("builtin") and i.get("absPath")
+    ]
     project = [i for i in items if i["scope"] == "project"]
     glob = [i for i in items if i["scope"] == "global"]
     for group in (project, glob):
@@ -589,7 +688,10 @@ def duplicate_template(
 
 
 def create_sample(root: Path | None, kind: str) -> dict[str, Any]:
-    """生成内置示例 docx；已存在则直接返回。"""
+    """生成内置示例 docx；已存在则直接返回。
+
+    写入用「临时文件 + os.replace」，避免并发首次请求把示例写成半截文件。
+    """
     if kind not in KINDS:
         raise ApiError("E_FILE_TYPE", 400, "error.fileType", {"name": kind})
     path = _sample_path(kind)
@@ -602,8 +704,18 @@ def create_sample(root: Path | None, kind: str) -> dict[str, Any]:
     else:
         _build_report(document)
 
-    path.parent.mkdir(parents=True, exist_ok=True)
-    document.save(str(path))
+    with WORKSPACE_MUTATION_LOCK:
+        if path.is_file():  # 另一个请求刚刚生成
+            return _sample_item(f"sample-{kind}", kind, path)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(".docx.tmp")
+            document.save(str(tmp))
+            tmp.replace(path)
+        except OSError as exc:
+            raise ApiError(
+                "E_FILE_WRITE", 500, "error.opFailed", {"name": kind}
+            ) from exc
     return _sample_item(f"sample-{kind}", kind, path)
 
 
@@ -664,8 +776,9 @@ def _build_report(document: Any) -> None:
     table.cell(2, 0).text = "{{/取证单}}"
 
     document.add_heading("附：疑点清单", level=2)
-    appendix = document.add_table(rows=2, cols=3)
+    appendix = document.add_table(rows=3, cols=3)
     for index, header in enumerate(["编号", "标题", "风险"]):
         appendix.cell(0, index).text = header
     for index, value in enumerate(["{{#疑点}}", "{{疑点.标题}}", "{{疑点.风险}}"]):
         appendix.cell(1, index).text = value
+    appendix.cell(2, 0).text = "{{/疑点}}"

@@ -520,6 +520,7 @@ export default {
     missing: '缺少关键字段：{{fields}}',
     loops: '循环：{{fields}}',
     noLoop: '未发现循环标记',
+    unclosed: '循环未闭合：{{fields}}',
     uploadFailed: '模板上传失败',
     sampleCopied: '已复制为可编辑模板',
     previewFailed: '模板预览失败',
