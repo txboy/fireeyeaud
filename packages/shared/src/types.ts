@@ -731,5 +731,10 @@ export interface AppSettings {
   skills?: {
     mode: string;
   };
+  /** 归档作者（姓名/邮箱），用于 commit 与归档清单。 */
+  archive?: {
+    authorName: string;
+    authorEmail: string;
+  };
   telemetry: boolean;
 }

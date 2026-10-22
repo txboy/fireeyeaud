@@ -1560,6 +1560,82 @@ body {
   gap: 4px;
 }
 
+/* ---- 项目归档 ---- */
+.archive-status {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-bg);
+}
+
+.archive-status__label {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.archive-status__value {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.archive-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.archive-row {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.archive-row__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.archive-row__id {
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.archive-row__meta {
+  font-size: 12px;
+  color: var(--text-3);
+  overflow-wrap: anywhere;
+}
+
+.conflict-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 42vh;
+  overflow-y: auto;
+}
+
+.conflict-row {
+  display: grid;
+  grid-template-columns: 1fr 150px;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.conflict-row__main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
 .titlebar__btn {
   display: inline-flex;
   align-items: center;

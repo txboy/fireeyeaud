@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { ChevronRight, Clock, FolderOpen, Loader2, X } from 'lucide-react';
+import { ChevronRight, Clock, CloudDownload, FolderOpen, Loader2, X } from 'lucide-react';
 import { useWorkspaceStore } from '../store/workspace';
 import { logoUrl } from '../lib/logo';
+import { RestoreFromRemoteDialog } from './archive/RestoreFromRemoteDialog';
 
 /** 相对时间（刚刚 / N 分钟前 / N 小时前 / 昨天 / N 天前）。 */
 function relativeTime(ts: number, t: TFunction): string {
@@ -25,6 +27,7 @@ export function Welcome() {
   const openFromDialog = useWorkspaceStore((s) => s.openFromDialog);
   const openPath = useWorkspaceStore((s) => s.openPath);
   const removeRecent = useWorkspaceStore((s) => s.removeRecent);
+  const [restoreOpen, setRestoreOpen] = useState(false);
 
   const mostRecent = recent[0];
 
@@ -53,6 +56,15 @@ export function Welcome() {
           >
             <Clock size={15} />
             {t('openRecent')}
+          </button>
+          <button
+            type="button"
+            className="welcome__btn welcome__btn--ghost"
+            disabled={loading}
+            onClick={() => setRestoreOpen(true)}
+          >
+            <CloudDownload size={15} />
+            {t('restoreFromRemote')}
           </button>
         </div>
 
@@ -103,6 +115,11 @@ export function Welcome() {
 
         <p className="welcome__privacy">{t('privacy')}</p>
       </div>
+
+      <RestoreFromRemoteDialog
+        open={restoreOpen}
+        onClose={() => setRestoreOpen(false)}
+      />
     </div>
   );
 }
