@@ -98,8 +98,13 @@ export function ArchiveView() {
   const pushNow = async (archiveId?: string) => {
     setBusy(true);
     try {
-      await push(archiveId);
-      void message.success(t('pushed'));
+      const result = await push(archiveId);
+      const skipped = result.skipped ?? [];
+      if (skipped.length > 0) {
+        void message.warning(t('pushSkipped', { count: skipped.length }));
+      } else {
+        void message.success(t('pushed'));
+      }
     } catch {
       /* store 已记录 errorKey */
     } finally {
@@ -111,10 +116,12 @@ export function ArchiveView() {
     setBusy(true);
     try {
       const result = await check();
-      if (!result.diverged) {
+      if (result.diverged) {
+        setConflict(result);
+      } else {
+        setConflict(null);
         void message.info(result.behind ? t('behind') : t('noConflict'));
       }
-      setConflict(result);
     } catch {
       /* store 已记录 errorKey */
     } finally {

@@ -695,6 +695,7 @@ export default {
     pushThis: 'Push this archive',
     archived: 'Archived',
     pushed: 'Pushed',
+    pushSkipped: '{{count}} tags conflicted with the remote and were skipped (branch pushed)',
     remoteSaved: 'Remote settings saved',
     conflictTitle: 'Resolve divergence',
     baseLocal: 'Keep local as base',

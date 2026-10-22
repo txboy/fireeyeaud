@@ -684,6 +684,7 @@ export default {
     pushThis: '推送此归档',
     archived: '已归档',
     pushed: '已推送',
+    pushSkipped: '{{count}} 个标签与远端冲突，已跳过（分支已推送）',
     remoteSaved: '远程配置已保存',
     conflictTitle: '解决分叉',
     baseLocal: '以本地为基准',

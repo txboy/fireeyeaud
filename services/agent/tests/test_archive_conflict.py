@@ -247,3 +247,66 @@ def test_resolve_requires_divergence_and_clean_tree(tmp_path):
     with pytest.raises(ApiError) as dirty:
         resolve_conflict(a, base="local", choices={}, message="x", author=A)
     assert dirty.value.code == "E_DIRTY_WORKTREE"
+
+def test_credentials_are_quoted_and_not_persisted(tmp_path):
+    from fireeyeaud_agent.store.archive import _with_credentials
+
+    url = "https://example.com/audit/project.git"
+    auth = _with_credentials(url, "user", "pa/ss:word")
+    from urllib.parse import unquote, urlsplit
+
+    parts = urlsplit(auth)
+    assert parts.username == "user"
+    assert unquote(parts.password or "") == "pa/ss:word"
+    assert parts.hostname == "example.com"
+
+    # clone 后 .git/config 里的 origin 必须是干净 URL（不含凭据）
+    remote = tmp_path / "remote.git"
+    porcelain.init(str(remote), bare=True)
+    root = _project(tmp_path / "project")
+    init_repo(root)
+    commit_archive(root, author=A)
+    set_remote(root, url=str(remote))
+    push_archive(root, archive_id=None)
+
+    target = tmp_path / "cloned"
+    clone_from_remote(url=str(remote), target=target, username="u", password="secret-token")
+    config_text = (target / ".git" / "config").read_text("utf-8")
+    assert "secret-token" not in config_text
+    url_line = next(
+        line for line in config_text.splitlines() if line.strip().startswith("url =")
+    )
+    assert "secret-token" not in url_line
+    assert "@" not in url_line
+    assert "remote.git" in url_line.replace("\\", "/")
+
+
+def test_push_all_after_merge_skips_colliding_tag(tmp_path):
+    a, remote = _setup_remote(tmp_path)
+    (a / "证据" / "共同.txt").write_text("base", "utf-8")
+    commit_archive(a, author=A)
+    push_archive(a, archive_id=None)
+
+    b = tmp_path / "b"
+    clone_from_remote(url=str(remote), target=b)
+    (b / "证据" / "共同.txt").write_text("remote", "utf-8")
+    commit_archive(b, author=B)
+    push_archive(b, archive_id=None)
+
+    (a / "证据" / "共同.txt").write_text("local", "utf-8")
+    commit_archive(a, author=A)
+
+    merged = resolve_conflict(
+        a,
+        base="local",
+        choices={"证据/共同.txt": "remote"},
+        message="合并",
+        author=A,
+    )
+    result = push_archive(a, archive_id=None)
+    assert result["ok"] is True
+    assert merged["id"] in result["pushed"]
+    # 同号标签冲突被跳过而不是让整体失败
+    assert any(name != merged["id"] for name in result["skipped"])
+    # 保护标签永不推送
+    assert list((remote / "refs" / "tags" / "archive").glob("local-*")) == []

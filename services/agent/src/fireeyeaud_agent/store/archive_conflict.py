@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import json
 import shutil
 import stat
@@ -114,7 +115,9 @@ def _remote_sha(root: Path, password: str | None) -> tuple[bytes | None, dict[st
     )
     repo = archive._open(root)
     try:
-        result = porcelain.fetch(repo, auth_url)
+        result = porcelain.fetch(
+            repo, auth_url, outstream=io.BytesIO(), errstream=io.BytesIO()
+        )
         refs = getattr(result, "refs", {}) or {}
         return refs.get(REMOTE_BRANCH), config
     except ApiError:
@@ -227,6 +230,17 @@ def _variant_path(path: str, suffix: str) -> str:
     return f"{stem}_{suffix}.{ext}"
 
 
+def _unique_variant(
+    target: dict[str, tuple[int, bytes]], path: str, suffix: str
+) -> str:
+    candidate = _variant_path(path, suffix)
+    n = 2
+    while candidate in target:
+        candidate = _variant_path(path, f"{suffix}{n}")
+        n += 1
+    return candidate
+
+
 def _merge_findings(
     base_text: str, local_text: str, remote_text: str
 ) -> str:
@@ -324,6 +338,7 @@ def resolve_conflict(
 
     resolved_author = archive.resolve_author(author)
     repo = archive._open(root)
+    WORKSPACE_MUTATION_LOCK.acquire()
     try:
         if archive._status_paths(repo):
             raise ApiError("E_DIRTY_WORKTREE", 409, "error.dirtyWorktree")
@@ -364,8 +379,8 @@ def resolve_conflict(
                 source = remote_files if base == "local" else local_files
                 entry = source.get(path)
                 if entry is not None:
-                    variant = _variant_path(
-                        path, "远程" if base == "local" else "本地"
+                    variant = _unique_variant(
+                        target, path, "远程" if base == "local" else "本地"
                     )
                     target[variant] = entry
             elif choice == "auto":
@@ -436,6 +451,7 @@ def resolve_conflict(
         repo.refs[b"refs/heads/main"] = commit.id
         porcelain.tag_create(repo, f"{archive.TAG_PREFIX}{archive_id}", objectish=commit.id)
     finally:
+        WORKSPACE_MUTATION_LOCK.release()
         repo.close()
 
     return {

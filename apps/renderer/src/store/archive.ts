@@ -25,7 +25,7 @@ interface ArchiveState {
   load: () => Promise<void>;
   init: () => Promise<void>;
   commit: (message?: string) => Promise<void>;
-  push: (archiveId?: string) => Promise<void>;
+  push: (archiveId?: string) => Promise<{ ok: boolean; pushed?: string[]; skipped?: string[] }>;
   saveRemote: (input: {
     url: string;
     username: string;
@@ -85,8 +85,9 @@ export const useArchiveStore = create<ArchiveState>((set, get) => ({
 
   push: async (archiveId) => {
     try {
-      await pushArchive(archiveId);
+      const result = await pushArchive(archiveId);
       await get().load();
+      return result;
     } catch (err) {
       set({ errorKey: messageKey(err) });
       throw err;

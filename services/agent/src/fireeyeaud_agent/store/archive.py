@@ -9,7 +9,9 @@
 from __future__ import annotations
 
 import getpass
+import io
 import os
+import re
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -45,6 +47,7 @@ GITIGNORE_LINES = [
     ".fireeye/staging/",
 ]
 PUSH_STATE = "fireeye-push-state.json"
+ARCHIVE_ID_RE = re.compile(r"^A-\d+$")
 
 
 # ---- 基础 ----
@@ -63,8 +66,17 @@ def _config_path(root: Path) -> Path:
 
 
 def _excluded(rel: str) -> bool:
-    rel = rel.replace("\\", "/").lstrip("./")
-    return any(rel == item or rel.startswith(item) for item in EXCLUDED)
+    """排除 DuckDB / 锁 / staging：支持文件与目录前缀（Windows 分隔符也归一）。"""
+    rel = rel.replace("\\", "/").lstrip("/")
+    while rel.startswith("./"):
+        rel = rel[2:]
+    for item in EXCLUDED:
+        if item.endswith("/"):
+            if rel == item[:-1] or rel.startswith(item):
+                return True
+        elif rel == item:
+            return True
+    return False
 
 
 def _author_bytes(author: dict[str, str] | None) -> bytes:
@@ -100,17 +112,17 @@ def _ensure_gitignore(root: Path) -> None:
 def init_repo(root: Path) -> dict[str, Any]:
     root = Path(root)
     with WORKSPACE_MUTATION_LOCK:
-        if repo_path(root).exists():
-            return {"initialized": True}
-        porcelain.init(str(root))
-        repo = _open(root)
-        try:
+        if not repo_path(root).exists():
+            porcelain.init(str(root))
+            repo = _open(root)
             try:
-                repo.refs.set_symbolic_ref(b"HEAD", b"refs/heads/main")
-            except (AttributeError, KeyError):
-                pass
-        finally:
-            repo.close()
+                try:
+                    repo.refs.set_symbolic_ref(b"HEAD", b"refs/heads/main")
+                except (AttributeError, KeyError):
+                    pass
+            finally:
+                repo.close()
+        # 即使用户删掉 .gitignore 或仓库已存在，也要补齐排除项
         _ensure_gitignore(root)
         config = _config_path(root)
         if not config.exists():
@@ -187,10 +199,15 @@ def _tags(repo: Repo) -> dict[str, str]:
     return out
 
 
+def _archive_tags(repo: Repo) -> dict[str, str]:
+    """只保留正式归档 A-xxxx；`local-<时间>` 等保护标签不算归档。"""
+    return {name: sha for name, sha in _tags(repo).items() if ARCHIVE_ID_RE.match(name)}
+
+
 def _next_archive_id(repo: Repo) -> str:
     numbers = [
         int(name[2:])
-        for name in _tags(repo)
+        for name in _archive_tags(repo)
         if name.startswith("A-") and name[2:].isdigit()
     ]
     return f"A-{(max(numbers) + 1) if numbers else 1:04d}"
@@ -342,7 +359,7 @@ def archive_status(root: Path) -> dict[str, Any]:
     try:
         head = _head_sha(repo)
         changed = sorted(_status_paths(repo))
-        tags = _tags(repo)
+        tags = _archive_tags(repo)
     finally:
         repo.close()
 
@@ -374,7 +391,7 @@ def list_archives(root: Path) -> list[dict[str, Any]]:
     repo = _open(root)
     try:
         items: list[dict[str, Any]] = []
-        for archive_id, sha_hex in _tags(repo).items():
+        for archive_id, sha_hex in _archive_tags(repo).items():
             commit = _peel_commit(repo, sha_hex.encode())
             if commit is None:
                 continue
@@ -491,7 +508,7 @@ def _with_credentials(url: str, username: str, password: str | None) -> str:
         return url
     host = parts.hostname or ""
     port = f":{parts.port}" if parts.port else ""
-    netloc = f"{quote(username)}:{quote(password or '')}@{host}{port}"
+    netloc = f"{quote(username, safe='')}:{quote(password or '', safe='')}@{host}{port}"
     return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
 
 
@@ -513,9 +530,26 @@ def _load_push_state(root: Path) -> dict[str, Any]:
     return data
 
 
+def _push_refs(repo: Repo, auth_url: str, refspecs: list[str]) -> dict[bytes, Any]:
+    """推送一组 refspec，返回 `ref_status`（值为 None 表示成功）。"""
+    result = porcelain.push(
+        repo,
+        auth_url,
+        refspecs=refspecs,
+        outstream=io.BytesIO(),
+        errstream=io.BytesIO(),
+    )
+    return dict(getattr(result, "ref_status", {}) or {})
+
+
 def push_archive(
     root: Path, *, archive_id: str | None, password: str | None = None
 ) -> dict[str, Any]:
+    """推送分支与归档标签。
+
+    逐个标签推送：某个标签在远端已存在且指向不同提交（两边各自归档出同号）时
+    跳过它并报告，而不是让整个推送失败；`local-*` 保护标签永不推送。
+    """
     root = Path(root)
     config = load_archive_config(root)
     url = config.get("remoteUrl") or ""
@@ -525,49 +559,55 @@ def push_archive(
         password = secrets.get(str(config["credRef"]))
     auth_url = _with_credentials(url, str(config.get("username") or ""), password)
 
-    refspecs = [f"refs/heads/{BRANCH}:refs/heads/{BRANCH}"]
-    if archive_id:
-        refspecs.append(
-            f"refs/tags/{TAG_PREFIX}{archive_id}:refs/tags/{TAG_PREFIX}{archive_id}"
-        )
-    else:
-        repo_tmp = _open(root)
-        try:
-            for name in _tags(repo_tmp):
-                refspecs.append(
-                    f"refs/tags/{TAG_PREFIX}{name}:refs/tags/{TAG_PREFIX}{name}"
-                )
-        finally:
-            repo_tmp.close()
-
     repo = _open(root)
     try:
-        porcelain.push(repo, auth_url, refspecs=refspecs)
-    except ApiError:
-        raise
-    except Exception as exc:  # noqa: BLE001 - 网络/拒绝统一报推送失败
-        raise ApiError(
-            "E_PUSH_FAILED", 409, "error.pushFailed", {"reason": type(exc).__name__}
-        ) from exc
+        tags = _archive_tags(repo)
+        if archive_id and archive_id not in tags:
+            raise ApiError(
+                "E_NOT_FOUND", 404, "error.archiveNotFound", {"id": archive_id}
+            )
+        targets = [archive_id] if archive_id else sorted(tags)
+
+        branch_ref = f"refs/heads/{BRANCH}:refs/heads/{BRANCH}"
+        try:
+            status = _push_refs(repo, auth_url, [branch_ref])
+        except Exception as exc:  # noqa: BLE001
+            raise ApiError(
+                "E_PUSH_FAILED", 409, "error.pushFailed", {"reason": type(exc).__name__}
+            ) from exc
+        if any(status.values()):
+            raise ApiError("E_PUSH_FAILED", 409, "error.pushFailed", {"reason": "branch"})
+
+        pushed: list[str] = []
+        skipped: list[str] = []
+        for name in targets:
+            refspec = f"refs/tags/{TAG_PREFIX}{name}:refs/tags/{TAG_PREFIX}{name}"
+            try:
+                status = _push_refs(repo, auth_url, [refspec])
+            except Exception:  # noqa: BLE001 - 单个标签失败不影响其他
+                skipped.append(name)
+                continue
+            if any(status.values()):
+                skipped.append(name)
+            else:
+                pushed.append(name)
+        shas = {name: tags[name] for name in pushed}
     finally:
         repo.close()
 
-    sha = None
-    if archive_id:
-        repo = _open(root)
-        try:
-            sha = _tags(repo).get(archive_id)
-        finally:
-            repo.close()
+    if archive_id and archive_id in skipped:
+        raise ApiError(
+            "E_PUSH_TAG_CONFLICT",
+            409,
+            "error.pushTagConflict",
+            {"id": archive_id},
+        )
+
     state = _load_push_state(root)
-    targets = [archive_id] if archive_id else list(_tags(_open(root)))
-    for target in targets:
-        state["archives"][str(target)] = {
-            "sha": sha or "",
-            "pushedAt": now_iso(),
-        }
+    for name in pushed:
+        state["archives"][name] = {"sha": shas[name], "pushedAt": now_iso()}
     write_json_atomic(_push_state_path(root), state)
-    return {"ok": True}
+    return {"ok": True, "pushed": pushed, "skipped": skipped}
 
 
 # ---- 还原 ----
@@ -606,8 +646,9 @@ def _rebuild_sources(target: Path) -> list[str]:
 
 
 def _validate_target(target: Path) -> None:
-    if target.exists() and any(target.iterdir()):
-        raise ApiError("E_TARGET_NOT_EMPTY", 409, "error.targetNotEmpty")
+    if target.exists():
+        if not target.is_dir() or any(target.iterdir()):
+            raise ApiError("E_TARGET_NOT_EMPTY", 409, "error.targetNotEmpty")
 
 
 def clone_from_remote(
@@ -623,12 +664,28 @@ def clone_from_remote(
     target.parent.mkdir(parents=True, exist_ok=True)
     auth_url = _with_credentials(url, username, password)
     try:
-        porcelain.clone(auth_url, str(target), branch=BRANCH)
+        new_repo = porcelain.clone(
+            auth_url,
+            str(target),
+            branch=BRANCH,
+            outstream=io.BytesIO(),
+            errstream=io.BytesIO(),
+        )
     except Exception as exc:  # noqa: BLE001
         shutil.rmtree(target, ignore_errors=True)
         raise ApiError(
             "E_CLONE_FAILED", 502, "error.cloneFailed", {"reason": type(exc).__name__}
         ) from exc
+
+    # 绝不把带凭据的 URL 留在 .git/config 里
+    try:
+        config = new_repo.get_config()
+        config.set((b"remote", b"origin"), b"url", url.encode("utf-8"))
+        config.write_to_path(str(target / ".git" / "config"))
+    except Exception:  # noqa: BLE001 - 配置重写失败不应让 clone 失败
+        pass
+    finally:
+        new_repo.close()
 
     if not (target / ".fireeye" / "project.json").is_file():
         shutil.rmtree(target, ignore_errors=True)
@@ -647,7 +704,7 @@ def restore_archive(root: Path, *, archive_id: str, target: Path) -> dict[str, A
         raise ApiError("E_NOT_INITIALIZED", 409, "error.archiveNotInitialized")
     repo = _open(root)
     try:
-        if archive_id not in _tags(repo):
+        if archive_id not in _archive_tags(repo):
             raise ApiError("E_NOT_FOUND", 404, "error.archiveNotFound", {"id": archive_id})
     finally:
         repo.close()
@@ -656,7 +713,12 @@ def restore_archive(root: Path, *, archive_id: str, target: Path) -> dict[str, A
     _validate_target(target)
     target.parent.mkdir(parents=True, exist_ok=True)
     try:
-        new_repo = porcelain.clone(str(root), str(target))
+        new_repo = porcelain.clone(
+            str(root),
+            str(target),
+            outstream=io.BytesIO(),
+            errstream=io.BytesIO(),
+        )
     except Exception as exc:  # noqa: BLE001
         shutil.rmtree(target, ignore_errors=True)
         raise ApiError(
@@ -666,6 +728,13 @@ def restore_archive(root: Path, *, archive_id: str, target: Path) -> dict[str, A
         porcelain.reset(
             new_repo, "hard", treeish=f"{TAG_PREFIX}{archive_id}".encode()
         )
+        # 还原出来的项目不应保留指向来源目录的 origin（推送走 archive.json）
+        try:
+            config = new_repo.get_config()
+            config.remove_section((b"remote", b"origin"))
+            config.write_to_path(str(target / ".git" / "config"))
+        except Exception:  # noqa: BLE001
+            pass
     finally:
         new_repo.close()
 

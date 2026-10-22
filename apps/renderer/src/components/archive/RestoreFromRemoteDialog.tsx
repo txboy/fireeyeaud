@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Modal } from 'antd';
+import { Modal, message } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { cloneArchive } from '../../lib/api';
 import { useConfirmStore } from '../../store/confirm';
@@ -59,6 +59,9 @@ export function RestoreFromRemoteDialog({
         username: username.trim(),
         credRef,
       });
+      if (result.warnings.length > 0) {
+        void message.warning(result.warnings.join('; '));
+      }
       onClose();
       const ok = await confirm({
         title: t('cloned'),

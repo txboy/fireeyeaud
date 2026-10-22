@@ -170,3 +170,43 @@ def test_gitignore_keeps_user_entries(tmp_path):
     text = (root / ".gitignore").read_text("utf-8")
     assert "node_modules" in text
     assert ".fireeye/workspace.duckdb" in text
+def test_exclusions_hold_even_without_gitignore(tmp_path):
+    """用户删掉 .gitignore 后，排除项仍不能进入历史。"""
+    root = _project(tmp_path)
+    init_repo(root)
+    (root / ".gitignore").unlink()
+    commit_archive(root, author=AUTHOR)
+
+    repo = porcelain.open_repo(root)
+    try:
+        paths = {p.decode() for p in repo.open_index()}
+    finally:
+        repo.close()
+    assert ".fireeye/workspace.duckdb" not in paths
+    assert ".fireeye/.lock" not in paths
+    assert not any(p.startswith(".fireeye/staging/") for p in paths)
+    # .gitignore 被自动补回
+    assert ".fireeye/workspace.duckdb" in (root / ".gitignore").read_text("utf-8")
+
+
+def test_push_reports_skipped_tag_conflicts(tmp_path):
+    """两边各自归档出同号标签后，推送全部不应整体失败。"""
+    root = _project(tmp_path / "project")
+    remote = tmp_path / "remote.git"
+    porcelain.init(str(remote), bare=True)
+    init_repo(root)
+    first = commit_archive(root, author=AUTHOR)
+    set_remote(root, url=str(remote))
+    push_archive(root, archive_id=first["id"])
+
+    (root / "证据" / "b.txt").write_text("b", "utf-8")
+    second = commit_archive(root, author=AUTHOR)
+    push_archive(root, archive_id=second["id"])
+    # 远端已存在 A-0001/A-0002；本地再归档出 A-0003 后推送全部
+    (root / "证据" / "c.txt").write_text("c", "utf-8")
+    third = commit_archive(root, author=AUTHOR)
+
+    result = push_archive(root, archive_id=None)
+    assert result["ok"] is True
+    assert third["id"] in result["pushed"]
+    assert (remote / "refs" / "tags" / "archive" / third["id"]).is_file()

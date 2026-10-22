@@ -46,6 +46,8 @@ export function ArchiveSettingsDialog({
     setErrorKey(null);
     try {
       let credRef = status?.remote.credRef ?? null;
+      // 换了远程地址就该重新输入 Token，避免把旧站点的凭据发给新站点
+      if (url.trim() !== (status?.remote.remoteUrl ?? '')) credRef = null;
       if (token.trim() && window.fireeyeaud?.putSecret) {
         credRef = (await window.fireeyeaud.putSecret(token.trim())) ?? credRef;
       }
@@ -53,6 +55,8 @@ export function ArchiveSettingsDialog({
       await patchSettings({
         archive: { authorName: authorName.trim(), authorEmail: authorEmail.trim() },
       });
+      // saveRemote 先刷新了一次状态，作者信息需要再刷新一次
+      await useArchiveStore.getState().load();
       void message.success(t('remoteSaved'));
       onClose();
     } catch (err) {

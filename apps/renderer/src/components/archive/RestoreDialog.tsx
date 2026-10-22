@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Modal } from 'antd';
+import { Modal, message } from 'antd';
 import { useTranslation } from 'react-i18next';
 import type { ArchiveHistoryItem } from '@fireeyeaud/shared';
 import { restoreArchive } from '../../lib/api';
@@ -49,6 +49,9 @@ export function RestoreDialog({
     try {
       const target = `${parent}/${name.trim()}`;
       const result = await restoreArchive({ archiveId, targetDir: target });
+      if (result.warnings.length > 0) {
+        void message.warning(result.warnings.join('; '));
+      }
       onClose();
       const ok = await confirm({
         title: t('restored'),
