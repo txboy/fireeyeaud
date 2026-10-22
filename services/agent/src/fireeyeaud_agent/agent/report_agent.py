@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from typing import Any, AsyncIterator
@@ -353,7 +354,7 @@ async def stream_report_chat(
                     result: Any = {"ok": False, "error": f"unknown tool {name}"}
                 else:
                     try:
-                        result = tool.invoke(args)
+                        result = await asyncio.to_thread(tool.invoke, args)
                     except ApiError as exc:
                         result = {
                             "ok": False,
