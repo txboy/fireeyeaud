@@ -240,6 +240,12 @@ function registerIpc() {
       title = '选择 docx 模板';
       // 一次只能添加一个模板。
       properties = ['openFile'];
+    } else if (kind === 'receipts') {
+      filters = [
+        { name: '回执文件', extensions: ['pdf', 'png', 'jpg', 'jpeg', 'docx'] },
+      ];
+      title = '选择回执单';
+      properties = ['openFile'];
     } else if (kind === 'attachments') {
       filters = [
         {
@@ -374,21 +380,30 @@ function registerIpc() {
     shell.showItemInFolder(filePath);
     return { ok: true };
   });
-  // 另存为：把渲染器给的 base64 内容写到用户选择的位置（模板下载）。
+  // 另存为：sourcePath（复制已有文件）或 data（base64，模板下载）写到用户选择的位置。
   ipcMain.handle('dialog:save-file', async (event, options) => {
     const payload = options ?? {};
-    if (typeof payload.data !== 'string' || !payload.data) {
-      return { ok: false, code: 'E_OP_FAILED' };
-    }
+    const hasSource = typeof payload.sourcePath === 'string' && payload.sourcePath;
+    const hasData = typeof payload.data === 'string' && payload.data;
+    if (!hasSource && !hasData) return { ok: false, code: 'E_OP_FAILED' };
     const win = BrowserWindow.fromWebContents(event.sender);
     const { canceled, filePath } = await dialog.showSaveDialog(win, {
-      title: typeof payload.title === 'string' ? payload.title : undefined,
-      defaultPath: typeof payload.defaultName === 'string' ? payload.defaultName : undefined,
+      title: typeof payload.title === 'string' ? payload.title : '保存文件',
+      defaultPath:
+        typeof payload.suggestedName === 'string'
+          ? payload.suggestedName
+          : typeof payload.defaultName === 'string'
+            ? payload.defaultName
+            : undefined,
       filters: Array.isArray(payload.filters) ? payload.filters : undefined,
     });
     if (canceled || !filePath) return { ok: false, canceled: true };
     try {
-      await fs.promises.writeFile(filePath, Buffer.from(payload.data, 'base64'));
+      if (hasSource) {
+        await fs.promises.copyFile(payload.sourcePath, filePath);
+      } else {
+        await fs.promises.writeFile(filePath, Buffer.from(payload.data, 'base64'));
+      }
       return { ok: true, path: filePath };
     } catch {
       return { ok: false, code: 'E_OP_FAILED' };

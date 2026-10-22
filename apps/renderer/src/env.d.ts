@@ -9,13 +9,15 @@ declare global {
       getAppInfo: () => Promise<AppInfo>;
       openFolder: () => Promise<string | null>;
       openFiles: (
-        kind?: 'tables' | 'attachments' | 'all' | 'database' | 'templates',
+        kind?: 'tables' | 'attachments' | 'all' | 'database' | 'templates' | 'receipts',
         options?: { driver?: string },
       ) => Promise<string[]>;
-      /** 另存为对话框：把 base64 内容写到用户选择的位置。 */
+      /** 另存为对话框：复制 sourcePath，或把 base64 data 写到用户选择的位置。 */
       saveFile: (options: {
-        data: string;
+        data?: string;
+        sourcePath?: string;
         defaultName?: string;
+        suggestedName?: string;
         title?: string;
         filters?: { name: string; extensions: string[] }[];
       }) => Promise<{ ok: boolean; path?: string; canceled?: boolean; code?: string }>;
