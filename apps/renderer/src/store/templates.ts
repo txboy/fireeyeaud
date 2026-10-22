@@ -18,6 +18,13 @@ interface TemplatesState {
     paths: string[],
     scope: ConfigScope,
     isDefault?: boolean,
+    name?: string,
+  ) => Promise<void>;
+  /** 改名 / 设默认 / 搬家（scope 为目标作用域）。 */
+  edit: (
+    id: string,
+    scope: ConfigScope,
+    patch: { name?: string; isDefault?: boolean; scope?: ConfigScope },
   ) => Promise<void>;
   rename: (id: string, scope: ConfigScope, name: string) => Promise<void>;
   setDefault: (id: string, scope: ConfigScope) => Promise<void>;
@@ -49,25 +56,26 @@ export const useTemplatesStore = create<TemplatesState>((set, get) => ({
     }
   },
 
-  upload: async (kind, paths, scope, isDefault = false) => {
+  upload: async (kind, paths, scope, isDefault = false, name) => {
     await withError(set, async () => {
-      await uploadTemplates(kind, paths, scope, isDefault);
+      await uploadTemplates(kind, paths, scope, isDefault, name);
+      await get().load();
+    });
+  },
+
+  edit: async (id, scope, patch) => {
+    await withError(set, async () => {
+      await patchTemplate(id, scope, patch);
       await get().load();
     });
   },
 
   rename: async (id, scope, name) => {
-    await withError(set, async () => {
-      await patchTemplate(id, scope, { name });
-      await get().load();
-    });
+    await get().edit(id, scope, { name });
   },
 
   setDefault: async (id, scope) => {
-    await withError(set, async () => {
-      await patchTemplate(id, scope, { isDefault: true });
-      await get().load();
-    });
+    await get().edit(id, scope, { isDefault: true });
   },
 
   remove: async (id, scope) => {

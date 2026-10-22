@@ -36,10 +36,19 @@ class UploadBody(BaseModel):
 class PatchBody(BaseModel):
     name: str | None = None
     isDefault: bool | None = None
+    # 目标作用域；与当前作用域不同时执行「搬家」。
+    scope: Scope | None = None
 
 
 class DuplicateBody(BaseModel):
     scope: Scope = "project"
+
+
+class InspectBody(BaseModel):
+    """新增模板时预览本地文件：只读，不写清单、不落盘。"""
+
+    path: str
+    kind: Literal["evidence-form", "report"]
 
 
 @router.get("/templates")
@@ -89,7 +98,32 @@ def patch(
         scope,
         name=fields.get("name"),
         is_default=fields.get("isDefault"),
+        target_scope=fields.get("scope"),
     )
+
+
+@router.post("/templates/inspect")
+def inspect(body: InspectBody) -> dict:
+    """新增模板表单的下半部分预览：读本地 docx（含体检），不保存任何东西。"""
+    path = Path(body.path)
+    check = templates_store.scan_docx(path, body.kind)  # 校验存在 / 后缀 / 可解析
+    size = path.stat().st_size
+    if size > templates_store.MAX_BYTES:
+        raise ApiError(
+            "E_FILE_TOO_LARGE", 400, "error.fileTooLarge", {"name": path.name}
+        )
+    data = path.read_bytes()
+    return {
+        "ok": True,
+        "kind": "base64",
+        "data": base64.b64encode(data).decode("ascii"),
+        "mime": templates_store.DOCX_MIME,
+        "size": size,
+        "path": str(path),
+        "name": path.stem,
+        "fileName": path.name,
+        "check": check,
+    }
 
 
 @router.delete("/templates/{template_id}")

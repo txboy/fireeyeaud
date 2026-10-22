@@ -5,18 +5,14 @@ import {
   AlertTriangle,
   CheckCircle2,
   Copy,
-  Eye,
-  Pencil,
+  Plus,
   Star,
   Trash2,
-  Upload,
 } from 'lucide-react';
 import type { ConfigScope, TemplateInfo, TemplateKind } from '@fireeyeaud/shared';
 import { ScopeBadge } from '../ScopeBadge';
-import { UploadTemplateDialog } from '../templates/UploadTemplateDialog';
-import { TemplatePreviewModal } from '../templates/TemplatePreviewModal';
 import { useTemplatesStore } from '../../store/templates';
-import { usePromptStore } from '../../store/prompt';
+import { useUiStore } from '../../store/ui';
 import { useConfirmStore } from '../../store/confirm';
 import { useWorkspaceStore } from '../../store/workspace';
 
@@ -24,7 +20,12 @@ type ScopeFilter = 'all' | 'global' | 'project';
 
 const KIND_ORDER: TemplateKind[] = ['evidence-form', 'report'];
 
-/** 模板中心：全局 / 本项目 docx 模板的上传、体检、预览与默认设置。 */
+/**
+ * 模板中心：全局 / 本项目 docx 模板。
+ *
+ * 点击行 = 打开编辑表单（表单内含预览）；「添加模板」= 打开同一表单的创建模式。
+ * 预览不在别处单独实现。
+ */
 export function TemplatesPanel() {
   const { t } = useTranslation('templates');
   const { t: tc } = useTranslation('common');
@@ -34,18 +35,15 @@ export function TemplatesPanel() {
   const loading = useTemplatesStore((s) => s.loading);
   const errorKey = useTemplatesStore((s) => s.errorKey);
   const load = useTemplatesStore((s) => s.load);
-  const rename = useTemplatesStore((s) => s.rename);
   const setDefault = useTemplatesStore((s) => s.setDefault);
   const remove = useTemplatesStore((s) => s.remove);
   const duplicate = useTemplatesStore((s) => s.duplicate);
 
-  const prompt = usePromptStore((s) => s.prompt);
+  const openForm = useUiStore((s) => s.openForm);
   const confirm = useConfirmStore((s) => s.confirm);
   const path = useWorkspaceStore((s) => s.path);
 
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>('all');
-  const [uploadKind, setUploadKind] = useState<TemplateKind | null>(null);
-  const [preview, setPreview] = useState<TemplateInfo | null>(null);
   const [duplicating, setDuplicating] = useState<TemplateInfo | null>(null);
   const [duplicateScope, setDuplicateScope] = useState<ConfigScope>('global');
 
@@ -74,22 +72,6 @@ export function TemplatesPanel() {
       );
     });
   }, [items]);
-
-  const uploadDefaultScope: ConfigScope =
-    scopeFilter === 'global' ? 'global' : 'project';
-
-  const onRename = async (item: TemplateInfo) => {
-    const name = await prompt({
-      title: t('rename'),
-      label: t('name'),
-      defaultValue: item.name,
-      confirmLabel: tc('save'),
-      cancelLabel: tc('cancel'),
-    });
-    if (name == null || !name.trim()) return;
-    // store 已记录 errorKey，这里只需吞掉 rejection（避免未处理 Promise）。
-    await rename(item.id, item.scope, name.trim()).catch(() => undefined);
-  };
 
   const onDelete = async (item: TemplateInfo) => {
     const ok = await confirm({
@@ -197,9 +179,16 @@ export function TemplatesPanel() {
               <button
                 type="button"
                 className="button button--sm"
-                onClick={() => setUploadKind(kind)}
+                onClick={() =>
+                  void openForm('templates', 'create', {
+                    id: '',
+                    scope: scopeFilter === 'global' ? 'global' : 'project',
+                    name: '',
+                    templateKind: kind,
+                  })
+                }
               >
-                <Upload size={12} strokeWidth={1.9} /> {t('upload')}
+                <Plus size={12} strokeWidth={2} /> {t('add')}
               </button>
             </div>
 
@@ -212,8 +201,35 @@ export function TemplatesPanel() {
                 <span>{t('empty')}</span>
               </div>
             ) : (
-              group.map((item) => (
-                <div key={`${item.scope}:${item.id}`} className="tpl-row">
+              group.map((item) => {
+                // 内置示例只读：不打开编辑表单，只能「复制」为可编辑模板。
+                const editable = !item.builtin;
+                const openEdit = () =>
+                  void openForm('templates', 'edit', {
+                    id: item.id,
+                    scope: item.scope,
+                    name: item.name,
+                    templateKind: item.kind,
+                  });
+                return (
+                <div
+                  key={`${item.scope}:${item.id}`}
+                  className={`tpl-row${editable ? ' tpl-row--clickable' : ''}`}
+                  role={editable ? 'button' : undefined}
+                  tabIndex={editable ? 0 : undefined}
+                  title={editable ? t('openHint') : t('builtin')}
+                  onClick={editable ? openEdit : undefined}
+                  onKeyDown={
+                    editable
+                      ? (event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            openEdit();
+                          }
+                        }
+                      : undefined
+                  }
+                >
                   <div className="tpl-row__top">
                     <span className="tpl-row__name" title={item.fileName}>
                       {item.name}
@@ -224,15 +240,12 @@ export function TemplatesPanel() {
                       <span className="tpl-badge tpl-badge--builtin">{t('builtin')}</span>
                     )}
                     <span className="spacer" />
-                    <div className="tpl-row__actions">
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        title={t('preview')}
-                        onClick={() => setPreview(item)}
-                      >
-                        <Eye size={13} strokeWidth={1.75} />
-                      </button>
+                    {/* 行内操作不能触发「打开表单」，故逐个 stopPropagation */}
+                    <div
+                      className="tpl-row__actions"
+                      onClick={(event) => event.stopPropagation()}
+                      onKeyDown={(event) => event.stopPropagation()}
+                    >
                       {!item.builtin && !item.isDefault && (
                         <button
                           type="button"
@@ -243,16 +256,6 @@ export function TemplatesPanel() {
                           <Star size={13} strokeWidth={1.75} />
                         </button>
                       )}
-                      {!item.builtin && (
-                        <button
-                          type="button"
-                          className="icon-btn"
-                          title={t('rename')}
-                          onClick={() => void onRename(item)}
-                        >
-                          <Pencil size={13} strokeWidth={1.75} />
-                        </button>
-                      )}
                       <button
                         type="button"
                         className="icon-btn"
@@ -261,7 +264,11 @@ export function TemplatesPanel() {
                           setDuplicating(item);
                           // 目标默认取「相反作用域」；没有工作区时只能复制到全局。
                           setDuplicateScope(
-                            !path ? 'global' : item.scope === 'project' ? 'global' : 'project',
+                            !path
+                              ? 'global'
+                              : item.scope === 'project'
+                                ? 'global'
+                                : 'project',
                           );
                         }}
                       >
@@ -281,25 +288,12 @@ export function TemplatesPanel() {
                   </div>
                   {renderCheck(item)}
                 </div>
-              ))
+                );
+              })
             )}
           </section>
         );
       })}
-
-      <UploadTemplateDialog
-        open={uploadKind !== null}
-        kind={uploadKind ?? 'evidence-form'}
-        defaultScope={uploadDefaultScope}
-        onCancel={() => setUploadKind(null)}
-        onUploaded={() => setUploadKind(null)}
-      />
-
-      <TemplatePreviewModal
-        open={preview !== null}
-        item={preview}
-        onClose={() => setPreview(null)}
-      />
 
       <Modal
         open={duplicating !== null}

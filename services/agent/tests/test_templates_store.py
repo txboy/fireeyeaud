@@ -433,6 +433,74 @@ def test_delete_template_rejects_unknown_scope(tmp_path, monkeypatch):
     assert exc.value.code == "E_INVALID_SCOPE"
 
 
+# ---- 修改作用域 = 搬家 ----
+
+
+def test_move_project_to_global(tmp_path, monkeypatch):
+    root = _env(tmp_path, monkeypatch)
+    item = upload_template(root, _docx(tmp_path / "p.docx"), kind="report", scope="project")
+    old_path = template_path(root, item["id"], "project")
+    assert old_path.is_file()
+
+    moved = update_template(root, item["id"], "project", target_scope="global")
+
+    assert moved["scope"] == "global"
+    assert not old_path.exists(), "搬家必须删除原作用域的文件"
+    assert template_path(root, item["id"], "global").is_file()
+    assert all(
+        i["id"] != item["id"]
+        for i in list_templates(root, "report")
+        if i["scope"] == "project"
+    )
+    # 搬家后全局可见
+    assert any(
+        i["id"] == item["id"] for i in list_templates(root, "report") if i["scope"] == "global"
+    )
+
+
+def test_move_global_to_project_is_project_only(tmp_path, monkeypatch):
+    root = _env(tmp_path, monkeypatch)
+    item = upload_template(root, _docx(tmp_path / "g.docx"), kind="report", scope="global")
+
+    update_template(root, item["id"], "global", target_scope="project")
+
+    items = {i["id"]: i for i in list_templates(root, "report")}
+    assert items[item["id"]]["scope"] == "project"
+    assert template_path(root, item["id"], "global") is None
+    assert template_path(root, item["id"], "project").is_file()
+
+
+def test_move_transfers_default_and_promotes_source(tmp_path, monkeypatch):
+    root = _env(tmp_path, monkeypatch)
+    first = upload_template(root, _docx(tmp_path / "1.docx"), kind="report", scope="project")
+    second = upload_template(root, _docx(tmp_path / "2.docx"), kind="report", scope="project")
+    update_template(root, second["id"], "project", is_default=True)
+
+    moved = update_template(root, second["id"], "project", target_scope="global")
+
+    assert moved["isDefault"] is True, "默认标记随模板一起搬走"
+    # 原作用域仍有健康默认
+    assert default_template(root, "report")["id"] == first["id"]
+
+
+def test_move_without_workspace_to_project_is_rejected(tmp_path, monkeypatch):
+    monkeypatch.setenv("FIREYEAUD_GLOBAL_DIR", str(tmp_path / "global"))
+    item = upload_template(None, _docx(tmp_path / "g.docx"), kind="report", scope="global")
+    with pytest.raises(ApiError) as exc:
+        update_template(None, item["id"], "global", target_scope="project")
+    assert exc.value.code == "E_NO_WORKSPACE"
+
+
+def test_move_rejects_missing_file(tmp_path, monkeypatch):
+    root = _env(tmp_path, monkeypatch)
+    item = upload_template(root, _docx(tmp_path / "p.docx"), kind="report", scope="project")
+    template_path(root, item["id"], "project").unlink()
+
+    with pytest.raises(ApiError) as exc:
+        update_template(root, item["id"], "project", target_scope="global")
+    assert exc.value.code == "E_FILE_NOT_FOUND"
+
+
 def test_template_path_rejects_path_traversal(tmp_path, monkeypatch):
     root = _env(tmp_path, monkeypatch)
     assert template_path(root, "../../etc/passwd", "project") is None

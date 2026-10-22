@@ -1,5 +1,13 @@
 import type { LucideIcon } from 'lucide-react';
-import { BookOpen, Cpu, Database, Plug, ShieldCheck, Sparkles } from 'lucide-react';
+import {
+  BookOpen,
+  Cpu,
+  Database,
+  LayoutTemplate,
+  Plug,
+  ShieldCheck,
+  Sparkles,
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { FormDomain, FormTab } from '../../store/ui';
 
@@ -11,6 +19,7 @@ export const FORM_DOMAIN_ICON: Record<FormDomain, LucideIcon> = {
   skills: Sparkles,
   rules: ShieldCheck,
   models: Cpu,
+  templates: LayoutTemplate,
 };
 
 /** 返回一个根据表单 tab 计算标题的函数（随语言切换刷新）。 */
@@ -22,6 +31,7 @@ export function useFormTitle(): (tab: FormTab) => string {
   const { t: tsk } = useTranslation('skills');
   const { t: trl } = useTranslation('rules');
   const { t: tmd } = useTranslation('models');
+  const { t: ttpl } = useTranslation('templates');
 
   return (tab: FormTab) => {
     if (tab.mode === 'edit') {
@@ -41,6 +51,8 @@ export function useFormTitle(): (tab: FormTab) => string {
         return trl('addRule');
       case 'models':
         return tmd('addModel');
+      case 'templates':
+        return ttpl('add');
     }
   };
 }

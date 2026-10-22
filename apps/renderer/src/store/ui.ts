@@ -4,6 +4,7 @@ import type {
   ConfigScope,
   DbDriver,
   DbTableSchema,
+  TemplateKind,
 } from '@fireeyeaud/shared';
 
 export type ResultsTab = 'findings' | 'graph' | 'working-paper' | 'evidence';
@@ -29,7 +30,14 @@ export interface PreviewTab {
 }
 
 /** 配置表单所属域。 */
-export type FormDomain = 'database' | 'knowledge' | 'mcp' | 'skills' | 'rules' | 'models';
+export type FormDomain =
+  | 'database'
+  | 'knowledge'
+  | 'mcp'
+  | 'skills'
+  | 'rules'
+  | 'models'
+  | 'templates';
 
 /** 右侧区「配置表单」tab（每个实体一个，可多开、可关闭）。 */
 export interface FormTab {
@@ -41,6 +49,8 @@ export interface FormTab {
   scope?: ConfigScope;
   /** 编辑时用于标题展示的名称。 */
   name?: string;
+  /** 模板表单：新建时选择的模板类型。 */
+  templateKind?: TemplateKind;
 }
 
 /** 右侧区「设置」tab（全局单例）。 */
@@ -145,7 +155,12 @@ interface UiState {
   openForm: (
     domain: FormDomain,
     mode: 'create' | 'edit',
-    entity?: { id: string; scope: ConfigScope; name: string },
+    entity?: {
+      id: string;
+      scope: ConfigScope;
+      name: string;
+      templateKind?: TemplateKind;
+    },
   ) => Promise<void>;
   openSession: (sessionId: string) => Promise<void>;
   openSettings: () => Promise<void>;
@@ -235,6 +250,7 @@ export const useUiStore = create<UiState>((set, get) => {
         entityId: entity?.id,
         scope: entity?.scope,
         name: entity?.name,
+        templateKind: entity?.templateKind,
       };
       set((state) => {
         const exists = state.rightTabs.some((t) => t.id === id);

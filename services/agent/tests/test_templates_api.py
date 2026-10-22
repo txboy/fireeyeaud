@@ -197,3 +197,77 @@ async def test_upload_bad_file_returns_400(tmp_path, monkeypatch):
         )
         assert res.status_code == 400
         await client.post("/api/v1/workspaces/close")
+
+
+async def test_patch_can_move_scope(tmp_path, monkeypatch):
+    monkeypatch.setenv("FIREYEAUD_GLOBAL_DIR", str(tmp_path / "global"))
+    root = tmp_path / "project"
+    root.mkdir()
+    src = _docx(tmp_path / "p.docx")
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        await client.post("/api/v1/workspaces/open", json={"path": str(root)})
+        item = (
+            await client.post(
+                "/api/v1/templates",
+                json={"kind": "report", "paths": [str(src)], "scope": "project"},
+            )
+        ).json()["items"][0]
+
+        moved = await client.patch(
+            f"/api/v1/templates/{item['id']}?scope=project",
+            json={"scope": "global"},
+        )
+        assert moved.status_code == 200
+        assert moved.json()["scope"] == "global"
+
+        listed = (await client.get("/api/v1/templates?kind=report&scope=project")).json()
+        assert all(i["id"] != item["id"] for i in listed["items"])
+        await client.post("/api/v1/workspaces/close")
+
+
+async def test_inspect_reads_a_local_docx_without_saving(tmp_path, monkeypatch):
+    """新增模板时下半部分预览用：只读检查本地文件，不写清单、不落盘。"""
+    monkeypatch.setenv("FIREYEAUD_GLOBAL_DIR", str(tmp_path / "global"))
+    src = _docx(tmp_path / "待添加.docx")
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        res = await client.post(
+            "/api/v1/templates/inspect",
+            json={"path": str(src), "kind": "report"},
+        )
+        assert res.status_code == 200
+        body = res.json()
+        assert body["name"] == "待添加"
+        assert body["kind"] == "base64"
+        assert base64.b64decode(body["data"])[:2] == b"PK"
+        assert "报告编号" in body["check"]["missing"] or body["check"]["missing"]
+        assert body["check"]["tags"]
+
+        # 没有产生任何模板记录
+        listed = (await client.get("/api/v1/templates?kind=report")).json()
+        assert all(i.get("builtin") for i in listed["items"])
+
+
+async def test_inspect_rejects_missing_and_non_docx(tmp_path, monkeypatch):
+    monkeypatch.setenv("FIREYEAUD_GLOBAL_DIR", str(tmp_path / "global"))
+    bad = tmp_path / "x.txt"
+    bad.write_text("hi", "utf-8")
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        missing = await client.post(
+            "/api/v1/templates/inspect",
+            json={"path": str(tmp_path / "nope.docx"), "kind": "report"},
+        )
+        assert missing.status_code == 404
+        wrong = await client.post(
+            "/api/v1/templates/inspect",
+            json={"path": str(bad), "kind": "report"},
+        )
+        assert wrong.status_code == 400

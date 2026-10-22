@@ -23,6 +23,7 @@ import type {
   ModelProfile,
   RuleRunResult,
   Skill,
+  TemplateCheck,
   TemplateInfo,
   TemplateKind,
   SseEvent,
@@ -1019,17 +1020,18 @@ export function uploadTemplates(
   paths: string[],
   scope: ConfigScope,
   isDefault = false,
+  name?: string,
 ): Promise<{ items: TemplateInfo[] }> {
   return request('/templates', {
     method: 'POST',
-    body: JSON.stringify({ kind, paths, scope, isDefault }),
+    body: JSON.stringify({ kind, paths, scope, isDefault, name }),
   });
 }
 
 export function patchTemplate(
   id: string,
   scope: ConfigScope,
-  patch: { name?: string; isDefault?: boolean },
+  patch: { name?: string; isDefault?: boolean; scope?: ConfigScope },
 ): Promise<TemplateInfo> {
   return request<TemplateInfo>(`/templates/${id}?scope=${scope}`, {
     method: 'PATCH',
@@ -1063,6 +1065,29 @@ export function getTemplateContent(
   scope: ConfigScope,
 ): Promise<FsFileContent> {
   return request<FsFileContent>(`/templates/${id}/content?scope=${scope}`);
+}
+
+/** 新增模板时的本地文件检查 + 预览（只读，不保存）。 */
+export interface TemplateInspectResult {
+  ok: true;
+  kind: 'base64';
+  data: string;
+  mime: string;
+  size: number;
+  path: string;
+  name: string;
+  fileName: string;
+  check: TemplateCheck;
+}
+
+export function inspectTemplateFile(
+  path: string,
+  kind: TemplateKind,
+): Promise<TemplateInspectResult> {
+  return request<TemplateInspectResult>('/templates/inspect', {
+    method: 'POST',
+    body: JSON.stringify({ path, kind }),
+  });
 }
 
 export interface SkillInput {

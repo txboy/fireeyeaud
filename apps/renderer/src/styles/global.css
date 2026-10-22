@@ -1271,6 +1271,59 @@ body {
   overflow: auto;
 }
 
+/* 点击行打开编辑表单（表单内含预览）。 */
+.tpl-row--clickable {
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.tpl-row--clickable:hover {
+  border-color: var(--border-strong);
+  background: var(--hover);
+}
+
+.tpl-row--clickable:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+/* 模板表单：上半填表、下半预览 docx。 */
+.tpl-form {
+  max-width: 720px;
+}
+
+.tpl-form__file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tpl-form__preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 240px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  background: var(--panel-bg);
+}
+
+.tpl-form__preview-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tpl-form__pages {
+  flex: 1;
+  min-height: 200px;
+  max-height: 46vh;
+  overflow: auto;
+}
+
 .titlebar__btn {
   display: inline-flex;
   align-items: center;

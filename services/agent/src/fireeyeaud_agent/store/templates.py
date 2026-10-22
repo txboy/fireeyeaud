@@ -548,9 +548,12 @@ def update_template(
     *,
     name: str | None = None,
     is_default: bool | None = None,
+    target_scope: str | None = None,
 ) -> dict[str, Any]:
-    """重命名 / 设默认；不允许改 scope 或 kind。"""
+    """重命名 / 设默认 / 搬家；kind 不可改。"""
     if scope not in ("global", "project"):
+        raise ApiError("E_INVALID_SCOPE", 400, "error.internal")
+    if target_scope is not None and target_scope not in ("global", "project"):
         raise ApiError("E_INVALID_SCOPE", 400, "error.internal")
     if _is_sample_id(template_id):
         raise ApiError(
@@ -572,7 +575,70 @@ def update_template(
             # 不允许把该作用域/类型清成「没有默认」：自动提升下一条，与删除一致。
             _promote_default(root, scope, str(current.get("kind") or ""))
             current = store.get_item(KIND, template_id, scope, root) or current
-    return _decorate(current, scope, root)
+
+        if target_scope is not None and target_scope != scope:
+            current = _move_template(root, current, scope, target_scope)
+    return _decorate(current, target_scope or scope, root)
+
+
+def _move_template(
+    root: Path | None,
+    item: dict[str, Any],
+    source_scope: str,
+    target_scope: str,
+) -> dict[str, Any]:
+    """搬家：文件与元数据一起换作用域（原作用域不再保留）。
+
+    先写目标、再删源：中途失败不会丢模板。
+    """
+    if target_scope == "project" and root is None:
+        raise ApiError("E_NO_WORKSPACE", 409, "error.noWorkspace")
+
+    template_id = str(item.get("id"))
+    kind = str(item.get("kind") or "")
+    source_path = template_path(root, template_id, source_scope)
+    if source_path is None:
+        raise ApiError(
+            "E_FILE_NOT_FOUND", 404, "error.fileNotFound", {"name": template_id}
+        )
+    if store.get_item(KIND, template_id, target_scope, root) is not None:
+        raise ApiError(
+            "E_SCOPE_CONFLICT", 409, "error.templateScopeConflict", {"id": template_id}
+        )
+
+    target_path = template_file(target_scope, root, kind, template_id)
+    try:
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source_path, target_path)
+    except OSError as exc:
+        target_path.unlink(missing_ok=True)
+        raise ApiError(
+            "E_FILE_WRITE", 500, "error.opFailed", {"name": template_id}
+        ) from exc
+
+    try:
+        was_default = bool(item.get("isDefault"))
+        moved = store.put_item(
+            KIND,
+            {
+                **item,
+                "scope": target_scope,
+                "fileName": target_path.name,
+                "isDefault": False,
+            },
+            root,
+        )
+        if was_default:
+            moved = _set_default(root, moved, target_scope)
+    except ApiError:
+        target_path.unlink(missing_ok=True)
+        raise
+
+    store.delete_item(KIND, template_id, source_scope, root)
+    source_path.unlink(missing_ok=True)
+    if was_default:
+        _promote_default(root, source_scope, kind)
+    return moved
 
 
 def delete_template(root: Path | None, template_id: str, scope: str) -> bool:
