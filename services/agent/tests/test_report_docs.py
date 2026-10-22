@@ -155,6 +155,28 @@ def test_create_report_uses_template_outline(tmp_path):
     assert (directory / "body.json").is_file()
 
 
+def test_set_forms_refreshes_snapshot_and_scope(tmp_path):
+    root, template_id = _workspace(tmp_path)
+    first = _form(root, "QZ-0001", amount="99")
+    second = _form(root, "QZ-0002", amount="199")
+    _create(root, template_id, [first])
+
+    body = report_docs.set_forms(root, "RPT-0001", [second])
+    assert body["selectedFormIds"] == [second]
+
+    doc = report_docs.get_document(root, "RPT-0001")
+    assert doc["manifest"]["formIds"] == [second]
+    assert [item["id"] for item in doc["manifest"]["formsSnapshot"]] == [second]
+    assert doc["manifest"]["findingCount"] == 1
+    assert doc["manifest"]["status"] == "draft"
+
+    report_docs.set_forms(root, "RPT-0001", [first, second])
+    doc = report_docs.get_document(root, "RPT-0001")
+    assert doc["body"]["selectedFormIds"] == [first, second]
+    assert doc["manifest"]["formIds"] == [first, second]
+    assert doc["manifest"]["findingCount"] == 2
+
+
 def test_outline_and_section_write(tmp_path):
     root, template_id = _workspace(tmp_path)
     form_id = _form(root)
@@ -243,6 +265,96 @@ def _fill_all(root: Path, form_id: str) -> None:
                 }
             ],
         )
+
+
+def test_rich_text_runs_are_normalized_and_exported(tmp_path):
+    root, template_id = _workspace(tmp_path)
+    form_id = _form(root)
+    _create(root, template_id, [form_id])
+    report_docs.set_outline(
+        root,
+        "RPT-0001",
+        [{"id": "S1", "title": "一、基本情况", "level": 1}],
+        approved=True,
+    )
+    section = report_docs.write_section(
+        root,
+        "RPT-0001",
+        "S1",
+        [
+            {
+                "type": "paragraph",
+                "runs": [
+                    {"text": "采购", "bold": True},
+                    {"text": "阿里云服务器，费用99元。", "italic": True},
+                ],
+                "sourceRefs": [form_id],
+                "align": "center",
+            },
+            {
+                "type": "bullets",
+                "itemRuns": [[{"text": "费用已在信息化费列支", "underline": True}]],
+                "sourceRefs": [form_id],
+                "itemAlign": ["right"],
+            },
+            {
+                "type": "table",
+                "columns": ["项目", "金额"],
+                "rows": [["费用", "99元"]],
+                "columnRuns": [
+                    [{"text": "项目", "bold": True}],
+                    [{"text": "金额", "bold": True}],
+                ],
+                "rowRuns": [[[{"text": "费用", "underline": True}], []]],
+                "sourceRefs": [form_id],
+                "columnAlign": ["center", "right"],
+                "rowAlign": [["left", "center"]],
+            },
+        ],
+    )
+
+    blocks = section["blocks"]
+    assert blocks[0]["text"] == "采购阿里云服务器，费用99元。"
+    assert blocks[0]["runs"][0]["bold"] is True
+    assert blocks[0]["align"] == "center"
+    assert blocks[1]["items"] == ["费用已在信息化费列支"]
+    assert blocks[1]["itemRuns"][0][0]["underline"] is True
+    assert blocks[1]["itemAlign"] == ["right"]
+    assert blocks[2]["columns"] == ["项目", "金额"]
+    assert blocks[2]["rowRuns"][0][0][0]["underline"] is True
+    assert blocks[2]["columnAlign"] == ["center", "right"]
+    assert blocks[2]["rowAlign"] == [["left", "center"]]
+
+    manifest = report_docs.export_report(root, "RPT-0001")
+    assert manifest["status"] == "saved"
+    exported = Document(str(report_docs._dir(root, "RPT-0001") / "document.docx"))
+
+    paragraph = next(p for p in exported.paragraphs if p.text.startswith("采购阿里云服务器"))
+    assert [run.text for run in paragraph.runs] == ["采购", "阿里云服务器，费用99元。"]
+    assert paragraph.runs[0].font.bold is True
+    assert paragraph.runs[1].font.italic is True
+    assert paragraph.alignment == WD_ALIGN_PARAGRAPH.CENTER
+
+    bullet = next(p for p in exported.paragraphs if p.text.startswith("· 费用已在"))
+    assert bullet.runs[0].text == "· "
+    assert bullet.runs[1].font.underline is True
+    assert bullet.alignment == WD_ALIGN_PARAGRAPH.RIGHT
+
+    table = exported.tables[-1]
+    header_run = next(
+        run
+        for run in table.rows[0].cells[0].paragraphs[0].runs
+        if run.text == "项目"
+    )
+    assert header_run.font.bold is True
+    assert table.rows[0].cells[0].paragraphs[0].alignment == WD_ALIGN_PARAGRAPH.CENTER
+    body_run = next(
+        run
+        for run in table.rows[1].cells[0].paragraphs[0].runs
+        if run.text == "费用"
+    )
+    assert body_run.font.underline is True
+    assert table.rows[1].cells[0].paragraphs[0].alignment == WD_ALIGN_PARAGRAPH.LEFT
 
 
 def test_export_writes_document_with_template_styles(tmp_path):

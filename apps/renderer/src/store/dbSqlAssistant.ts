@@ -32,11 +32,14 @@ export interface DbSqlThread {
   messages: DbSqlMessage[];
   busy: boolean;
   errorKey: string | null;
+  /** 当前线程选择的模型；null 表示跟随默认模型。 */
+  modelId: string | null;
 }
 
 interface DbSqlAssistantState {
   threads: Record<string, DbSqlThread>;
   setOpen: (tabId: string, open: boolean) => void;
+  setModel: (tabId: string, modelId: string | null) => void;
   appendUser: (tabId: string, content: string) => DbSqlMessage;
   startAssistant: (tabId: string) => DbSqlMessage;
   appendDelta: (tabId: string, messageId: string, delta: string) => void;
@@ -77,6 +80,7 @@ const EMPTY_THREAD: DbSqlThread = {
   messages: [],
   busy: false,
   errorKey: null,
+  modelId: null,
 };
 
 /**
@@ -95,6 +99,9 @@ export const useDbSqlAssistantStore = create<DbSqlAssistantState>((set) => {
     threads: {},
 
     setOpen: (tabId, open) => update(tabId, (thread) => ({ ...thread, open })),
+
+    setModel: (tabId, modelId) =>
+      update(tabId, (thread) => ({ ...thread, modelId })),
 
     appendUser: (tabId, content) => {
       const message: DbSqlMessage = {
@@ -230,8 +237,11 @@ export const useDbSqlAssistantStore = create<DbSqlAssistantState>((set) => {
         const { [tabId]: _dropped, ...others } = state.threads;
         return {
           threads: current
-          ? { ...others, [tabId]: { ...EMPTY_THREAD, open: current.open } }
-          : others,
+            ? {
+                ...others,
+                [tabId]: { ...EMPTY_THREAD, open: current.open, modelId: current.modelId },
+              }
+            : others,
         };
       });
     },

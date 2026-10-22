@@ -3,16 +3,15 @@ import { useTranslation } from 'react-i18next';
 import { message } from 'antd';
 import { Download, FileText, Plus, Trash2 } from 'lucide-react';
 import type { ReportManifest } from '@fireeyeaud/shared';
-import { NewReportDialog } from '../reports/NewReportDialog';
+import { NewReportDialog } from './NewReportDialog';
 import { useReportsStore } from '../../store/reports';
 import { useFormsStore } from '../../store/forms';
-import { useReportDocStore } from '../../store/reportWorkspace';
 import { useUiStore } from '../../store/ui';
 import { useWorkspaceStore } from '../../store/workspace';
 import { useConfirmStore } from '../../store/confirm';
 
-/** 成果栏「项目报告」：上半报告记录、下半项目取证单。 */
-export function ReportsView() {
+/** 项目报告模块：上栏报告记录、下栏本项目取证单。 */
+export function ReportsPanel() {
   const { t } = useTranslation('report');
   const { t: tc } = useTranslation('common');
   const { t: terr } = useTranslation('error');
@@ -27,17 +26,15 @@ export function ReportsView() {
   const openPreview = useUiStore((s) => s.openPreview);
   const openReport = useUiStore((s) => s.openReport);
   const closeRightTab = useUiStore((s) => s.closeRightTab);
-  const resetDocs = useReportDocStore((s) => s.reset);
   const confirm = useConfirmStore((s) => s.confirm);
 
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     if (!wsPath) return;
-    resetDocs();
     void load();
     void loadForms();
-  }, [load, loadForms, resetDocs, wsPath]);
+  }, [load, loadForms, wsPath]);
 
   if (!wsPath) {
     return (
@@ -98,13 +95,18 @@ export function ReportsView() {
     if (result.ok) void message.success(t('downloaded'));
   };
 
+  /** 没有 status 字段的旧报告：有 document.docx 即视为已保存。 */
+  const isSaved = (report: ReportManifest) =>
+    report.status === 'saved' ||
+    (!report.status && report.files.includes('document.docx'));
+
   const statusLabel = (report: ReportManifest) => {
-    if (report.status === 'saved') return t('statusSaved');
+    if (isSaved(report)) return t('statusSaved');
     return report.files.includes('document.docx') ? t('statusDirty') : t('statusDraft');
   };
 
   return (
-    <div className="reports-split">
+    <div className="reports-panel">
       <section className="reports-pane">
         <div className="reports-pane__head">
           <span className="reports-pane__title">{t('records')}</span>
@@ -144,34 +146,36 @@ export function ReportsView() {
                     {report.id} · {report.title}
                   </span>
                 </button>
-                <span
-                  className={`report-status${
-                    report.status === 'saved' ? '' : ' report-status--draft'
-                  }`}
-                >
-                  {statusLabel(report)}
-                </span>
-                <span className="card__meta report-row__date">
-                  {(report.updatedAt ?? report.createdAt).slice(0, 10)}
-                </span>
-                {report.files.includes('document.docx') && (
+                <div className="report-row__meta">
+                  <span
+                    className={`report-status${isSaved(report) ? '' : ' report-status--draft'}`}
+                  >
+                    {statusLabel(report)}
+                  </span>
+                  <span className="card__meta report-row__date">
+                    {(report.updatedAt ?? report.createdAt).slice(0, 10)}
+                  </span>
+                </div>
+                <div className="report-row__actions">
+                  {report.files.includes('document.docx') && (
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      title={t('download')}
+                      onClick={() => void download(report)}
+                    >
+                      <Download size={13} strokeWidth={1.75} />
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="icon-btn"
-                    title={t('download')}
-                    onClick={() => void download(report)}
+                    title={t('delete')}
+                    onClick={() => void del(report)}
                   >
-                    <Download size={13} strokeWidth={1.75} />
+                    <Trash2 size={13} strokeWidth={1.75} />
                   </button>
-                )}
-                <button
-                  type="button"
-                  className="icon-btn"
-                  title={t('delete')}
-                  onClick={() => void del(report)}
-                >
-                  <Trash2 size={13} strokeWidth={1.75} />
-                </button>
+                </div>
               </div>
             ))
           )}
@@ -197,13 +201,15 @@ export function ReportsView() {
                 onClick={() => previewForm(form.id, form.artifactRef)}
               >
                 <FileText size={13} strokeWidth={1.75} />
-                <span className="report-form-row__title" title={form.title}>
-                  {form.id} · {form.title}
+                <span className="report-form-row__body">
+                  <span className="report-form-row__title" title={form.title}>
+                    {form.id} · {form.title}
+                  </span>
+                  <span className="report-form-row__meta">
+                    <span>{t('formFindings', { count: form.findingIds.length })}</span>
+                    {form.receipt && <span className="receipt-badge">{form.receipt.name}</span>}
+                  </span>
                 </span>
-                <span className="card__meta">
-                  {t('formFindings', { count: form.findingIds.length })}
-                </span>
-                {form.receipt && <span className="receipt-badge">{form.receipt.name}</span>}
               </button>
             ))
           )}

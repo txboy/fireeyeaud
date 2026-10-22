@@ -10,6 +10,7 @@ import { ModelsPanel } from './panels/ModelsPanel';
 import { SkillsPanel } from './panels/SkillsPanel';
 import { RulesPanel } from './panels/RulesPanel';
 import { TemplatesPanel } from './panels/TemplatesPanel';
+import { ReportsPanel } from './reports/ReportsPanel';
 import { PlaceholderPanel } from './panels/PlaceholderPanel';
 
 interface HeadMeta {
@@ -34,6 +35,7 @@ const HEAD: Record<ActivityView, HeadMeta> = {
     subNs: 'templates',
     subKey: 'subtitle',
   },
+  reports: { titleNs: 'report', titleKey: 'title' },
 };
 
 function PanelBody({ view }: { view: ActivityView }) {
@@ -56,6 +58,8 @@ function PanelBody({ view }: { view: ActivityView }) {
       return <ModelsPanel />;
     case 'templates':
       return <TemplatesPanel />;
+    case 'reports':
+      return <ReportsPanel />;
     default:
       return <PlaceholderPanel />;
   }
@@ -79,7 +83,9 @@ export function SideBar() {
           )}
         </div>
       </div>
-      <div className="sidebar__body">
+      <div
+        className={`sidebar__body${activeView === 'reports' ? ' sidebar__body--reports' : ''}`}
+      >
         <PanelBody view={activeView} />
       </div>
     </aside>

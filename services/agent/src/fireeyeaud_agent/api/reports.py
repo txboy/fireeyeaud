@@ -62,6 +62,10 @@ class TitleBody(BaseModel):
     title: str
 
 
+class FormsBody(BaseModel):
+    formIds: list[str] = []
+
+
 class ExportBody(BaseModel):
     title: str | None = None
 
@@ -130,6 +134,11 @@ def put_section(report_id: str, section_id: str, body: SectionBody) -> dict:
 @router.put("/reports/{report_id}/title")
 def put_title(report_id: str, body: TitleBody) -> dict:
     return report_docs.set_title(_root(), report_id, body.title)
+
+
+@router.put("/reports/{report_id}/forms")
+def put_forms(report_id: str, body: FormsBody) -> dict:
+    return report_docs.set_forms(_root(), report_id, body.formIds)
 
 
 @router.post("/reports/{report_id}/verify")

@@ -1,24 +1,40 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import type { JSONContent, Editor } from '@tiptap/react';
 import { useTranslation } from 'react-i18next';
-import { message } from 'antd';
+import { Input, message } from 'antd';
 import {
   AlertTriangle,
   CheckCircle2,
   Download,
+  Edit3,
   ExternalLink,
   FileCheck2,
   Loader2,
+  Save,
+  X,
 } from 'lucide-react';
-import type { ReportDocument, ReportVerifyResult } from '@fireeyeaud/shared';
+import type {
+  ReportBlock,
+  ReportDocument,
+  ReportTextRun,
+  ReportVerifyResult,
+} from '@fireeyeaud/shared';
 import {
   exportReportDocument,
+  setReportOutline,
+  setReportTitleApi,
   verifyReportDocument,
+  writeReportSection,
 } from '../../lib/api';
 import { useWorkspaceStore } from '../../store/workspace';
 import { useUiStore } from '../../store/ui';
 import { useReportDocStore } from '../../store/reportWorkspace';
+import { useConfirmStore } from '../../store/confirm';
+import { ReportEditorToolbar } from './ReportEditorToolbar';
+import { ReportSectionEditor } from './ReportSectionEditor';
+import { sectionFromTiptap } from './editor/reportEditorModel';
 
-/** 右侧报告预览：大纲确认、结构化正文、校验与导出。 */
+/** 右侧报告预览：大纲确认、结构化正文、校验与导出；支持章节富文本编辑。 */
 export function ReportPreview({
   doc,
   onRefresh,
@@ -27,23 +43,45 @@ export function ReportPreview({
   onRefresh: () => void;
 }) {
   const { t } = useTranslation('report');
+  const { t: tc } = useTranslation('common');
   const { t: terr } = useTranslation('error');
   const wsPath = useWorkspaceStore((s) => s.path);
   const openPreview = useUiStore((s) => s.openPreview);
   const saveOutline = useReportDocStore((s) => s.saveOutline);
+  const confirm = useConfirmStore((s) => s.confirm);
 
   const [check, setCheck] = useState<ReportVerifyResult | null>(null);
   const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [errorKey, setErrorKey] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [draftTitle, setDraftTitle] = useState(doc.body.title);
+  const [draftSectionTitles, setDraftSectionTitles] = useState<Record<string, string>>({});
+  const [activeEditor, setActiveEditor] = useState<Editor | null>(null);
+  const [, forceToolbar] = useState(0);
 
-  useEffect(() => {
-    setCheck(null);
-    setErrorKey(null);
-  }, [doc.body.updatedAt, doc.manifest.id]);
+  const editorsRef = useRef(new Map<string, Editor>());
 
   const body = doc.body;
   const skeleton = doc.skeleton;
   const bodyStyle = skeleton.body ?? {};
+
+  useEffect(() => {
+    setCheck(null);
+    setErrorKey(null);
+  }, [body.updatedAt, doc.manifest.id]);
+
+  useEffect(() => {
+    if (!activeEditor) return;
+    const refreshToolbar = () => forceToolbar((value) => value + 1);
+    activeEditor.on('transaction', refreshToolbar);
+    activeEditor.on('selectionUpdate', refreshToolbar);
+    return () => {
+      activeEditor.off('transaction', refreshToolbar);
+      activeEditor.off('selectionUpdate', refreshToolbar);
+    };
+  }, [activeEditor]);
 
   const runVerify = async () => {
     setBusy(true);
@@ -89,11 +127,141 @@ export function ReportPreview({
     void openPreview(wsPath, docxPath(), `${doc.manifest.id}.docx`);
   };
 
+  const startEdit = () => {
+    setDraftTitle(body.title);
+    setDraftSectionTitles(
+      Object.fromEntries(body.sections.map((section) => [section.id, section.title])),
+    );
+    setDirty(false);
+    setEditing(true);
+  };
+
+  const cancelEdit = async () => {
+    if (dirty) {
+      const ok = await confirm({
+        title: t('discardTitle'),
+        message: t('discardMessage'),
+        confirmLabel: tc('confirm'),
+        cancelLabel: tc('cancel'),
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    setEditing(false);
+    setDirty(false);
+    setActiveEditor(null);
+    editorsRef.current.clear();
+  };
+
+  const handleReady = useCallback((sectionId: string, editor: Editor | null) => {
+    if (editor) {
+      editorsRef.current.set(sectionId, editor);
+      setActiveEditor((current) => current ?? editor);
+    } else {
+      editorsRef.current.delete(sectionId);
+    }
+  }, []);
+
+  const handleFocus = useCallback((editor: Editor) => {
+    setActiveEditor(editor);
+  }, []);
+
+  const markDirty = useCallback(() => setDirty(true), []);
+
+  const save = useCallback(async () => {
+    if (saving) return;
+    const title = draftTitle.trim();
+    if (!title) {
+      void message.warning(t('titleRequired'));
+      return;
+    }
+
+    setSaving(true);
+    setErrorKey(null);
+    try {
+      for (const section of body.sections) {
+        const editor = editorsRef.current.get(section.id);
+        if (!editor) continue;
+        const blocks = sectionFromTiptap(editor.getJSON().content as JSONContent[] | undefined);
+        await writeReportSection(doc.manifest.id, section.id, blocks);
+      }
+
+      const nextSections = body.sections.map((section) => ({
+        id: section.id,
+        title: (draftSectionTitles[section.id] ?? section.title).trim() || section.title,
+        level: section.level,
+        goal: section.goal,
+      }));
+      const sectionTitleChanged = nextSections.some(
+        (section, index) => section.title !== body.sections[index].title,
+      );
+      if (sectionTitleChanged) {
+        await setReportOutline(doc.manifest.id, nextSections, body.outlineApproved);
+      }
+      if (title !== body.title) {
+        await setReportTitleApi(doc.manifest.id, title);
+      }
+
+      setEditing(false);
+      setDirty(false);
+      setActiveEditor(null);
+      editorsRef.current.clear();
+      void message.success(t('savedChanges'));
+      onRefresh();
+    } catch (err) {
+      const key = (err as { messageKey?: string }).messageKey ?? 'error.internal';
+      setErrorKey(key);
+      void message.error(terr(key.replace(/^error\./, '')));
+    } finally {
+      setSaving(false);
+    }
+  }, [
+    body.outlineApproved,
+    body.sections,
+    body.title,
+    doc.manifest.id,
+    draftSectionTitles,
+    draftTitle,
+    onRefresh,
+    saving,
+    t,
+    terr,
+  ]);
+
+  const saveRef = useRef(save);
+  useEffect(() => {
+    saveRef.current = save;
+  }, [save]);
+
+  useEffect(() => {
+    if (!editing) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        void saveRef.current();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [editing]);
+
   return (
     <section className="report-preview">
       <div className="report-preview__head">
         <div className="report-preview__heading">
-          <div className="report-preview__title">{body.title}</div>
+          {editing ? (
+            <Input
+              className="report-preview__title-input"
+              value={draftTitle}
+              placeholder={t('titlePlaceholder')}
+              onChange={(event) => {
+                setDraftTitle(event.target.value);
+                setDirty(true);
+              }}
+            />
+          ) : (
+            <div className="report-preview__title">{body.title}</div>
+          )}
           <div className="card__meta">
             {t('templateSkeleton', {
               name: doc.manifest.templateName || '—',
@@ -103,36 +271,72 @@ export function ReportPreview({
           </div>
         </div>
         <div className="report-preview__actions">
-          <button
-            type="button"
-            className="button button--sm button--ghost"
-            disabled={busy}
-            onClick={() => void runVerify()}
-          >
-            <FileCheck2 size={12} strokeWidth={1.9} /> {t('verify')}
-          </button>
-          <button
-            type="button"
-            className="button button--sm button--ghost"
-            disabled={busy || !hasCurrentDocx}
-            title={hasCurrentDocx ? undefined : t('needExport')}
-            onClick={openDocx}
-          >
-            <ExternalLink size={12} strokeWidth={1.9} /> {t('openDocx')}
-          </button>
-          <button
-            type="button"
-            className="button button--sm"
-            disabled={busy}
-            onClick={() => void exportWord()}
-          >
-            {busy ? (
-              <Loader2 size={12} className="spin" />
-            ) : (
-              <Download size={12} strokeWidth={1.9} />
-            )}
-            {t('exportWord')}
-          </button>
+          {editing ? (
+            <>
+              <button
+                type="button"
+                className="button button--sm button--ghost"
+                disabled={saving}
+                onClick={() => void cancelEdit()}
+              >
+                <X size={12} strokeWidth={1.9} /> {tc('cancel')}
+              </button>
+              <button
+                type="button"
+                className="button button--sm"
+                disabled={saving}
+                onClick={() => void save()}
+              >
+                {saving ? (
+                  <Loader2 size={12} className="spin" />
+                ) : (
+                  <Save size={12} strokeWidth={1.9} />
+                )}
+                {t('save')}
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="button button--sm button--ghost"
+                disabled={busy}
+                onClick={startEdit}
+              >
+                <Edit3 size={12} strokeWidth={1.9} /> {tc('edit')}
+              </button>
+              <button
+                type="button"
+                className="button button--sm button--ghost"
+                disabled={busy}
+                onClick={() => void runVerify()}
+              >
+                <FileCheck2 size={12} strokeWidth={1.9} /> {t('verify')}
+              </button>
+              <button
+                type="button"
+                className="button button--sm button--ghost"
+                disabled={busy || !hasCurrentDocx}
+                title={hasCurrentDocx ? undefined : t('needExport')}
+                onClick={openDocx}
+              >
+                <ExternalLink size={12} strokeWidth={1.9} /> {t('openDocx')}
+              </button>
+              <button
+                type="button"
+                className="button button--sm"
+                disabled={busy}
+                onClick={() => void exportWord()}
+              >
+                {busy ? (
+                  <Loader2 size={12} className="spin" />
+                ) : (
+                  <Download size={12} strokeWidth={1.9} />
+                )}
+                {t('exportWord')}
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -187,11 +391,28 @@ export function ReportPreview({
         </div>
       )}
 
+      {editing && <ReportEditorToolbar editor={activeEditor} />}
+
       <div className="report-preview__body">
         {body.sections.length === 0 ? (
           <div className="panel-empty">
             <span>{t('emptySections')}</span>
           </div>
+        ) : editing ? (
+          body.sections.map((section) => (
+            <ReportSectionEditor
+              key={section.id}
+              section={section}
+              title={draftSectionTitles[section.id] ?? section.title}
+              onTitleChange={(value) => {
+                setDraftSectionTitles((current) => ({ ...current, [section.id]: value }));
+                setDirty(true);
+              }}
+              onReady={handleReady}
+              onFocus={handleFocus}
+              onDirty={markDirty}
+            />
+          ))
         ) : (
           body.sections.map((section) => (
             <article key={section.id} className="report-section">
@@ -203,55 +424,103 @@ export function ReportPreview({
               {section.blocks.length === 0 ? (
                 <div className="report-section__empty">{t('sectionEmpty')}</div>
               ) : (
-                section.blocks.map((block, index) => {
-                  if (block.type === 'paragraph') {
-                    return (
-                      <p key={index} className="report-section__para">
-                        {block.text}
-                        <Refs refs={block.sourceRefs} label={t('source')} />
-                      </p>
-                    );
-                  }
-                  if (block.type === 'bullets') {
-                    return (
-                      <ul key={index} className="report-section__list">
-                        {block.items.map((item, itemIndex) => (
-                          <li key={itemIndex}>{item}</li>
-                        ))}
-                        <Refs refs={block.sourceRefs} label={t('source')} />
-                      </ul>
-                    );
-                  }
-                  return (
-                    <div key={index} className="report-table-wrap">
-                      <table className="report-table">
-                        <thead>
-                          <tr>
-                            {block.columns.map((column) => (
-                              <th key={column}>{column}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {block.rows.map((row, rowIndex) => (
-                            <tr key={rowIndex}>
-                              {row.map((cell, cellIndex) => (
-                                <td key={cellIndex}>{cell}</td>
-                              ))}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      <Refs refs={block.sourceRefs} label={t('source')} />
-                    </div>
-                  );
-                })
+                section.blocks.map((block, index) => (
+                  <ReportBlockView key={index} block={block} />
+                ))
               )}
             </article>
           ))
         )}
       </div>
     </section>
+  );
+}
+
+function ReportBlockView({ block }: { block: ReportBlock }) {
+  if (block.type === 'paragraph') {
+    return (
+      <p className="report-section__para" style={block.align ? { textAlign: block.align } : undefined}>
+        <RichText text={block.text} runs={block.runs} />
+        <Refs refs={block.sourceRefs} label="" />
+      </p>
+    );
+  }
+  if (block.type === 'bullets') {
+    return (
+      <div className="report-block-wrap">
+        <ul className="report-section__list">
+          {block.items.map((item, itemIndex) => (
+            <li
+              key={itemIndex}
+              style={
+                block.itemAlign?.[itemIndex]
+                  ? { textAlign: block.itemAlign[itemIndex] }
+                  : undefined
+              }
+            >
+              <RichText text={item} runs={block.itemRuns?.[itemIndex]} />
+            </li>
+          ))}
+        </ul>
+        <Refs refs={block.sourceRefs} label="" />
+      </div>
+    );
+  }
+  return (
+    <div className="report-table-wrap">
+      <table className="report-table">
+        <thead>
+          <tr>
+            {block.columns.map((column, index) => (
+              <th
+                key={index}
+                style={
+                  block.columnAlign?.[index]
+                    ? { textAlign: block.columnAlign[index] }
+                    : undefined
+                }
+              >
+                <RichText text={column} runs={block.columnRuns?.[index]} />
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {block.rows.map((row, rowIndex) => (
+            <tr key={rowIndex}>
+              {row.map((cell, cellIndex) => (
+                <td
+                  key={cellIndex}
+                  style={
+                    block.rowAlign?.[rowIndex]?.[cellIndex]
+                      ? { textAlign: block.rowAlign[rowIndex][cellIndex] }
+                      : undefined
+                  }
+                >
+                  <RichText text={cell} runs={block.rowRuns?.[rowIndex]?.[cellIndex]} />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <Refs refs={block.sourceRefs} label="" />
+    </div>
+  );
+}
+
+function RichText({ text, runs }: { text: string; runs?: ReportTextRun[] }) {
+  if (!runs || runs.length === 0) return <>{text}</>;
+  return (
+    <>
+      {runs.map((run, index) => {
+        let node: ReactNode = run.text;
+        if (run.underline) node = <u>{node}</u>;
+        if (run.italic) node = <em>{node}</em>;
+        if (run.bold) node = <strong>{node}</strong>;
+        return <Fragment key={index}>{node}</Fragment>;
+      })}
+    </>
   );
 }
 

@@ -195,6 +195,41 @@ async def test_report_workspace_flow(tmp_path):
         await client.post("/api/v1/workspaces/close")
 
 
+async def test_report_forms_endpoint(tmp_path):
+    root, template_id = _workspace(tmp_path)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        await client.post("/api/v1/workspaces/open", json={"path": str(root)})
+        created = await client.post(
+            "/api/v1/reports/drafts",
+            json={
+                "templateId": template_id,
+                "templateScope": "project",
+                "formIds": ["QZ-0001"],
+            },
+        )
+        report_id = created.json()["manifest"]["id"]
+
+        cleared = await client.put(
+            f"/api/v1/reports/{report_id}/forms", json={"formIds": []}
+        )
+        assert cleared.status_code == 200, cleared.text
+        assert cleared.json()["selectedFormIds"] == []
+
+        restored = await client.put(
+            f"/api/v1/reports/{report_id}/forms", json={"formIds": ["QZ-0001"]}
+        )
+        assert restored.status_code == 200, restored.text
+        assert restored.json()["selectedFormIds"] == ["QZ-0001"]
+
+        doc = (await client.get(f"/api/v1/reports/{report_id}/doc")).json()
+        assert doc["manifest"]["formIds"] == ["QZ-0001"]
+        assert doc["manifest"]["formsSnapshot"][0]["id"] == "QZ-0001"
+
+        await client.post("/api/v1/workspaces/close")
+
+
 async def test_report_requires_workspace(tmp_path):
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"

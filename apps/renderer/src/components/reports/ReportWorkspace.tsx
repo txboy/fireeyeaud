@@ -38,7 +38,11 @@ export function ReportWorkspace({ reportId }: { reportId: string }) {
 
   return (
     <div className="report-workspace">
-      <ReportChat reportId={reportId} onChanged={refresh} />
+      <ReportChat
+        reportId={reportId}
+        selectedFormIds={doc.body.selectedFormIds}
+        onChanged={refresh}
+      />
       <ReportPreview doc={doc} onRefresh={refresh} />
     </div>
   );

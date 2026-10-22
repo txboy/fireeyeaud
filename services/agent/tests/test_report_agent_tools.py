@@ -75,9 +75,27 @@ def test_tools_read_context_and_write(tmp_path):
     )
     assert written["blocks"] == 1
 
+    context = json.loads(tools["report_context"].invoke({}))
+    assert context["当前正文"]["章节"][1]["内容"][0]["文本"] == "采购阿里云服务器，费用99元。"
+
     check = json.loads(tools["report_verify"].invoke({}))
     codes = {error["code"] for error in check["errors"]}
     assert "E_SECTION_EMPTY" in codes
+
+
+def test_tools_follow_updated_form_scope(tmp_path):
+    root, template_id = _workspace(tmp_path)
+    first = _form(root, "QZ-0001")
+    second = _form(root, "QZ-0002", amount="199")
+    _create(root, template_id, [first])
+    tools = _tool_map(root, "RPT-0001")
+
+    report_docs.set_forms(root, "RPT-0001", [second])
+    context = json.loads(tools["report_context"].invoke({}))
+    assert [item["编号"] for item in context["选中取证单"]] == [second]
+    finding = context["选中取证单"][0]["疑点"][0]
+    assert "199" in finding["描述"]
+    assert finding["金额"] is None
 
 
 def test_write_section_requires_approved_outline(tmp_path):
@@ -145,6 +163,18 @@ async def test_stream_chat_runs_tools(tmp_path, monkeypatch):
     root, template_id = _workspace(tmp_path)
     form_id = _form(root)
     _create(root, template_id, [form_id])
+    report_docs.write_section(
+        root,
+        "RPT-0001",
+        "S1",
+        [
+            {
+                "type": "paragraph",
+                "text": "用户手工补充的内容。",
+                "sourceRefs": [form_id],
+            }
+        ],
+    )
 
     fake = _FakeModel()
     monkeypatch.setattr(report_agent, "build_chat_model", lambda *a, **k: fake)
@@ -175,7 +205,7 @@ async def test_stream_chat_runs_tools(tmp_path, monkeypatch):
     assert chat[0]["role"] == "user"
     assert any(entry["role"] == "assistant" for entry in chat)
 
-    from langchain_core.messages import HumanMessage
+    from langchain_core.messages import HumanMessage, SystemMessage
 
     first_turn = [
         message.content
@@ -183,6 +213,17 @@ async def test_stream_chat_runs_tools(tmp_path, monkeypatch):
         if isinstance(message, HumanMessage)
     ]
     assert first_turn.count("先给个大纲") == 1
+
+    system_text = "\n".join(
+        str(message.content)
+        for message in fake.seen[0]
+        if isinstance(message, SystemMessage)
+    )
+    assert "当前报告正文" in system_text
+    assert "未明确要求修改的章节" in system_text
+    assert "用户手工补充的内容。" in system_text
+    assert "本轮选中取证单" in system_text
+    assert form_id in system_text
 
 
 def test_system_prompt_has_source_rules():

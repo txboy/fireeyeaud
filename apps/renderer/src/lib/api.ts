@@ -1276,6 +1276,13 @@ export function setReportTitleApi(id: string, title: string): Promise<ReportBody
   });
 }
 
+export function setReportForms(id: string, formIds: string[]): Promise<ReportBody> {
+  return request<ReportBody>(`/reports/${id}/forms`, {
+    method: 'PUT',
+    body: JSON.stringify({ formIds }),
+  });
+}
+
 export function verifyReportDocument(id: string): Promise<ReportVerifyResult> {
   return request<ReportVerifyResult>(`/reports/${id}/verify`, { method: 'POST' });
 }

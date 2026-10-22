@@ -3,6 +3,7 @@ import {
   BookOpen,
   Cpu,
   Database,
+  FileCheck2,
   FolderTree,
   LayoutTemplate,
   Moon,
@@ -34,6 +35,7 @@ const TOP_ITEMS: RailItem[] = [
   { view: 'rules', icon: ShieldCheck, labelKey: 'rules' },
   { view: 'models', icon: Cpu, labelKey: 'models' },
   { view: 'templates', icon: LayoutTemplate, labelKey: 'templates' },
+  { view: 'reports', icon: FileCheck2, labelKey: 'reports' },
 ];
 
 export function ActivityRail() {

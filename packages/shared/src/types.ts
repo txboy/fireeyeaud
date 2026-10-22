@@ -9,7 +9,8 @@ export type ActivityView =
   | 'skills'
   | 'rules'
   | 'models'
-  | 'templates';
+  | 'templates'
+  | 'reports';
 
 export type ThemeMode = 'light' | 'dark';
 
@@ -496,12 +497,23 @@ export interface ReportManifest {
 // ---- 报告工作台（结构化正文） ----
 
 export type ReportBlockOrigin = 'form' | 'user' | 'model';
+export type ReportTextAlign = 'left' | 'center' | 'right' | 'justify';
+
+/** 报告正文的行内格式。纯文本仍保存在 text / items / rows 中，便于校验和检索。 */
+export interface ReportTextRun {
+  text: string;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+}
 
 export interface ReportBlockParagraph {
   type: 'paragraph';
   text: string;
   sourceRefs: string[];
   origin?: ReportBlockOrigin;
+  align?: ReportTextAlign;
+  runs?: ReportTextRun[];
 }
 
 export interface ReportBlockBullets {
@@ -509,6 +521,10 @@ export interface ReportBlockBullets {
   items: string[];
   sourceRefs: string[];
   origin?: ReportBlockOrigin;
+  /** 与 items 一一对应的行内格式；没有格式时省略。 */
+  itemRuns?: ReportTextRun[][];
+  /** 与 items 一一对应的段落对齐方式；null 表示默认对齐。 */
+  itemAlign?: Array<ReportTextAlign | null>;
 }
 
 export interface ReportBlockTable {
@@ -517,6 +533,14 @@ export interface ReportBlockTable {
   rows: string[][];
   sourceRefs: string[];
   origin?: ReportBlockOrigin;
+  /** 表头列的行内格式；与 columns 一一对应。 */
+  columnRuns?: ReportTextRun[][];
+  /** 数据行的行内格式；[row][column]。 */
+  rowRuns?: ReportTextRun[][][];
+  /** 表头列的对齐方式；与 columns 一一对应，null 表示默认对齐。 */
+  columnAlign?: Array<ReportTextAlign | null>;
+  /** 数据行的对齐方式；[row][column]，null 表示默认对齐。 */
+  rowAlign?: Array<Array<ReportTextAlign | null>>;
 }
 
 export type ReportBlock = ReportBlockParagraph | ReportBlockBullets | ReportBlockTable;

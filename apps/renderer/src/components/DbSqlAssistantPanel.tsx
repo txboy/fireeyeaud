@@ -15,6 +15,7 @@ import {
 import { useConfirmStore } from '../store/confirm';
 import type { DbDataTab } from '../store/ui';
 import { Markdown } from './Markdown';
+import { ModelSelect } from './ModelSelect';
 
 /** 用户停在底部附近时才自动跟随流式输出。 */
 const STICK_THRESHOLD = 48;
@@ -126,7 +127,7 @@ export function DbSqlAssistantPanel(props: DbSqlAssistantPanelProps) {
             total,
           }),
           locale: i18n.language,
-          modelId: null,
+          modelId: getThread(tab.id).modelId,
         },
         {
           signal: controller.signal,
@@ -339,9 +340,19 @@ export function DbSqlAssistantPanel(props: DbSqlAssistantPanelProps) {
       </div>
 
       <div className="dbdata__assistant-input">
+        <div className="dbdata__assistant-tools">
+          <ModelSelect
+            className="dbdata__assistant-model"
+            value={thread.modelId}
+            disabled={thread.busy}
+            onChange={(modelId) => store.getState().setModel(tab.id, modelId)}
+          />
+        </div>
         <div className="dbdata__assistant-notice">
           <Table2 size={10} strokeWidth={1.8} />
-          {t('assistantSampleHint')}
+          <span>
+            {t('assistantSampleHint')} · {t('assistantReadonlyHint')}
+          </span>
         </div>
         <textarea
           className="dbdata__assistant-textarea"
@@ -353,7 +364,6 @@ export function DbSqlAssistantPanel(props: DbSqlAssistantPanelProps) {
           onKeyDown={onKeyDown}
         />
         <div className="dbdata__assistant-actions">
-          <span className="dbdata__assistant-hint">{t('assistantReadonlyHint')}</span>
           {thread.busy ? (
             <button type="button" className="button button--sm button--ghost" onClick={stop}>
               <Square size={11} strokeWidth={2} /> {t('assistantStop')}

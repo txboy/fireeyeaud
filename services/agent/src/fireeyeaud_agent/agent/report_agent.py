@@ -131,6 +131,49 @@ def _compact_forms(manifest: dict[str, Any]) -> list[dict[str, Any]]:
     return forms
 
 
+def _compact_blocks(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for block in blocks:
+        kind = block.get("type")
+        item: dict[str, Any]
+        if kind == "paragraph":
+            item = {"类型": "paragraph", "文本": block.get("text") or ""}
+        elif kind == "bullets":
+            item = {"类型": "bullets", "条目": block.get("items") or []}
+        elif kind == "table":
+            item = {
+                "类型": "table",
+                "表头": block.get("columns") or [],
+                "行": block.get("rows") or [],
+            }
+        else:
+            continue
+        refs = block.get("sourceRefs") or []
+        if refs:
+            item["来源"] = refs
+        if block.get("origin"):
+            item["提供方"] = block.get("origin")
+        out.append(item)
+    return out
+
+
+def _body_snapshot(body: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "标题": body.get("title"),
+        "大纲已确认": body.get("outlineApproved"),
+        "章节": [
+            {
+                "id": section.get("id"),
+                "标题": section.get("title"),
+                "层级": section.get("level"),
+                "要点": section.get("goal"),
+                "内容": _compact_blocks(list(section.get("blocks") or [])),
+            }
+            for section in body.get("sections") or []
+        ],
+    }
+
+
 def build_context(root: Path, report_id: str) -> dict[str, Any]:
     doc = report_docs.get_document(root, report_id)
     body = doc["body"]
@@ -149,6 +192,7 @@ def build_context(root: Path, report_id: str) -> dict[str, Any]:
             }
             for section in body.get("sections") or []
         ],
+        "当前正文": _body_snapshot(body),
         "校验": verify_report(root, report_id),
     }
 
@@ -257,6 +301,8 @@ def system_prompt(report_title: str, locale: str | None) -> str:
 2. 若还没有大纲，调用 report_set_outline 给出章节大纲（标题、层级、每节要点），然后请用户在右侧预览区确认。确认前不要写正文。
 3. 用户确认后，按章节调用 report_write_section 逐节写入。每写完一节简要说明依据。
 4. 全部写完后调用 report_verify；如果返回错误，按错误提示修正后再校验。
+5. 用户可能在右侧预览区直接编辑正文。每次写入前以「当前报告正文」为准；未明确要求修改的章节和内容块必须原样保留，不得覆盖用户的手动修改。
+6. 用户每轮发送时可以增删「选中取证单」。以本轮注入的「选中取证单」为唯一可用范围，并按用户要求同步改写报告：新增取证单时补充依据，移除取证单时删除或改写对其的引用。
 
 硬性规则：
 - 只能使用「选中取证单」里的事实与用户明确给出的信息。不得编造金额、日期、编号、单位名称。
@@ -297,6 +343,7 @@ async def stream_report_chat(
 
     doc = report_docs.get_document(root, report_id)
     title = str(doc["body"].get("title") or doc["manifest"].get("title") or report_id)
+    selected_forms = _compact_forms(doc["manifest"])
 
     # 历史要在写入本轮用户消息之前取，否则同一句话会重复发给模型
     history = _load_history(root, report_id)
@@ -311,6 +358,18 @@ async def stream_report_chat(
 
         messages: list[BaseMessage] = [
             SystemMessage(content=system_prompt(title, locale)),
+            SystemMessage(
+                content=(
+                    "当前报告正文（用户可能在预览区手动修改过，以此为准）：\n"
+                    + _dump(_body_snapshot(doc["body"]))
+                )
+            ),
+            SystemMessage(
+                content=(
+                    "本轮选中取证单（以此为准；用户可能刚增删，增删后需同步改写正文）：\n"
+                    + _dump(selected_forms)
+                )
+            ),
             *history,
             HumanMessage(content=text),
         ]
