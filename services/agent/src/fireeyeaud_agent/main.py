@@ -12,6 +12,7 @@ from .api import (
     datasources,
     db,
     evidence,
+    evidence_forms as evidence_forms_api,
     export,
     findings,
     graph,
@@ -19,6 +20,7 @@ from .api import (
     knowledge as knowledge_api,
     mcp as mcp_api,
     models,
+    reports as reports_api,
     rules,
     secrets as secrets_api,
     templates as templates_api,
@@ -71,6 +73,8 @@ def create_app() -> FastAPI:
     app.include_router(skills_api.router, prefix=API_PREFIX)
     app.include_router(secrets_api.router, prefix=API_PREFIX)
     app.include_router(templates_api.router, prefix=API_PREFIX)
+    app.include_router(evidence_forms_api.router, prefix=API_PREFIX)
+    app.include_router(reports_api.router, prefix=API_PREFIX)
     app.include_router(sessions.router, prefix=API_PREFIX)
     app.include_router(settings_api.router, prefix=API_PREFIX)
     return app
