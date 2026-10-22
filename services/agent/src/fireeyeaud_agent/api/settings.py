@@ -29,6 +29,11 @@ class SkillsBody(BaseModel):
     mode: str | None = None
 
 
+class ArchiveBody(BaseModel):
+    authorName: str | None = None
+    authorEmail: str | None = None
+
+
 class SettingsPatch(BaseModel):
     locale: str | None = None
     theme: str | None = None
@@ -36,6 +41,7 @@ class SettingsPatch(BaseModel):
     webSearch: WebSearchBody | None = None
     compaction: CompactionBody | None = None
     skills: SkillsBody | None = None
+    archive: ArchiveBody | None = None
 
 
 @router.get("/settings")

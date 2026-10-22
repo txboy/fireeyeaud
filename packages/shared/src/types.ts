@@ -496,6 +496,82 @@ export interface ArtifactPreview {
   warnings: string[];
 }
 
+// ---- 项目归档（Git） ----
+
+export interface ArchiveAuthor {
+  name: string;
+  email: string;
+}
+
+export interface ArchiveConfig {
+  remoteUrl: string;
+  username: string;
+  credRef: string | null;
+  autoPush: boolean;
+}
+
+export interface ArchiveManifest {
+  id: string;
+  createdAt: string;
+  author: ArchiveAuthor;
+  message: string;
+  branch: string;
+  counts: { findings: number; evidenceForms: number; reports: number };
+  appVersion: string;
+  schemaVersion: number;
+  merge: null | {
+    base: 'local' | 'remote';
+    local: string;
+    remote: string;
+    choices: Array<{
+      path: string;
+      choice: 'local' | 'remote' | 'both' | 'auto';
+    }>;
+  };
+}
+
+export interface ArchiveHistoryItem {
+  id: string;
+  tag: string;
+  commit: string;
+  message: string;
+  author: ArchiveAuthor;
+  createdAt: string;
+  manifest: ArchiveManifest | null;
+  pushed: boolean;
+}
+
+export interface ArchiveStatus {
+  initialized: boolean;
+  branch: string;
+  head: string | null;
+  lastArchive: string | null;
+  remote: ArchiveConfig;
+  author: ArchiveAuthor;
+  dirty: boolean;
+  changed: string[];
+  canPush: boolean;
+}
+
+export interface ArchiveConflictFile {
+  path: string;
+  localStatus: 'added' | 'modified' | 'deleted';
+  remoteStatus: 'added' | 'modified' | 'deleted';
+  autoMerge: boolean;
+  hint?: string;
+}
+
+export interface ArchiveConflictCheck {
+  diverged: boolean;
+  behind: boolean;
+  local: string | null;
+  remote: string | null;
+  base: string | null;
+  conflicts: ArchiveConflictFile[];
+  remoteOnly: string[];
+  localOnly: string[];
+}
+
 export type TemplateKind = 'evidence-form' | 'report';
 
 export interface TemplateCheck {

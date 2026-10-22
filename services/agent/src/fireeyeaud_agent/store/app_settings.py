@@ -21,6 +21,7 @@ _DEFAULTS: dict[str, Any] = {
     },
     "skills": {"mode": "lazy"},
     "telemetry": False,
+    "archive": {"authorName": "", "authorEmail": ""},
 }
 
 
@@ -44,6 +45,7 @@ def load() -> dict[str, Any]:
         **(data.get("compaction") or {}),
     }
     merged["skills"] = {**_DEFAULTS["skills"], **(data.get("skills") or {})}
+    merged["archive"] = {**_DEFAULTS["archive"], **(data.get("archive") or {})}
     merged["systemPrompt"] = str(merged.get("systemPrompt") or "")
     merged["telemetry"] = False
     return merged
@@ -58,6 +60,8 @@ def patch(update: dict[str, Any]) -> dict[str, Any]:
         merged["compaction"] = {**current["compaction"], **update["compaction"]}
     if isinstance(update.get("skills"), dict):
         merged["skills"] = {**current["skills"], **update["skills"]}
+    if isinstance(update.get("archive"), dict):
+        merged["archive"] = {**current.get("archive", {}), **update["archive"]}
     merged["telemetry"] = False
     path = _path()
     path.parent.mkdir(parents=True, exist_ok=True)
