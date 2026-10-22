@@ -1,179 +1,20 @@
-import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type { Finding } from '@fireeyeaud/shared';
 import { useUiStore, type ResultsTab } from '../store/ui';
-import { useFindingsStore } from '../store/findings';
-import { useWorkspaceStore } from '../store/workspace';
-import { FindingDetail } from './FindingDetail';
-import { GraphView } from './GraphView';
-import { WorkingPaperView } from './WorkingPaperView';
+import { FindingsView } from './results/FindingsView';
 import { EvidenceFormsView } from './results/EvidenceFormsView';
 import { ReportsView } from './results/ReportsView';
+import { ArchiveView } from './results/ArchiveView';
 
-const TABS: ResultsTab[] = [
-  'findings',
-  'graph',
-  'working-paper',
-  'evidence',
-  'evidence-forms',
-  'reports',
-];
+const TABS: ResultsTab[] = ['findings', 'evidence-form', 'report', 'archive'];
 
 const TAB_LABEL_KEY: Record<ResultsTab, string> = {
   findings: 'findings',
-  graph: 'graph',
-  'working-paper': 'workingPaper',
-  evidence: 'evidence',
-  'evidence-forms': 'evidenceForms',
-  reports: 'reports',
+  'evidence-form': 'evidenceForm',
+  report: 'report',
+  archive: 'archive',
 };
 
-function FindingCard({ finding }: { finding: Finding }) {
-  const { t: ts } = useTranslation('enums');
-  const { t: tf } = useTranslation('findings');
-  const [open, setOpen] = useState(false);
-  const selectedFindingId = useUiStore((s) => s.selectedFindingId);
-  const setSelectedFindingId = useUiStore((s) => s.setSelectedFindingId);
-  const selected = useFindingsStore((s) => s.selectedIds.includes(finding.id));
-  const toggleSelect = useFindingsStore((s) => s.toggleSelect);
-  const ref = useRef<HTMLDivElement>(null);
-  const highlighted = selectedFindingId === finding.id;
-  const title = finding.title?.text ?? finding.ruleKey ?? finding.id;
-  const subjects = finding.subjects?.join('、') ?? '';
-  const meta = [subjects, finding.amount].filter(Boolean).join(' · ');
-
-  useEffect(() => {
-    if (highlighted) {
-      setOpen(true);
-      ref.current?.scrollIntoView({ block: 'nearest' });
-    }
-  }, [highlighted]);
-
-  const toggle = () => {
-    const next = !open;
-    setOpen(next);
-    if (next) setSelectedFindingId(finding.id);
-  };
-
-  return (
-    <div
-      ref={ref}
-      className={`finding${open ? ' finding--open' : ''}${highlighted ? ' finding--selected' : ''}`}
-    >
-      <div className="finding__row">
-        <input
-          type="checkbox"
-          className="finding__check"
-          checked={selected}
-          title={tf('selectForForm')}
-          aria-label={tf('selectForForm')}
-          onChange={() => toggleSelect(finding.id)}
-        />
-        <button
-          type="button"
-          className="finding__head"
-          onClick={toggle}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', flex: 1, padding: 0 }}
-        >
-          {open ? (
-            <ChevronDown size={13} strokeWidth={1.75} />
-          ) : (
-            <ChevronRight size={13} strokeWidth={1.75} />
-          )}
-          <span className={`severity severity--${finding.severity}`}>
-            {ts(`severity.${finding.severity}`)}
-          </span>
-          <span className="finding__id">{finding.id}</span>
-          <span className="spacer" />
-          <span className="finding__status">{ts(`status.${finding.status}`)}</span>
-        </button>
-      </div>
-      <div className="finding__title">{title}</div>
-      {finding.description?.text && (
-        <div className="finding__desc">{finding.description.text}</div>
-      )}
-      {meta && <div className="finding__meta">{meta}</div>}
-      {open && <FindingDetail finding={finding} />}
-    </div>
-  );
-}
-
-function FindingsView() {
-  const { t } = useTranslation('findings');
-  const { t: tc } = useTranslation('common');
-  const { t: te } = useTranslation('error');
-  const items = useFindingsStore((s) => s.items);
-  const loading = useFindingsStore((s) => s.loading);
-  const errorKey = useFindingsStore((s) => s.errorKey);
-  const load = useFindingsStore((s) => s.load);
-  const workspace = useWorkspaceStore((s) => s.workspace);
-  const path = useWorkspaceStore((s) => s.path);
-
-  useEffect(() => {
-    void load();
-  }, [load, path]);
-
-  const count = (severity: string) =>
-    items.filter((i) => i.severity === severity).length;
-
-  return (
-    <>
-      <div className="stat-row" style={{ marginBottom: 14 }}>
-        <div className="stat">
-          <div className="stat__value" style={{ color: 'var(--danger)' }}>
-            {count('high')}
-          </div>
-          <div className="stat__label">{t('statsHigh')}</div>
-        </div>
-        <div className="stat">
-          <div className="stat__value" style={{ color: 'var(--warning)' }}>
-            {count('medium')}
-          </div>
-          <div className="stat__label">{t('statsMedium')}</div>
-        </div>
-        <div className="stat">
-          <div className="stat__value" style={{ color: 'var(--info)' }}>
-            {count('low')}
-          </div>
-          <div className="stat__label">{t('statsLow')}</div>
-        </div>
-      </div>
-
-      {!workspace ? (
-        <div className="panel-empty">
-          <span>{tc('noWorkspace')}</span>
-        </div>
-      ) : errorKey ? (
-        <div className="panel-error">{te(errorKey.replace(/^error\./, ''))}</div>
-      ) : loading && items.length === 0 ? (
-        <div className="panel-empty">
-          <span>{tc('loading')}</span>
-        </div>
-      ) : items.length === 0 ? (
-        <div className="panel-empty">
-          <span>{t('empty')}</span>
-        </div>
-      ) : (
-        <div className="finding-list">
-          {items.map((f) => (
-            <FindingCard key={f.id} finding={f} />
-          ))}
-        </div>
-      )}
-    </>
-  );
-}
-
-function EmptyView() {
-  const { t } = useTranslation('results');
-  return (
-    <div className="panel-empty">
-      <span>{t('empty')}</span>
-    </div>
-  );
-}
-
+/** 成果栏：疑点 / 取证单 / 项目报告 / 归档。 */
 export function ResultsColumn() {
   const { t } = useTranslation('results');
   const resultsTab = useUiStore((s) => s.resultsTab);
@@ -196,16 +37,12 @@ export function ResultsColumn() {
       <div className="results__body">
         {resultsTab === 'findings' ? (
           <FindingsView />
-        ) : resultsTab === 'graph' ? (
-          <GraphView />
-        ) : resultsTab === 'working-paper' ? (
-          <WorkingPaperView />
-        ) : resultsTab === 'evidence-forms' ? (
+        ) : resultsTab === 'evidence-form' ? (
           <EvidenceFormsView />
-        ) : resultsTab === 'reports' ? (
+        ) : resultsTab === 'report' ? (
           <ReportsView />
         ) : (
-          <EmptyView />
+          <ArchiveView />
         )}
       </div>
     </aside>

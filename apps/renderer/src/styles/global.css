@@ -1491,6 +1491,74 @@ body {
   cursor: pointer;
 }
 
+/* 疑点：工具栏、删除入口与详情上下分块。 */
+.findings-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.finding__delete {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.finding:hover .finding__delete {
+  opacity: 1;
+}
+
+.finding__detail--split {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.finding__content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.finding__content-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.finding__evidence {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-top: 1px dashed var(--border);
+  padding-top: 10px;
+}
+
+.evidence-item__main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.evidence-item__title {
+  font-weight: 500;
+}
+
+.evidence-item__note {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.evidence-item__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .titlebar__btn {
   display: inline-flex;
   align-items: center;

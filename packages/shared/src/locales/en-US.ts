@@ -446,6 +446,7 @@ export default {
     evidenceTitle: 'Evidence title',
     evidenceNote: 'Note',
     chooseFile: 'Choose file',
+    preview: 'Preview',
     fileChosen: 'Selected: {{name}}',
     noFileChosen: 'No file chosen',
     save: 'Save',

@@ -437,6 +437,57 @@ export function listEvidence(findingId?: string): Promise<{ items: EvidenceItem[
   return request<{ items: EvidenceItem[] }>(`/evidence${qs}`);
 }
 
+// ---- 人工疑点与证据（疑点与证据重构） ----
+
+export interface CreateFindingInput {
+  title: string;
+  description?: string;
+  severity: string;
+  subjects?: string[];
+  amount?: string;
+  currency?: string;
+  author?: string;
+  lang?: string;
+}
+
+export function createFindingApi(input: CreateFindingInput): Promise<Finding> {
+  return request<Finding>('/findings', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteFindingApi(id: string): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/findings/${id}`, { method: 'DELETE' });
+}
+
+export interface AddEvidenceInput {
+  kind: 'file' | 'text' | 'record';
+  title: string;
+  note?: string;
+  path?: string;
+}
+
+export function addFindingEvidenceApi(
+  findingId: string,
+  input: AddEvidenceInput,
+): Promise<{ evidence: EvidenceItem; finding: Finding }> {
+  return request<{ evidence: EvidenceItem; finding: Finding }>(
+    `/findings/${findingId}/evidence`,
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+}
+
+export function removeFindingEvidenceApi(
+  findingId: string,
+  evidenceId: string,
+): Promise<{ ok: boolean; finding: Finding }> {
+  return request<{ ok: boolean; finding: Finding }>(
+    `/findings/${findingId}/evidence/${evidenceId}`,
+    { method: 'DELETE' },
+  );
+}
+
 export function getGraph(findingId?: string): Promise<GraphData> {
   const qs = findingId ? `?findingId=${encodeURIComponent(findingId)}` : '';
   return request<GraphData>(`/graph${qs}`);

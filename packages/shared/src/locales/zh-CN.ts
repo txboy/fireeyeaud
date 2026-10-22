@@ -441,6 +441,7 @@ export default {
     evidenceTitle: '证据标题',
     evidenceNote: '说明',
     chooseFile: '选择文件',
+    preview: '预览',
     fileChosen: '已选择：{{name}}',
     noFileChosen: '尚未选择文件',
     save: '保存',
