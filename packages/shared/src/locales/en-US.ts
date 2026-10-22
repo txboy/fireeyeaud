@@ -681,7 +681,7 @@ export default {
     formsRequired: 'Select at least one evidence form',
     templateKindMismatch: 'Template kind does not match',
     templateLoopUnsupported: 'Unsupported loop in template: {{name}}',
-    templateRender: 'Template render failed: {{reason}}',
+    templateRender: 'Template render failed; check the template syntax',
     stagingExpired: 'Preview expired — generate again',
   },
   import: {

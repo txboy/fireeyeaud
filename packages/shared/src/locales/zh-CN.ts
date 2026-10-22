@@ -672,7 +672,7 @@ export default {
     formsRequired: '请先选择至少一份取证单',
     templateKindMismatch: '模板类型不匹配',
     templateLoopUnsupported: '模板包含不支持的循环：{{name}}',
-    templateRender: '模板渲染失败：{{reason}}',
+    templateRender: '模板渲染失败，请检查模板语法',
     stagingExpired: '预览已过期，请重新生成',
   },
   import: {
