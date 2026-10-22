@@ -25,7 +25,14 @@ export const useFindingsStore = create<FindingsState>((set, get) => ({
     set({ loading: true, errorKey: null });
     try {
       const page = await listFindings(params);
-      set({ items: page.items, loading: false });
+      set((state) => ({
+        items: page.items,
+        loading: false,
+        // 已删除的疑点不能留在勾选里，否则生成时会带上看不见的条目
+        selectedIds: state.selectedIds.filter((id) =>
+          page.items.some((item) => item.id === id),
+        ),
+      }));
     } catch (err) {
       set({
         loading: false,

@@ -15,6 +15,7 @@ import { useWorkspaceStore } from './store/workspace';
 import { useUiStore } from './store/ui';
 import { useChatStore } from './store/chat';
 import { useDbSqlAssistantStore } from './store/dbSqlAssistant';
+import { useFindingsStore } from './store/findings';
 
 export default function App() {
   const init = useSidecarStore((s) => s.init);
@@ -39,6 +40,8 @@ export default function App() {
       clearAllChats();
       // SQL 助手对话只在内存中；切换工作区后表结构/连接都变了，必须一并清空并中断生成。
       clearDbSqlAssistant();
+      // 疑点 id 是逐工作区计数（F-0001…），切换项目后旧勾选会指向另一项目的同号疑点。
+      useFindingsStore.getState().clearSelection();
       await loadSessions();
       if (cancelled) return;
       const list = useChatStore.getState().sessions;

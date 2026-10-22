@@ -60,7 +60,7 @@ export function EvidenceFormsView() {
       suggestedName: `${form.id}.docx`,
       filters: [{ name: 'Word', extensions: ['docx'] }],
     });
-    if (result.ok) void message.success(t('download'));
+    if (result.ok) void message.success(t('downloaded'));
   };
 
   const del = async (form: EvidenceFormManifest) => {

@@ -47,6 +47,8 @@ export function GenerateReportDialog({
     setBusy(false);
     setSaving(false);
     setTemplate(null);
+    // 标题属于本次生成：不重置会把上一份的标题带进新报告
+    setTitle('');
     setHeader((prev) => ({
       ...prev,
       projectName: prev.projectName || workspace?.name || '',

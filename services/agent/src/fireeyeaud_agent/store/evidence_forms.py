@@ -171,11 +171,11 @@ def _load_payload(root: Path, token: str, kind: str) -> tuple[Path, dict[str, An
     try:
         created = datetime.fromisoformat(str(payload.get("createdAt")))
     except (TypeError, ValueError) as exc:
-        raise ApiError("E_STAGING_EXPIRED", 410, "error.artifactNotFound") from exc
+        raise ApiError("E_STAGING_EXPIRED", 410, "error.stagingExpired") from exc
     if created.tzinfo is None:
         created = created.replace(tzinfo=timezone.utc)
     if datetime.now(timezone.utc) - created > STAGING_TTL:
-        raise ApiError("E_STAGING_EXPIRED", 410, "error.artifactNotFound")
+        raise ApiError("E_STAGING_EXPIRED", 410, "error.stagingExpired")
     return directory, payload
 
 
@@ -256,7 +256,13 @@ def preview_evidence_form(
         "header": dict(header or {}),
         "findingIds": [str(f["id"]) for f in findings],
         "findingsSnapshot": snapshots,
-        "evidenceIds": sorted({i for s in snapshots for i in s["evidence"]}),
+        "evidenceIds": sorted(
+            {
+                str(ref)
+                for f in findings
+                for ref in (f.get("evidenceRefs") or [])
+            }
+        ),
         "suggestedTitle": (header or {}).get("formTitle")
         or ((header or {}).get("projectName") and f"取证单 · {header['projectName']}")
         or "取证单",
@@ -281,11 +287,13 @@ def commit_evidence_form(root: Path, token: str, title: str | None = None) -> di
     root = Path(root)
     with WORKSPACE_MUTATION_LOCK:
         directory, payload = _load_payload(root, token, KIND)
-        seq = next_counter(root / ".fireeye", "evidenceForm", root)
-        form_id = f"QZ-{seq:04d}"
-        target = forms_dir(root) / form_id
-        if target.exists():
-            shutil.rmtree(target, ignore_errors=True)
+        # 计数器可能被重建（project.json 丢失）；绝不覆盖已存在的产物，顺延到空位。
+        while True:
+            seq = next_counter(root / ".fireeye", "evidenceForm", root)
+            form_id = f"QZ-{seq:04d}"
+            target = forms_dir(root) / form_id
+            if not target.exists():
+                break
         target.mkdir(parents=True, exist_ok=True)
 
         try:
@@ -323,7 +331,10 @@ def _manifest_path(root: Path, form_id: str) -> Path:
 
 def get_evidence_form(root: Path, form_id: str) -> dict[str, Any]:
     import json
+    import re
 
+    if not re.fullmatch(r"QZ-\d{4,}", form_id):
+        raise ApiError("E_NOT_FOUND", 404, "error.artifactNotFound", {"id": form_id})
     path = _manifest_path(Path(root), form_id)
     if not path.is_file():
         raise ApiError("E_NOT_FOUND", 404, "error.artifactNotFound", {"id": form_id})

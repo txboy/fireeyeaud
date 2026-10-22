@@ -65,14 +65,31 @@ export const useFormsStore = create<FormsState>((set, get) => ({
   },
 
   attach: async (id, path) => {
-    await attachReceipt(id, path);
-    await get().load();
+    await withError(set, async () => {
+      await attachReceipt(id, path);
+      await get().load();
+    });
   },
 
   clear: async (id) => {
-    await clearReceipt(id);
-    await get().load();
+    await withError(set, async () => {
+      await clearReceipt(id);
+      await get().load();
+    });
   },
 
   reset: () => set({ items: [], loading: false, errorKey: null }),
 }));
+
+/** 统一错误处理：记录可本地化的 messageKey 并向上抛，供弹窗提示。 */
+async function withError(
+  set: (partial: Partial<FormsState>) => void,
+  action: () => Promise<void>,
+): Promise<void> {
+  try {
+    await action();
+  } catch (err) {
+    set({ errorKey: messageKey(err) });
+    throw err;
+  }
+}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Checkbox } from 'antd';
+import { Checkbox, message } from 'antd';
 import type { ConfigScope, TemplateKind } from '@fireeyeaud/shared';
 import { ScopeBadge } from '../ScopeBadge';
 import { useTemplatesStore } from '../../store/templates';
@@ -70,7 +70,8 @@ export function TemplatePicker({
           {options.map((item) => (
             <option key={`${item.scope}:${item.id}`} value={`${item.scope}:${item.id}`}>
               {item.name}
-              {item.builtin ? `（${tt('builtin')}）` : ''}
+              {item.builtin ? `（${tt('builtin')}）` : ''} ·{' '}
+              {item.scope === 'global' ? tt('scopeGlobal') : tt('scopeProject')}
             </option>
           ))}
         </select>
@@ -89,7 +90,20 @@ export function TemplatePicker({
         disabled={!selected || isDefault}
         onChange={(event) => {
           if (!event.target.checked || !selected) return;
-          void setDefault(selected.id, selected.scope);
+          void (async () => {
+            try {
+              await setDefault(selected.id, selected.scope);
+              void message.success(t('defaultSaved'));
+            } catch (err) {
+              // 勾选状态由 store 派生，失败后会自动回滚
+              void message.error(
+                ((err as { messageKey?: string }).messageKey ?? 'error.internal').replace(
+                  /^error\./,
+                  '',
+                ),
+              );
+            }
+          })();
         }}
       >
         {t('setAsDefault')}

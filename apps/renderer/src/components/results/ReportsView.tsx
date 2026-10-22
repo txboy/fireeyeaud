@@ -37,6 +37,11 @@ export function ReportsView() {
     void loadForms();
   }, [load, loadForms, wsPath]);
 
+  useEffect(() => {
+    // 取证单被删除后清理失去引用的选择
+    setSelectedFormIds((prev) => prev.filter((id) => forms.some((f) => f.id === id)));
+  }, [forms]);
+
   if (!wsPath) {
     return (
       <div className="panel-empty">
@@ -44,11 +49,6 @@ export function ReportsView() {
       </div>
     );
   }
-
-  useEffect(() => {
-    // 取证单被删除后清理失去引用的选择
-    setSelectedFormIds((prev) => prev.filter((id) => forms.some((f) => f.id === id)));
-  }, [forms]);
 
   const toggle = (id: string) =>
     setSelectedFormIds((prev) =>
@@ -73,7 +73,7 @@ export function ReportsView() {
       suggestedName: `${report.id}.docx`,
       filters: [{ name: 'Word', extensions: ['docx'] }],
     });
-    if (result.ok) void message.success(t('download'));
+    if (result.ok) void message.success(t('downloaded'));
   };
 
   const del = async (report: ReportManifest) => {

@@ -316,3 +316,57 @@ def test_artifact_keeps_template_snapshot_after_template_deleted(tmp_path, monke
     artifact = tmp_path / manifest["artifactRef"]
     assert (artifact / "template.docx").is_file()
     assert (artifact / "document.docx").is_file()
+
+
+def test_evidence_ids_store_refs_not_labels(tmp_path, monkeypatch):
+    """manifest.evidenceIds 必须是证据 id，而不是展示标题（否则无法追溯）。"""
+    monkeypatch.setenv("FIREYEAUD_GLOBAL_DIR", str(tmp_path / "global"))
+    (tmp_path / ".fireeye").mkdir(parents=True, exist_ok=True)
+    fid = create_finding(
+        tmp_path,
+        title="带证据的疑点",
+        description="",
+        severity="high",
+        dataRefs=[],
+        sessionId="",
+        origin="manual",
+        evidenceRefs=["E-0001"],
+    )["id"]
+    tpl = upload_template(
+        tmp_path, _template(tmp_path / "t.docx"), kind="evidence-form", scope="project"
+    )
+
+    preview = preview_evidence_form(
+        tmp_path,
+        template_id=tpl["id"],
+        template_scope="project",
+        finding_ids=[fid],
+        header={},
+    )
+    manifest = commit_evidence_form(tmp_path, preview["token"])
+    assert manifest["evidenceIds"] == ["E-0001"]
+
+
+def test_commit_never_overwrites_an_existing_artifact(tmp_path, monkeypatch):
+    """计数器被重建（project.json 丢失）时，不能删除已存在的 QZ-0001。"""
+    fid, tpl_id = _setup(tmp_path, monkeypatch)
+
+    # 先占用 QZ-0001，并把计数器归零，模拟 project.json 被重建
+    occupied = tmp_path / ".fireeye" / "artifacts" / "evidence-forms" / "QZ-0001"
+    occupied.mkdir(parents=True)
+    (occupied / "manifest.json").write_text('{"id": "QZ-0001"}', "utf-8")
+    project = tmp_path / ".fireeye" / "project.json"
+    if project.is_file():
+        project.write_text('{"counters": {"evidenceForm": 0}}', "utf-8")
+
+    preview = preview_evidence_form(
+        tmp_path,
+        template_id=tpl_id,
+        template_scope="project",
+        finding_ids=[fid],
+        header={},
+    )
+    manifest = commit_evidence_form(tmp_path, preview["token"])
+
+    assert manifest["id"] == "QZ-0002"
+    assert (occupied / "manifest.json").is_file(), "既有产物不能被覆盖"

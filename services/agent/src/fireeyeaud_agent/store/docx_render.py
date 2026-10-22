@@ -166,12 +166,22 @@ def prepare_template(src: Path, dst: Path, kind: str) -> None:
             section.even_page_footer,
         ):
             _process_paragraphs(part.paragraphs, kind)
-            for table in part.tables:
-                for row in table.rows:
-                    for cell in row.cells:
-                        _process_paragraphs(cell.paragraphs, kind)
+            # 页眉/页脚里的表格同样要走行循环克隆，否则数据行会被 docxtpl 丢掉。
+            _process_tables(part, kind)
     dst.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(dst))
+
+
+def _jinja_env() -> Any:
+    """沙箱 + 自动转义。
+
+    - 沙箱：模板来自用户上传的 docx，不能让 `{{ ''.__class__.__mro__ }}` 之类执行任意代码。
+    - 自动转义：渲染结果直接写进 docx 的 XML，`&` / `<` 不转义会破坏文档结构
+      （实测 `A&B` 会截断后续内容，`<...>` 甚至能把表格整段吃掉）。
+    """
+    from jinja2.sandbox import SandboxedEnvironment
+
+    return SandboxedEnvironment(autoescape=True)
 
 
 def render_docx(template: Path, out: Path, context: dict[str, Any]) -> None:
@@ -180,7 +190,7 @@ def render_docx(template: Path, out: Path, context: dict[str, Any]) -> None:
 
     try:
         tpl = DocxTemplate(str(template))
-        tpl.render(context)
+        tpl.render(context, jinja_env=_jinja_env())
         out.parent.mkdir(parents=True, exist_ok=True)
         tpl.save(str(out))
     except ApiError:

@@ -42,9 +42,13 @@ export function ReceiptDialog({
       if (!path) return;
       setBusy(true);
       await attach(form.id, path);
-      setBusy(false);
-      void message.success(t('uploadReceipt'));
-    } catch {
+      void message.success(t('receiptUploaded'));
+    } catch (err) {
+      // store 已记录 errorKey（面板下方展示），这里再提示一次避免静默失败
+      void message.error(
+        terr(((err as { messageKey?: string }).messageKey ?? 'error.internal').replace(/^error\./, '')),
+      );
+    } finally {
       setBusy(false);
     }
   };
@@ -65,8 +69,15 @@ export function ReceiptDialog({
     });
     if (!ok) return;
     setBusy(true);
-    await clear(form.id).catch(() => undefined);
-    setBusy(false);
+    try {
+      await clear(form.id);
+    } catch (err) {
+      void message.error(
+        terr(((err as { messageKey?: string }).messageKey ?? 'error.internal').replace(/^error\./, '')),
+      );
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (

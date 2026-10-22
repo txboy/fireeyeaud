@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from docx import Document
+from docx.shared import Inches
 
 from fireeyeaud_agent.store.docx_render import prepare_template, render_docx
 
@@ -124,3 +125,85 @@ def test_prepare_rejects_unsupported_loop(tmp_path):
     with pytest.raises(ApiError) as exc:
         prepare_template(src, tmp_path / "out.docx", "report")
     assert exc.value.code == "E_TEMPLATE_LOOP"
+
+
+def test_render_escapes_xml_special_characters(tmp_path):
+    """`&` 与 `<` 必须被转义：否则 docx 的 XML 会被破坏，内容静默丢失。"""
+    doc = Document()
+    doc.add_paragraph("单位：{{项目名称}}")
+    table = doc.add_table(rows=2, cols=1)
+    table.cell(0, 0).text = "{{#疑点}}"
+    table.cell(1, 0).text = "{{疑点.标题}}"
+    src = tmp_path / "amp.docx"
+    doc.save(src)
+
+    # 段落循环：把 table 换成段落，便于断言
+    doc2 = Document()
+    doc2.add_paragraph("单位：{{项目名称}}")
+    doc2.add_paragraph("{{#疑点}}")
+    doc2.add_paragraph("{{疑点.标题}}")
+    doc2.add_paragraph("{{/疑点}}")
+    src2 = tmp_path / "amp2.docx"
+    doc2.save(src2)
+
+    prepared = tmp_path / "prepared.docx"
+    prepare_template(src2, prepared, "evidence-form")
+    out = tmp_path / "out.docx"
+    render_docx(
+        prepared,
+        out,
+        {
+            "项目名称": "A&B <100万",
+            "findings": [{"标题": "P&L <阈值>"}],
+        },
+    )
+
+    text = "\n".join(p.text for p in Document(out).paragraphs)
+    assert "A&B <100万" in text
+    assert "P&L <阈值>" in text
+
+
+def test_render_rejects_sandboxed_jinja_escapes(tmp_path):
+    """用户上传的模板不可执行任意 Python（沙箱环境）。"""
+    import pytest
+
+    from fireeyeaud_agent.errors import ApiError
+
+    doc = Document()
+    doc.add_paragraph("{{ ''.__class__.__mro__ }}")
+    src = tmp_path / "evil.docx"
+    doc.save(src)
+    prepared = tmp_path / "prepared.docx"
+    prepare_template(src, prepared, "report")
+
+    with pytest.raises(ApiError) as exc:
+        render_docx(prepared, tmp_path / "out.docx", {})
+    assert exc.value.code == "E_TEMPLATE_RENDER"
+
+
+def test_header_table_loop_repeats_rows(tmp_path):
+    """页眉表格里的行循环也必须克隆数据行，否则只会剩下表头。"""
+    doc = Document()
+    section = doc.sections[0]
+    table = section.header.add_table(rows=3, cols=2, width=Inches(6))
+    table.cell(0, 0).text = "编号"
+    table.cell(0, 1).text = "标题"
+    table.cell(1, 0).text = "{{#疑点}}"
+    table.cell(1, 1).text = "{{疑点.标题}}"
+    table.cell(2, 0).text = "{{/疑点}}"
+    src = tmp_path / "hdr.docx"
+    doc.save(src)
+
+    prepared = tmp_path / "prepared.docx"
+    prepare_template(src, prepared, "evidence-form")
+    out = tmp_path / "out.docx"
+    render_docx(
+        prepared,
+        out,
+        {"findings": [{"标题": "甲"}, {"标题": "乙"}]},
+    )
+
+    header_tables = Document(out).sections[0].header.tables
+    cells = [c.text for t in header_tables for r in t.rows for c in r.cells]
+    assert "甲" in cells
+    assert "乙" in cells

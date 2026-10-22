@@ -58,9 +58,18 @@ def build_report_context(
             "编号": str(f.get("id") or ""),
             "标题": str(f.get("title") or ""),
             "描述": str(f.get("description") or ""),
-            "风险": f.get("severity") or "",
-            "状态": f.get("status") or "",
+            "风险": evidence_forms.SEVERITY_LABEL.get(
+                str(f.get("severity") or ""), str(f.get("severity") or "")
+            ),
+            "状态": evidence_forms.STATUS_LABEL.get(
+                str(f.get("status") or ""), str(f.get("status") or "")
+            ),
             "科目": "、".join(f.get("subjects") or []),
+            "金额": f'{f["amount"]} {f.get("currency") or "CNY"}'
+            if f.get("amount")
+            else "",
+            "证据": "；".join(f.get("evidence") or []),
+            "证据数量": len(f.get("evidence") or []),
         }
         for f in findings
     ]
@@ -197,11 +206,13 @@ def commit_report(root: Path, token: str, title: str | None = None) -> dict[str,
     root = Path(root)
     with WORKSPACE_MUTATION_LOCK:
         directory, payload = evidence_forms._load_payload(root, token, KIND)
-        seq = next_counter(root / ".fireeye", "report", root)
-        report_id = f"RPT-{seq:04d}"
-        target = reports_dir(root) / report_id
-        if target.exists():
-            shutil.rmtree(target, ignore_errors=True)
+        # 计数器可能被重建；绝不覆盖已存在的报告目录，顺延到空位。
+        while True:
+            seq = next_counter(root / ".fireeye", "report", root)
+            report_id = f"RPT-{seq:04d}"
+            target = reports_dir(root) / report_id
+            if not target.exists():
+                break
         target.mkdir(parents=True, exist_ok=True)
 
         try:
@@ -249,6 +260,10 @@ def _manifest_path(root: Path, report_id: str) -> Path:
 
 
 def get_report(root: Path, report_id: str) -> dict[str, Any]:
+    import re
+
+    if not re.fullmatch(r"RPT-\d{4,}", report_id):
+        raise ApiError("E_NOT_FOUND", 404, "error.artifactNotFound", {"id": report_id})
     path = _manifest_path(Path(root), report_id)
     if not path.is_file():
         raise ApiError("E_NOT_FOUND", 404, "error.artifactNotFound", {"id": report_id})
