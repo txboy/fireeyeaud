@@ -8,13 +8,23 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from ..errors import ApiError
-from ..store.findings import get_finding, load_findings, review_finding
+from ..store.evidence import append_manual_evidence
+from ..store.findings import (
+    create_finding,
+    delete_finding,
+    detach_evidence,
+    get_finding,
+    load_findings,
+    review_finding,
+)
 from ..store.workspace import workspace_manager
 from .deps import require_token
 
 router = APIRouter(tags=["findings"], dependencies=[Depends(require_token)])
 
 _MAX_LIMIT = 200
+_SEVERITIES = {"high", "medium", "low"}
+_EVIDENCE_KINDS = {"file", "text", "record"}
 
 
 def _root() -> Path:
@@ -50,12 +60,88 @@ class ReviewBody(BaseModel):
     reason: str | None = None
 
 
+class CreateFindingBody(BaseModel):
+    title: str
+    description: str | None = None
+    severity: str = "medium"
+    subjects: list[str] = []
+    amount: str | None = None
+    currency: str = "CNY"
+    author: str = "审计员"
+    lang: str = "zh-CN"
+
+
+class EvidenceBody(BaseModel):
+    kind: str
+    title: str
+    note: str | None = None
+    path: str | None = None
+
+
+@router.post("/findings", status_code=201)
+def create_manual(body: CreateFindingBody) -> dict:
+    """人工创建疑点（origin=manual）。"""
+    title = body.title.strip()
+    if not title:
+        raise ApiError("E_INVALID_TITLE", 400, "error.internal")
+    if body.severity not in _SEVERITIES:
+        raise ApiError("E_INVALID_SEVERITY", 400, "error.internal")
+    return create_finding(
+        _root(),
+        title=title,
+        description=(body.description or "").strip() or None,
+        severity=body.severity,
+        dataRefs=[],
+        sessionId="",
+        lang=body.lang,
+        subjects=[s.strip() for s in body.subjects if s.strip()],
+        amount=(body.amount or "").strip() or None,
+        currency=body.currency or "CNY",
+        origin="manual",
+        author=body.author or "审计员",
+    )
+
+
 @router.get("/findings/{finding_id}")
 def finding_detail(finding_id: str) -> dict:
     item = get_finding(_root(), finding_id)
     if item is None:
         raise ApiError("E_NOT_FOUND", 404, "error.notFound", {"id": finding_id})
     return item
+
+
+@router.delete("/findings/{finding_id}")
+def delete_one(finding_id: str, author: str = "审计员") -> dict:
+    result = delete_finding(_root(), finding_id, author=author)
+    if result is None:
+        raise ApiError("E_NOT_FOUND", 404, "error.notFound", {"id": finding_id})
+    return {"ok": True, "id": finding_id}
+
+
+@router.post("/findings/{finding_id}/evidence", status_code=201)
+def add_evidence(finding_id: str, body: EvidenceBody) -> dict:
+    if body.kind not in _EVIDENCE_KINDS:
+        raise ApiError("E_INVALID_KIND", 400, "error.internal", {"kind": body.kind})
+    if not body.title.strip():
+        raise ApiError("E_INVALID_TITLE", 400, "error.internal")
+    event = append_manual_evidence(
+        _root(),
+        finding_id=finding_id,
+        kind=body.kind,
+        title=body.title.strip(),
+        note=(body.note or "").strip() or None,
+        source_path=Path(body.path) if body.path else None,
+        author="审计员",
+    )
+    return {"evidence": event, "finding": get_finding(_root(), finding_id)}
+
+
+@router.delete("/findings/{finding_id}/evidence/{evidence_id}")
+def remove_evidence(finding_id: str, evidence_id: str) -> dict:
+    result = detach_evidence(_root(), finding_id, evidence_id, author="审计员")
+    if result is None:
+        raise ApiError("E_NOT_FOUND", 404, "error.notFound", {"id": evidence_id})
+    return {"ok": True, "finding": get_finding(_root(), finding_id)}
 
 
 @router.post("/findings/{finding_id}/review")
