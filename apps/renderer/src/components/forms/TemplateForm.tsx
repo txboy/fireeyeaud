@@ -288,7 +288,7 @@ export function TemplateForm({
         {preview ? (
           <div className="tpl-form__pages">
             <Suspense fallback={<span className="card__meta">{tc('loading')}</span>}>
-              <DocxPreview data={preview.data} mime={preview.mime} />
+              <DocxPreview data={preview.data} mime={preview.mime} fitWidth />
             </Suspense>
           </div>
         ) : (

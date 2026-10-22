@@ -1287,9 +1287,14 @@ body {
   outline-offset: -1px;
 }
 
-/* 模板表单：上半填表、下半预览 docx。 */
+/* 模板表单：上半填表、下半预览 docx。预览占满整栏宽度，表单字段保持紧凑。 */
 .tpl-form {
-  max-width: 720px;
+  max-width: none;
+}
+
+.tpl-form > .field,
+.tpl-form > .formtab__actions {
+  max-width: 560px;
 }
 
 .tpl-form__file {
@@ -1321,7 +1326,8 @@ body {
   flex: 1;
   min-height: 200px;
   max-height: 46vh;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .titlebar__btn {
