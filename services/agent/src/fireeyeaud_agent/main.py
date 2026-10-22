@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .api import (
+    archive as archive_api,
     datasources,
     db,
     evidence,
@@ -59,6 +60,7 @@ def create_app() -> FastAPI:
         return JSONResponse(status_code=exc.http_status, content=envelope)
 
     app.include_router(health.router, prefix=API_PREFIX)
+    app.include_router(archive_api.router, prefix=API_PREFIX)
     app.include_router(workspaces.router, prefix=API_PREFIX)
     app.include_router(datasources.router, prefix=API_PREFIX)
     app.include_router(findings.router, prefix=API_PREFIX)
