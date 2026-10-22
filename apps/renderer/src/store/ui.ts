@@ -7,7 +7,13 @@ import type {
   TemplateKind,
 } from '@fireeyeaud/shared';
 
-export type ResultsTab = 'findings' | 'graph' | 'working-paper' | 'evidence';
+export type ResultsTab =
+  | 'findings'
+  | 'graph'
+  | 'working-paper'
+  | 'evidence'
+  | 'evidence-forms'
+  | 'reports';
 
 /** 右侧区「会话」tab（对话栏 + 成果栏一体），每个会话一个。 */
 export interface SessionTab {

@@ -8,21 +8,35 @@ import { useWorkspaceStore } from '../store/workspace';
 import { FindingDetail } from './FindingDetail';
 import { GraphView } from './GraphView';
 import { WorkingPaperView } from './WorkingPaperView';
+import { EvidenceFormsView } from './results/EvidenceFormsView';
+import { ReportsView } from './results/ReportsView';
 
-const TABS: ResultsTab[] = ['findings', 'graph', 'working-paper', 'evidence'];
+const TABS: ResultsTab[] = [
+  'findings',
+  'graph',
+  'working-paper',
+  'evidence',
+  'evidence-forms',
+  'reports',
+];
 
 const TAB_LABEL_KEY: Record<ResultsTab, string> = {
   findings: 'findings',
   graph: 'graph',
   'working-paper': 'workingPaper',
   evidence: 'evidence',
+  'evidence-forms': 'evidenceForms',
+  reports: 'reports',
 };
 
 function FindingCard({ finding }: { finding: Finding }) {
   const { t: ts } = useTranslation('enums');
+  const { t: tf } = useTranslation('findings');
   const [open, setOpen] = useState(false);
   const selectedFindingId = useUiStore((s) => s.selectedFindingId);
   const setSelectedFindingId = useUiStore((s) => s.setSelectedFindingId);
+  const selected = useFindingsStore((s) => s.selectedIds.includes(finding.id));
+  const toggleSelect = useFindingsStore((s) => s.toggleSelect);
   const ref = useRef<HTMLDivElement>(null);
   const highlighted = selectedFindingId === finding.id;
   const title = finding.title?.text ?? finding.ruleKey ?? finding.id;
@@ -47,24 +61,34 @@ function FindingCard({ finding }: { finding: Finding }) {
       ref={ref}
       className={`finding${open ? ' finding--open' : ''}${highlighted ? ' finding--selected' : ''}`}
     >
-      <button
-        type="button"
-        className="finding__head"
-        onClick={toggle}
-        style={{ background: 'none', border: 'none', cursor: 'pointer', width: '100%', padding: 0 }}
-      >
-        {open ? (
-          <ChevronDown size={13} strokeWidth={1.75} />
-        ) : (
-          <ChevronRight size={13} strokeWidth={1.75} />
-        )}
-        <span className={`severity severity--${finding.severity}`}>
-          {ts(`severity.${finding.severity}`)}
-        </span>
-        <span className="finding__id">{finding.id}</span>
-        <span className="spacer" />
-        <span className="finding__status">{ts(`status.${finding.status}`)}</span>
-      </button>
+      <div className="finding__row">
+        <input
+          type="checkbox"
+          className="finding__check"
+          checked={selected}
+          title={tf('selectForForm')}
+          aria-label={tf('selectForForm')}
+          onChange={() => toggleSelect(finding.id)}
+        />
+        <button
+          type="button"
+          className="finding__head"
+          onClick={toggle}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', flex: 1, padding: 0 }}
+        >
+          {open ? (
+            <ChevronDown size={13} strokeWidth={1.75} />
+          ) : (
+            <ChevronRight size={13} strokeWidth={1.75} />
+          )}
+          <span className={`severity severity--${finding.severity}`}>
+            {ts(`severity.${finding.severity}`)}
+          </span>
+          <span className="finding__id">{finding.id}</span>
+          <span className="spacer" />
+          <span className="finding__status">{ts(`status.${finding.status}`)}</span>
+        </button>
+      </div>
       <div className="finding__title">{title}</div>
       {finding.description?.text && (
         <div className="finding__desc">{finding.description.text}</div>
@@ -176,6 +200,10 @@ export function ResultsColumn() {
           <GraphView />
         ) : resultsTab === 'working-paper' ? (
           <WorkingPaperView />
+        ) : resultsTab === 'evidence-forms' ? (
+          <EvidenceFormsView />
+        ) : resultsTab === 'reports' ? (
+          <ReportsView />
         ) : (
           <EmptyView />
         )}

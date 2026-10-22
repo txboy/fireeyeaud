@@ -1,6 +1,7 @@
 import type {
   ApiErrorEnvelope,
   AppSettings,
+  ArtifactPreview,
   AuditRule,
   ConfigScope,
   DataSourceInfo,
@@ -8,6 +9,7 @@ import type {
   DbDriver,
   DbQueryResult,
   DbTableSchema,
+  EvidenceFormManifest,
   EvidenceItem,
   Finding,
   FsFileContent,
@@ -21,6 +23,7 @@ import type {
   McpServer,
   McpTransport,
   ModelProfile,
+  ReportManifest,
   RuleRunResult,
   Skill,
   TemplateCheck,
@@ -1077,6 +1080,82 @@ export function getTemplateContent(
   scope: ConfigScope,
 ): Promise<FsFileContent> {
   return request<FsFileContent>(`/templates/${id}/content?scope=${scope}`);
+}
+
+// ---- 取证单与项目报告（P3） ----
+
+export interface GenerateFormInput {
+  templateId: string;
+  templateScope: ConfigScope;
+  findingIds: string[];
+  header: Record<string, string>;
+}
+
+export function previewEvidenceForm(input: GenerateFormInput): Promise<ArtifactPreview> {
+  return request<ArtifactPreview>('/evidence-forms/preview', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function commitEvidenceForm(
+  token: string,
+  title?: string,
+): Promise<EvidenceFormManifest> {
+  return request<EvidenceFormManifest>('/evidence-forms', {
+    method: 'POST',
+    body: JSON.stringify({ token, title }),
+  });
+}
+
+export function listEvidenceForms(): Promise<{ items: EvidenceFormManifest[] }> {
+  return request<{ items: EvidenceFormManifest[] }>('/evidence-forms');
+}
+
+export function deleteEvidenceForm(id: string): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/evidence-forms/${id}`, { method: 'DELETE' });
+}
+
+export function attachReceipt(id: string, path: string): Promise<EvidenceFormManifest> {
+  return request<EvidenceFormManifest>(`/evidence-forms/${id}/receipt`, {
+    method: 'POST',
+    body: JSON.stringify({ path }),
+  });
+}
+
+export function clearReceipt(id: string): Promise<EvidenceFormManifest> {
+  return request<EvidenceFormManifest>(`/evidence-forms/${id}/receipt`, {
+    method: 'DELETE',
+  });
+}
+
+export interface GenerateReportInput {
+  templateId: string;
+  templateScope: ConfigScope;
+  formIds: string[];
+  header: Record<string, string>;
+}
+
+export function previewReport(input: GenerateReportInput): Promise<ArtifactPreview> {
+  return request<ArtifactPreview>('/reports/preview', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function commitReport(token: string, title?: string): Promise<ReportManifest> {
+  return request<ReportManifest>('/reports', {
+    method: 'POST',
+    body: JSON.stringify({ token, title }),
+  });
+}
+
+export function listReports(): Promise<{ items: ReportManifest[] }> {
+  return request<{ items: ReportManifest[] }>('/reports');
+}
+
+export function deleteReport(id: string): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/reports/${id}`, { method: 'DELETE' });
 }
 
 /** 新增模板时的本地文件检查 + 预览（只读，不保存）。 */
