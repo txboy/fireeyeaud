@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { message } from 'antd';
 import { ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
 import type { Finding } from '@fireeyeaud/shared';
 import { FindingDetail } from '../FindingDetail';
@@ -12,7 +13,9 @@ export function FindingCard({ finding }: { finding: Finding }) {
   const { t: ts } = useTranslation('enums');
   const { t } = useTranslation('findings');
   const { t: tc } = useTranslation('common');
+  const { t: terr } = useTranslation('error');
   const [open, setOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const selectedFindingId = useUiStore((s) => s.selectedFindingId);
   const setSelectedFindingId = useUiStore((s) => s.setSelectedFindingId);
   const selected = useFindingsStore((s) => s.selectedIds.includes(finding.id));
@@ -47,7 +50,17 @@ export function FindingCard({ finding }: { finding: Finding }) {
       cancelLabel: tc('cancel'),
       danger: true,
     });
-    if (ok) await remove(finding.id).catch(() => undefined);
+    if (!ok || deleting) return;
+    setDeleting(true);
+    try {
+      await remove(finding.id);
+    } catch (err) {
+      void message.error(
+        terr(((err as { messageKey?: string }).messageKey ?? 'error.internal').replace(/^error\./, '')),
+      );
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -90,6 +103,7 @@ export function FindingCard({ finding }: { finding: Finding }) {
           className="icon-btn finding__delete"
           title={t('deleteFinding')}
           aria-label={t('deleteFinding')}
+          disabled={deleting}
           onClick={() => void onDelete()}
         >
           <Trash2 size={13} strokeWidth={1.75} />
@@ -97,10 +111,11 @@ export function FindingCard({ finding }: { finding: Finding }) {
       </div>
 
       <div className="finding__title">{title}</div>
-      {finding.description?.text && (
+      {/* 展开后由详情区展示描述与科目，避免重复 */}
+      {!open && finding.description?.text && (
         <div className="finding__desc">{finding.description.text}</div>
       )}
-      {meta && <div className="finding__meta">{meta}</div>}
+      {!open && meta && <div className="finding__meta">{meta}</div>}
       {open && <FindingDetail finding={finding} />}
     </div>
   );

@@ -1504,7 +1504,8 @@ body {
   transition: opacity 0.15s;
 }
 
-.finding:hover .finding__delete {
+.finding:hover .finding__delete,
+.finding__delete:focus-visible {
   opacity: 1;
 }
 

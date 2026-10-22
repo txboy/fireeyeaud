@@ -21,6 +21,27 @@ import { AddEvidenceDialog } from './results/AddEvidenceDialog';
 
 const REVIEWER = '审计员';
 
+/** 桌面端预览支持的文件类型（与 file-preview.cjs 对齐）。 */
+const PREVIEWABLE_EXT = new Set([
+  '.pdf',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.bmp',
+  '.webp',
+  '.docx',
+  '.xlsx',
+  '.csv',
+  '.txt',
+  '.md',
+  '.json',
+  '.xml',
+  '.yaml',
+  '.yml',
+]);
+const PREVIEW_MAX_BYTES = 30 * 1024 * 1024;
+
 function EvidenceIcon({ item }: { item: EvidenceItem }) {
   if (item.kind === 'file') return <Paperclip size={12} strokeWidth={1.75} />;
   if (item.kind === 'record') return <ClipboardCheck size={12} strokeWidth={1.75} />;
@@ -42,6 +63,14 @@ function EvidenceRow({
 
   const label = item.title ?? item.resultSummary ?? item.tool ?? te(`step.${item.step}`);
 
+  // 只给桌面端能渲染的格式显示预览；.doc/.xls/.zip 等会被判为 unsupported。
+  const ext = (item.filePath ?? '').toLowerCase().match(/\.[^.]+$/)?.[0] ?? '';
+  const size = Number((item.params as { size?: number } | undefined)?.size ?? 0);
+  const canPreview =
+    Boolean(item.filePath) &&
+    PREVIEWABLE_EXT.has(ext) &&
+    (!size || size <= PREVIEW_MAX_BYTES);
+
   return (
     <div className="evidence-item">
       <EvidenceIcon item={item} />
@@ -55,7 +84,7 @@ function EvidenceRow({
       </div>
       <span className="spacer" />
       <div className="evidence-item__actions">
-        {item.filePath && root && (
+        {canPreview && root && (
           <button
             type="button"
             className="button button--sm button--ghost"
@@ -99,6 +128,8 @@ export function FindingDetail({ finding }: { finding: Finding }) {
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [errorKey, setErrorKey] = useState<string | null>(null);
+  const { t: terr } = useTranslation('error');
 
   const refsKey = (finding.evidenceRefs ?? []).join(',');
 
@@ -135,8 +166,8 @@ export function FindingDetail({ finding }: { finding: Finding }) {
     try {
       await removeFindingEvidenceApi(finding.id, item.id);
       await reloadFindings();
-    } catch {
-      /* 失败时保持现状；下次刷新会恢复 */
+    } catch (err) {
+      setErrorKey((err as { messageKey?: string }).messageKey ?? 'error.internal');
     }
   };
 
@@ -257,6 +288,9 @@ export function FindingDetail({ finding }: { finding: Finding }) {
               onRemove={(target) => void onRemoveEvidence(target)}
             />
           ))
+        )}
+        {errorKey && (
+          <div className="panel-error">{terr(errorKey.replace(/^error\./, ''))}</div>
         )}
       </section>
 

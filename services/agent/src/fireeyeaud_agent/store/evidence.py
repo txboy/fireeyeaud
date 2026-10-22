@@ -146,7 +146,12 @@ def append_manual_evidence(
         file_path=file_path,
         file_hash=file_hash,
     )
-    attach_evidence(root, finding_id, str(event["id"]), author=author)
+    attached = attach_evidence(root, finding_id, str(event["id"]), author=author)
+    if attached is None:
+        # 疑点在此期间被删除：清理刚落盘的文件，避免留下无主证据
+        if file_path:
+            (root / file_path).unlink(missing_ok=True)
+        raise ApiError("E_NOT_FOUND", 404, "error.notFound", {"id": finding_id})
     return event
 
 

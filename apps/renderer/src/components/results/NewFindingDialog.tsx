@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Modal } from 'antd';
+import { Modal, message } from 'antd';
 import type { Severity } from '@fireeyeaud/shared';
 import { useFindingsStore } from '../../store/findings';
 
@@ -23,6 +23,7 @@ export function NewFindingDialog({
   const [severity, setSeverity] = useState<Severity>('medium');
   const [subjects, setSubjects] = useState('');
   const [amount, setAmount] = useState('');
+  const [currency, setCurrency] = useState('CNY');
   const [busy, setBusy] = useState(false);
   const [errorKey, setErrorKey] = useState<string | null>(null);
 
@@ -33,6 +34,7 @@ export function NewFindingDialog({
     setSeverity('medium');
     setSubjects('');
     setAmount('');
+    setCurrency('CNY');
     setBusy(false);
     setErrorKey(null);
   }, [open]);
@@ -52,9 +54,10 @@ export function NewFindingDialog({
           .map((item) => item.trim())
           .filter(Boolean),
         amount: amount.trim() || undefined,
-        currency: 'CNY',
+        currency,
         author: '审计员',
       });
+      void message.success(t('created'));
       onClose();
     } catch (err) {
       setErrorKey((err as { messageKey?: string }).messageKey ?? 'error.internal');
@@ -120,17 +123,29 @@ export function NewFindingDialog({
           <input
             className="searchbox"
             value={subjects}
-            placeholder="应收账款、货币资金"
             onChange={(event) => setSubjects(event.target.value)}
           />
         </label>
         <label className="field">
           <span className="field__label">{t('amount')}</span>
-          <input
-            className="searchbox"
-            value={amount}
-            onChange={(event) => setAmount(event.target.value)}
-          />
+          <div className="artifact-receipt__actions">
+            <input
+              className="searchbox"
+              value={amount}
+              onChange={(event) => setAmount(event.target.value)}
+            />
+            <select
+              className="searchbox"
+              value={currency}
+              onChange={(event) => setCurrency(event.target.value)}
+            >
+              <option value="CNY">CNY</option>
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+              <option value="HKD">HKD</option>
+              <option value="JPY">JPY</option>
+            </select>
+          </div>
         </label>
         {errorKey && (
           <div className="panel-error">{terr(errorKey.replace(/^error\./, ''))}</div>

@@ -254,6 +254,8 @@ function registerIpc() {
             'txt', 'md', 'markdown', 'json', 'csv', 'tsv', 'log', 'xml',
             'yaml', 'yml', 'ini', 'conf', 'sql', 'py', 'js', 'ts',
             'xlsx', 'xlsm', 'docx', 'pdf',
+            'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp',
+            'doc', 'xls', 'eml', 'msg', 'zip',
           ],
         },
         { name: '所有文件', extensions: ['*'] },

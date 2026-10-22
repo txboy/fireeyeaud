@@ -83,9 +83,9 @@ def create_manual(body: CreateFindingBody) -> dict:
     """人工创建疑点（origin=manual）。"""
     title = body.title.strip()
     if not title:
-        raise ApiError("E_INVALID_TITLE", 400, "error.internal")
+        raise ApiError("E_INVALID_TITLE", 400, "error.invalidTitle")
     if body.severity not in _SEVERITIES:
-        raise ApiError("E_INVALID_SEVERITY", 400, "error.internal")
+        raise ApiError("E_INVALID_SEVERITY", 400, "error.invalidSeverity")
     return create_finding(
         _root(),
         title=title,
@@ -121,9 +121,9 @@ def delete_one(finding_id: str, author: str = "审计员") -> dict:
 @router.post("/findings/{finding_id}/evidence", status_code=201)
 def add_evidence(finding_id: str, body: EvidenceBody) -> dict:
     if body.kind not in _EVIDENCE_KINDS:
-        raise ApiError("E_INVALID_KIND", 400, "error.internal", {"kind": body.kind})
+        raise ApiError("E_INVALID_KIND", 400, "error.invalidKind")
     if not body.title.strip():
-        raise ApiError("E_INVALID_TITLE", 400, "error.internal")
+        raise ApiError("E_INVALID_TITLE", 400, "error.invalidTitle")
     event = append_manual_evidence(
         _root(),
         finding_id=finding_id,
