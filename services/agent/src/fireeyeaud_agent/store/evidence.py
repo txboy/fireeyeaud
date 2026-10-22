@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from ..errors import ApiError
 from ..util import now_iso
 from .jsonl import append_event, next_seq, read_events
 
@@ -46,6 +47,12 @@ def append_evidence(
     duration_ms: int | None = None,
     tokens: int | None = None,
     lang: str = "zh-CN",
+    source: str = "agent",
+    kind: str | None = None,
+    title: str | None = None,
+    note: str | None = None,
+    file_path: str | None = None,
+    file_hash: str | None = None,
 ) -> dict[str, Any]:
     root = Path(root)
     path = evidence_path(root)
@@ -77,8 +84,70 @@ def append_evidence(
         "lang": lang,
         "prevHash": _prev_hash(path),
     }
+    # 人工证据的可选字段：只在有值时写入，保持 Agent 生成的事件形状不变。
+    if source != "agent":
+        event["source"] = source
+        # 人工证据固定带 filePath / fileHash（文字证据为 null），便于前端统一处理
+        event["filePath"] = file_path
+        event["fileHash"] = file_hash
+    if kind is not None:
+        event["kind"] = kind
+    if title is not None:
+        event["title"] = title
+    if note is not None:
+        event["note"] = note
     event["hash"] = compute_hash(event["prevHash"], event)
     return append_event(path, event)
+
+
+def append_manual_evidence(
+    root: Path,
+    *,
+    finding_id: str,
+    kind: str,
+    title: str,
+    note: str | None = None,
+    source_path: Path | None = None,
+    author: str | None = None,
+) -> dict[str, Any]:
+    """录入人工证据（文件 / 文字 / 核查记录）并挂接到疑点。
+
+    - 文件：复制到项目根 `证据/`，sha256 计入哈希链
+    - 文字 / 记录：只写证据日志，不落文件
+    """
+    from .evidence_files import copy_into_evidence
+    from .findings import attach_evidence, get_finding
+
+    root = Path(root)
+    if get_finding(root, finding_id) is None:
+        raise ApiError("E_NOT_FOUND", 404, "error.notFound", {"id": finding_id})
+    if kind not in {"file", "text", "record"}:
+        raise ApiError("E_INVALID_KIND", 400, "error.internal", {"kind": kind})
+    if kind == "file" and source_path is None:
+        raise ApiError("E_FILE_REQUIRED", 400, "error.fileRequired")
+
+    file_path = file_hash = None
+    size = None
+    if kind == "file" and source_path is not None:
+        file_path, size, file_hash = copy_into_evidence(root, source_path)
+
+    event = append_evidence(
+        root,
+        session_id="",
+        step="manual",
+        tool=None,
+        params={"kind": kind, "title": title, "size": size},
+        result_summary=note or title,
+        finding_refs=[finding_id],
+        source="manual",
+        kind=kind,
+        title=title,
+        note=note,
+        file_path=file_path,
+        file_hash=file_hash,
+    )
+    attach_evidence(root, finding_id, str(event["id"]), author=author)
+    return event
 
 
 def load_evidence(
