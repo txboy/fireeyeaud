@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Copy,
+  Pencil,
   Plus,
   Star,
   Trash2,
@@ -254,6 +255,17 @@ export function TemplatesPanel() {
                           onClick={() => void setDefault(item.id, item.scope)}
                         >
                           <Star size={13} strokeWidth={1.75} />
+                        </button>
+                      )}
+                      {!item.builtin && (
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title={tc('edit')}
+                          aria-label={tc('edit')}
+                          onClick={openEdit}
+                        >
+                          <Pencil size={13} strokeWidth={1.75} />
                         </button>
                       )}
                       <button
