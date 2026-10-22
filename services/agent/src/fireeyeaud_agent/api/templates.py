@@ -106,12 +106,16 @@ def patch(
 def inspect(body: InspectBody) -> dict:
     """新增模板表单的下半部分预览：读本地 docx（含体检），不保存任何东西。"""
     path = Path(body.path)
-    check = templates_store.scan_docx(path, body.kind)  # 校验存在 / 后缀 / 可解析
-    size = path.stat().st_size
-    if size > templates_store.MAX_BYTES:
+    if not path.is_file():
+        raise ApiError(
+            "E_FILE_NOT_FOUND", 404, "error.fileNotFound", {"name": path.name}
+        )
+    if path.stat().st_size > templates_store.MAX_BYTES:
         raise ApiError(
             "E_FILE_TOO_LARGE", 400, "error.fileTooLarge", {"name": path.name}
         )
+    check = templates_store.scan_docx(path, body.kind)  # 校验后缀 / 可解析
+    size = path.stat().st_size
     data = path.read_bytes()
     return {
         "ok": True,

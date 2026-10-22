@@ -238,6 +238,8 @@ function registerIpc() {
     if (kind === 'templates') {
       filters = [{ name: 'Word 模板', extensions: ['docx'] }];
       title = '选择 docx 模板';
+      // 一次只能添加一个模板。
+      properties = ['openFile'];
     } else if (kind === 'attachments') {
       filters = [
         {
