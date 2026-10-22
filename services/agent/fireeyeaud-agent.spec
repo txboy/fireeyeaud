@@ -11,8 +11,11 @@ hiddenimports = (
     + collect_submodules("pydantic")
     + collect_submodules("oracledb")
     + collect_submodules("access_parser")
+    # 归档（dulwich）：porcelain 子包按需导入，且带 C 扩展；排除 tests 以免打进测试资源。
+    + collect_submodules("dulwich", filter=lambda name: ".tests" not in name)
     # MCP 接入（Phase 9）：客户端与传输子模块按需导入，需显式收集。
-    + collect_submodules("mcp")
+    # 排除 mcp.cli：它依赖可选 extra（typer），sidecar 用不到。
+    + collect_submodules("mcp", filter=lambda name: not name.startswith("mcp.cli"))
 )
 
 a = Analysis(
