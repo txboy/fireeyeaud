@@ -352,3 +352,36 @@ def test_list_templates_sorted_defaults_first(tmp_path, monkeypatch):
     ]
     assert items[0]["id"] == first["id"]
     assert items[0]["isDefault"] is True
+
+
+def test_same_file_name_uploads_do_not_overwrite(tmp_path, monkeypatch):
+    """文件名用模板 id，两份同名 docx 都保留。"""
+    root = _env(tmp_path, monkeypatch)
+    d1 = tmp_path / "a"
+    d2 = tmp_path / "b"
+    d1.mkdir()
+    d2.mkdir()
+    one = upload_template(root, _docx(d1 / "同名.docx"), kind="report", scope="project")
+    two = upload_template(root, _docx(d2 / "同名.docx"), kind="report", scope="project")
+
+    assert one["id"] != two["id"]
+    assert one["fileName"] != two["fileName"]
+    assert template_path(root, one["id"], "project").is_file()
+    assert template_path(root, two["id"], "project").is_file()
+
+
+def test_no_template_counter_in_project_json(tmp_path, monkeypatch):
+    """模板计数走全局 `_counters.json`，不污染项目 project.json。"""
+    root = _env(tmp_path, monkeypatch)
+    import json
+
+    project = root / ".fireeye" / "project.json"
+    project.parent.mkdir(parents=True, exist_ok=True)
+    project.write_text(json.dumps({"counters": {"finding": 0}}), "utf-8")
+
+    upload_template(root, _docx(tmp_path / "p.docx"), kind="report", scope="project")
+
+    data = json.loads(project.read_text("utf-8"))
+    assert "template" not in json.dumps(data.get("counters", {}))
+    counters = tmp_path / "global" / "config" / "_counters.json"
+    assert "templates" in counters.read_text("utf-8")
