@@ -9,7 +9,7 @@ declare global {
       getAppInfo: () => Promise<AppInfo>;
       openFolder: () => Promise<string | null>;
       openFiles: (
-        kind?: 'tables' | 'attachments' | 'all' | 'database',
+        kind?: 'tables' | 'attachments' | 'all' | 'database' | 'templates',
         options?: { driver?: string },
       ) => Promise<string[]>;
       searchRun: (payload: {

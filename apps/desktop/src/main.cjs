@@ -235,7 +235,10 @@ function registerIpc() {
     let filters;
     let title;
     let properties = ['openFile', 'multiSelections'];
-    if (kind === 'attachments') {
+    if (kind === 'templates') {
+      filters = [{ name: 'Word 模板', extensions: ['docx'] }];
+      title = '选择 docx 模板';
+    } else if (kind === 'attachments') {
       filters = [
         {
           name: '支持的附件',

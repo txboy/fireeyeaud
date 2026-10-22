@@ -1128,6 +1128,145 @@ body {
   font-size: 11.5px;
 }
 
+/* ---- 模板中心 ---- */
+.tpl-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.tpl-hint {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.tpl-group {
+  margin-bottom: 18px;
+}
+
+.tpl-group__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.tpl-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 6px;
+  background: var(--panel-bg);
+}
+
+.tpl-row__top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.tpl-row__name {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tpl-row__actions {
+  display: flex;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+
+.tpl-row__check {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-3);
+  overflow-wrap: anywhere;
+}
+
+.tpl-row__check--ok {
+  color: var(--success);
+}
+
+.tpl-row__check--warn {
+  color: var(--warning);
+}
+
+.tpl-row__detail {
+  display: block;
+  color: var(--text-3);
+}
+
+.tpl-badge {
+  flex: 0 0 auto;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--hover);
+  color: var(--text-2);
+  font-size: 11px;
+}
+
+.tpl-badge--builtin {
+  background: var(--accent-weak);
+  color: var(--accent);
+}
+
+.tpl-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tpl-upload__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tpl-upload__label {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.tpl-upload__files {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 6px 8px;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--hover);
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+
+.tpl-upload__files li {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow-wrap: anywhere;
+}
+
+.tpl-preview {
+  max-height: 68vh;
+  overflow: auto;
+}
+
 .titlebar__btn {
   display: inline-flex;
   align-items: center;

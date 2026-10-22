@@ -4,6 +4,7 @@ import {
   Cpu,
   Database,
   FolderTree,
+  LayoutTemplate,
   Moon,
   Plug,
   Search,
@@ -32,6 +33,7 @@ const TOP_ITEMS: RailItem[] = [
   { view: 'skills', icon: Sparkles, labelKey: 'skills' },
   { view: 'rules', icon: ShieldCheck, labelKey: 'rules' },
   { view: 'models', icon: Cpu, labelKey: 'models' },
+  { view: 'templates', icon: LayoutTemplate, labelKey: 'templates' },
 ];
 
 export function ActivityRail() {
