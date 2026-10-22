@@ -39,6 +39,7 @@ def create_finding(
     params: dict[str, Any] | None = None,
     origin: str = "agent",
     evidenceRefs: list[str] | None = None,
+    author: str | None = None,
 ) -> dict[str, Any]:
     root = Path(root)
     fe = root / ".fireeye"
@@ -63,8 +64,68 @@ def create_finding(
         "dataRefs": dataRefs,
         "evidenceRefs": evidenceRefs or [],
         "sessionId": sessionId,
+        "author": author,
     }
     return append_event(findings_path(root), event)
+
+
+def delete_finding(
+    root: Path, finding_id: str, *, author: str | None = None
+) -> dict[str, Any] | None:
+    """软删除：追加 `deleted` 事件，折叠后从列表隐藏（历史与产物保留）。"""
+    root = Path(root)
+    if get_finding(root, finding_id) is None:
+        return None
+    return append_event(
+        findings_path(root),
+        {
+            "event": "deleted",
+            "id": finding_id,
+            "author": author,
+            "ts": now_iso(),
+        },
+    )
+
+
+def attach_evidence(
+    root: Path, finding_id: str, evidence_id: str, *, author: str | None = None
+) -> dict[str, Any] | None:
+    """把证据挂到疑点上（重复挂接由折叠去重；已删除疑点拒绝）。"""
+    root = Path(root)
+    if get_finding(root, finding_id) is None:
+        return None
+    return append_event(
+        findings_path(root),
+        {
+            "event": "evidence_attached",
+            "id": finding_id,
+            "evidenceId": evidence_id,
+            "author": author,
+            "ts": now_iso(),
+        },
+    )
+
+
+def detach_evidence(
+    root: Path, finding_id: str, evidence_id: str, *, author: str | None = None
+) -> dict[str, Any] | None:
+    """只解除疑点与证据的关联，不删除证据日志。"""
+    root = Path(root)
+    finding = get_finding(root, finding_id)
+    if finding is None:
+        return None
+    if evidence_id not in (finding.get("evidenceRefs") or []):
+        return None
+    return append_event(
+        findings_path(root),
+        {
+            "event": "evidence_detached",
+            "id": finding_id,
+            "evidenceId": evidence_id,
+            "author": author,
+            "ts": now_iso(),
+        },
+    )
 
 
 def review_finding(
@@ -128,11 +189,27 @@ def fold_findings(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 **event,
                 "notes": [],
                 "reviews": [],
+                "deleted": False,
                 "seq": event.get("seq"),
             }
             order.append(fid)
         elif fid in folded:
-            if kind == "status_changed":
+            if kind == "deleted":
+                folded[fid]["deleted"] = True
+                folded[fid]["deletedAt"] = event.get("ts")
+            elif kind == "evidence_attached":
+                refs = folded[fid].setdefault("evidenceRefs", [])
+                evidence_id = event.get("evidenceId")
+                if evidence_id and evidence_id not in refs:
+                    refs.append(evidence_id)
+            elif kind == "evidence_detached":
+                evidence_id = event.get("evidenceId")
+                folded[fid]["evidenceRefs"] = [
+                    ref
+                    for ref in (folded[fid].get("evidenceRefs") or [])
+                    if ref != evidence_id
+                ]
+            elif kind == "status_changed":
                 folded[fid]["status"] = event.get("status", folded[fid]["status"])
                 folded[fid].setdefault("reviews", []).append(
                     {
@@ -166,7 +243,11 @@ def fold_findings(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def load_findings(root: Path) -> list[dict[str, Any]]:
-    return fold_findings(read_events(findings_path(root)))
+    return [
+        item
+        for item in fold_findings(read_events(findings_path(root)))
+        if not item.get("deleted")
+    ]
 
 
 def get_finding(root: Path, finding_id: str) -> dict[str, Any] | None:

@@ -1,6 +1,13 @@
 import json
 
-from fireeyeaud_agent.store.findings import create_finding
+from fireeyeaud_agent.store.findings import (
+    attach_evidence,
+    create_finding,
+    delete_finding,
+    detach_evidence,
+    get_finding,
+    load_findings,
+)
 from fireeyeaud_agent.store.project import load_project
 
 
@@ -77,3 +84,66 @@ def test_create_rule_finding_links_evidence(tmp_path):
     assert rec["origin"] == "rule"
     assert rec["ruleKey"] == "tie_check"
     assert get_finding(root, rec["id"])["evidenceRefs"] == [ev["id"]]
+
+def test_manual_finding_create_and_soft_delete(tmp_path):
+    created = create_finding(
+        tmp_path,
+        title="手工疑点",
+        description="说明",
+        severity="high",
+        dataRefs=[],
+        sessionId="",
+        origin="manual",
+        author="张审计",
+    )
+    assert created["id"] == "F-0001"
+    assert created["origin"] == "manual"
+    assert created["author"] == "张审计"
+
+    items = load_findings(tmp_path)
+    assert [i["id"] for i in items] == ["F-0001"]
+    assert items[0]["deleted"] is False
+
+    deleted = delete_finding(tmp_path, "F-0001", author="张审计")
+    assert deleted is not None
+    assert deleted["event"] == "deleted"
+    assert load_findings(tmp_path) == []
+    assert get_finding(tmp_path, "F-0001") is None
+    assert delete_finding(tmp_path, "F-9999", author="张审计") is None
+
+
+def test_attach_and_detach_evidence(tmp_path):
+    create_finding(
+        tmp_path,
+        title="t",
+        description="d",
+        severity="high",
+        dataRefs=[],
+        sessionId="",
+        origin="manual",
+    )
+    attach_evidence(tmp_path, "F-0001", "ev_1", author="张审计")
+    attach_evidence(tmp_path, "F-0001", "ev_1", author="张审计")
+    assert get_finding(tmp_path, "F-0001")["evidenceRefs"] == ["ev_1"]
+
+    detach_evidence(tmp_path, "F-0001", "ev_1", author="张审计")
+    assert get_finding(tmp_path, "F-0001")["evidenceRefs"] == []
+
+    # 不存在的疑点/未挂接的证据 → 不写事件
+    assert attach_evidence(tmp_path, "F-9999", "ev_1") is None
+    assert detach_evidence(tmp_path, "F-0001", "ev_1") is None
+
+
+def test_deleted_finding_rejects_further_events(tmp_path):
+    create_finding(
+        tmp_path,
+        title="t",
+        description="d",
+        severity="high",
+        dataRefs=[],
+        sessionId="",
+        origin="manual",
+    )
+    delete_finding(tmp_path, "F-0001")
+    assert attach_evidence(tmp_path, "F-0001", "ev_1") is None
+    assert delete_finding(tmp_path, "F-0001") is None
