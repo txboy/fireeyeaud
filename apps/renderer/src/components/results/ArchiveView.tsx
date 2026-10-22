@@ -28,6 +28,7 @@ export function ArchiveView() {
   const loading = useArchiveStore((s) => s.loading);
   const errorKey = useArchiveStore((s) => s.errorKey);
   const load = useArchiveStore((s) => s.load);
+  const reset = useArchiveStore((s) => s.reset);
   const init = useArchiveStore((s) => s.init);
   const commit = useArchiveStore((s) => s.commit);
   const push = useArchiveStore((s) => s.push);
@@ -43,8 +44,10 @@ export function ArchiveView() {
   const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
-    if (wsPath) void load();
-  }, [load, wsPath]);
+    if (!wsPath) return;
+    reset();
+    void load();
+  }, [load, reset, wsPath]);
 
   if (!wsPath) {
     return (

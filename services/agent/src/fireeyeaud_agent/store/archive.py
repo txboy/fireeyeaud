@@ -94,7 +94,7 @@ def resolve_author(
     email = (
         (override or {}).get("email")
         or stored.get("authorEmail")
-        or "auditor@localhost"
+        or f"{getpass.getuser() or 'auditor'}@localhost"
     )
     return {"name": name or "auditor", "email": email}
 
