@@ -24,6 +24,7 @@ _ID_PREFIX = {
     "mcp": "mcp",
     "skills": "sk",
     "rules": "rule",
+    "templates": "tpl",
 }
 
 

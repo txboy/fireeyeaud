@@ -8,7 +8,8 @@ export type ActivityView =
   | 'mcp'
   | 'skills'
   | 'rules'
-  | 'models';
+  | 'models'
+  | 'templates';
 
 export type ThemeMode = 'light' | 'dark';
 
@@ -397,6 +398,36 @@ export interface DbQueryResult {
 }
 
 export type KbProviderType = 'dify' | 'ragflow';
+
+export type TemplateKind = 'evidence-form' | 'report';
+
+export interface TemplateCheck {
+  tags: string[];
+  loops: string[];
+  unknown: string[];
+  missing: string[];
+  /** 没有 unknown 且没有 missing。 */
+  ok: boolean;
+}
+
+export interface TemplateInfo {
+  id: string;
+  /** 与其他配置面板一致：global | project。 */
+  scope: ConfigScope;
+  kind: TemplateKind;
+  name: string;
+  fileName: string;
+  /** 模板文件绝对路径；全局模板位于项目目录外。 */
+  absPath: string;
+  size: number;
+  createdAt: string;
+  updatedAt?: string;
+  /** 同作用域、同 kind 内的默认模板。 */
+  isDefault: boolean;
+  /** 全局内置示例，不可删除，只能复制。 */
+  builtin?: boolean;
+  check: TemplateCheck;
+}
 
 export interface KbProviderDefaults {
   topK?: number;
