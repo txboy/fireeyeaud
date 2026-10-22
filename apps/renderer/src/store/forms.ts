@@ -18,7 +18,7 @@ interface FormsState {
   preview: (input: GenerateFormInput) => Promise<ArtifactPreview>;
   commit: (token: string, title?: string) => Promise<EvidenceFormManifest>;
   remove: (id: string) => Promise<void>;
-  attach: (id: string, path: string) => Promise<void>;
+  attach: (id: string, path: string, note?: string) => Promise<void>;
   clear: (id: string) => Promise<void>;
   reset: () => void;
 }
@@ -64,9 +64,9 @@ export const useFormsStore = create<FormsState>((set, get) => ({
     }
   },
 
-  attach: async (id, path) => {
+  attach: async (id, path, note) => {
     await withError(set, async () => {
-      await attachReceipt(id, path);
+      await attachReceipt(id, path, note);
       await get().load();
     });
   },

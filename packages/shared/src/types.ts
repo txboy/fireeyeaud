@@ -438,6 +438,8 @@ export interface ReceiptInfo {
   path: string;
   name: string;
   uploadedAt: string;
+  /** 回执内容 / 签收说明（可选，人工填写）。 */
+  note?: string | null;
 }
 
 export interface EvidenceFormManifest {

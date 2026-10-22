@@ -389,7 +389,9 @@ def _save_manifest(root: Path, manifest: dict[str, Any]) -> None:
     write_json_atomic(_manifest_path(root, str(manifest["id"])), manifest)
 
 
-def attach_receipt(root: Path, form_id: str, source: Path) -> dict[str, Any]:
+def attach_receipt(
+    root: Path, form_id: str, source: Path, note: str | None = None
+) -> dict[str, Any]:
     root = Path(root)
     manifest = get_evidence_form(root, form_id)
     source = Path(source)
@@ -421,6 +423,7 @@ def attach_receipt(root: Path, form_id: str, source: Path) -> dict[str, Any]:
             "path": _posix(target, root),
             "name": source.name,
             "uploadedAt": now_iso(),
+            "note": (note or "").strip() or None,
         }
         _save_manifest(root, manifest)
     return manifest

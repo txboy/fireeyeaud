@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, X } from 'lucide-react';
+import { FileCheck2, Plus, X } from 'lucide-react';
 import { FindingCard } from './FindingCard';
 import { NewFindingDialog } from './NewFindingDialog';
+import { GenerateFormDialog } from '../artifacts/GenerateFormDialog';
 import { useFindingsStore } from '../../store/findings';
 import { useWorkspaceStore } from '../../store/workspace';
 
 /** 疑点列表：统计、新建、多选、删除、详情。 */
 export function FindingsView() {
   const { t } = useTranslation('findings');
+  const { t: tform } = useTranslation('evidence-form');
   const { t: tc } = useTranslation('common');
   const { t: te } = useTranslation('error');
   const items = useFindingsStore((s) => s.items);
@@ -21,6 +23,7 @@ export function FindingsView() {
   const path = useWorkspaceStore((s) => s.path);
 
   const [creating, setCreating] = useState(false);
+  const [generatingForm, setGeneratingForm] = useState(false);
 
   useEffect(() => {
     void load();
@@ -53,6 +56,13 @@ export function FindingsView() {
       </div>
 
       <div className="findings-toolbar">
+        <button
+          type="button"
+          className="button button--sm button--ghost"
+          onClick={() => setGeneratingForm(true)}
+        >
+          <FileCheck2 size={12} strokeWidth={1.9} /> {tform('generate')}
+        </button>
         <button
           type="button"
           className="button button--sm"
@@ -100,6 +110,10 @@ export function FindingsView() {
       )}
 
       <NewFindingDialog open={creating} onClose={() => setCreating(false)} />
+      <GenerateFormDialog
+        open={generatingForm}
+        onClose={() => setGeneratingForm(false)}
+      />
     </>
   );
 }

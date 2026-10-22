@@ -480,6 +480,8 @@ export default {
     deleteConfirm: '删除取证单会同时删除其回执单，确定删除？',
     receipt: '回执单',
     receiptNone: '未上传回执',
+    receiptNote: '回执内容',
+    receiptNoteHint: '可选，例如签收人、签收日期、备注',
     uploadReceipt: '上传回执',
     receiptUploaded: '回执单已上传',
     replaceReceipt: '替换回执',

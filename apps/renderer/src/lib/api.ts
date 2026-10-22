@@ -1171,10 +1171,14 @@ export function deleteEvidenceForm(id: string): Promise<{ ok: boolean }> {
   return request<{ ok: boolean }>(`/evidence-forms/${id}`, { method: 'DELETE' });
 }
 
-export function attachReceipt(id: string, path: string): Promise<EvidenceFormManifest> {
+export function attachReceipt(
+  id: string,
+  path: string,
+  note?: string,
+): Promise<EvidenceFormManifest> {
   return request<EvidenceFormManifest>(`/evidence-forms/${id}/receipt`, {
     method: 'POST',
-    body: JSON.stringify({ path }),
+    body: JSON.stringify({ path, note }),
   });
 }
 

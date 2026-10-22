@@ -39,6 +39,8 @@ class CommitBody(BaseModel):
 
 class ReceiptBody(BaseModel):
     path: str
+    # 回执内容 / 签收说明（可选）
+    note: str | None = None
 
 
 @router.post("/evidence-forms/preview")
@@ -75,7 +77,9 @@ def remove(form_id: str) -> dict:
 
 @router.post("/evidence-forms/{form_id}/receipt")
 def attach(form_id: str, body: ReceiptBody) -> dict:
-    return evidence_forms.attach_receipt(_root(), form_id, Path(body.path))
+    return evidence_forms.attach_receipt(
+        _root(), form_id, Path(body.path), note=body.note
+    )
 
 
 @router.delete("/evidence-forms/{form_id}/receipt")

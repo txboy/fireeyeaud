@@ -243,8 +243,9 @@ def test_receipt_upload_replace_delete(tmp_path, monkeypatch):
 
     a = tmp_path / "客户签收.pdf"
     a.write_bytes(b"%PDF a")
-    updated = attach_receipt(tmp_path, form_id, a)
+    updated = attach_receipt(tmp_path, form_id, a, note="客户已签收")
     assert updated["receipt"]["name"] == "客户签收.pdf"
+    assert updated["receipt"]["note"] == "客户已签收"
     assert updated["receipt"]["path"] == f"回执单/{form_id}_客户签收.pdf"
     assert (tmp_path / "回执单" / f"{form_id}_客户签收.pdf").is_file()
 

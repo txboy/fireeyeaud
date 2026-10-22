@@ -27,10 +27,13 @@ export function ReceiptDialog({
   const openPreview = useUiStore((s) => s.openPreview);
   const confirm = useConfirmStore((s) => s.confirm);
   const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState('');
 
   useEffect(() => {
-    if (open) setBusy(false);
-  }, [open, form?.id]);
+    if (!open) return;
+    setBusy(false);
+    setNote(form?.receipt?.note ?? '');
+  }, [open, form?.id, form?.receipt?.note]);
 
   const receipt = form?.receipt ?? null;
 
@@ -41,7 +44,7 @@ export function ReceiptDialog({
       const [path] = await api.openFiles('receipts');
       if (!path) return;
       setBusy(true);
-      await attach(form.id, path);
+      await attach(form.id, path, note.trim() || undefined);
       void message.success(t('receiptUploaded'));
     } catch (err) {
       // store 已记录 errorKey（面板下方展示），这里再提示一次避免静默失败
@@ -94,6 +97,16 @@ export function ReceiptDialog({
       ]}
     >
       <div className="artifact-form">
+        <label className="field">
+          <span className="field__label">{t('receiptNote')}</span>
+          <textarea
+            className="searchbox"
+            rows={2}
+            value={note}
+            placeholder={t('receiptNoteHint')}
+            onChange={(event) => setNote(event.target.value)}
+          />
+        </label>
         {receipt ? (
           <>
             <div className="artifact-row__title">{receipt.name}</div>

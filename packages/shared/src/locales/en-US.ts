@@ -485,6 +485,8 @@ export default {
     deleteConfirm: 'Deleting the form also removes its receipt. Delete?',
     receipt: 'Receipt',
     receiptNone: 'No receipt',
+    receiptNote: 'Receipt note',
+    receiptNoteHint: 'Optional: signed by, date, remarks',
     uploadReceipt: 'Upload receipt',
     receiptUploaded: 'Receipt uploaded',
     replaceReceipt: 'Replace receipt',
