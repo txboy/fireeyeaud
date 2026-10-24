@@ -168,7 +168,9 @@ def attach_receipt(
     root: Path, form_id: str, source: Path, note: str | None = None
 ) -> dict[str, Any]:
     root = Path(root)
-    manifest = load_manifest(root, form_id)
+    # 先在锁外校验「这份取证单存在 + 文件可用」，锁内再重新读取 manifest 合并写回，
+    # 避免与章节写入并发时整对象覆盖（status / snapshot 会被回滚）。
+    load_manifest(root, form_id)
     source = Path(source)
     if not source.is_file():
         raise ApiError(
@@ -182,6 +184,7 @@ def attach_receipt(
         )
 
     with WORKSPACE_MUTATION_LOCK:
+        manifest = load_manifest(root, form_id)
         old = manifest.get("receipt") or {}
         if isinstance(old, dict) and old.get("path"):
             try:
@@ -206,8 +209,9 @@ def attach_receipt(
 
 def clear_receipt(root: Path, form_id: str) -> dict[str, Any]:
     root = Path(root)
-    manifest = load_manifest(root, form_id)
+    load_manifest(root, form_id)
     with WORKSPACE_MUTATION_LOCK:
+        manifest = load_manifest(root, form_id)
         receipt = manifest.get("receipt") or {}
         if isinstance(receipt, dict) and receipt.get("path"):
             try:

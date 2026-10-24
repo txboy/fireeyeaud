@@ -116,3 +116,58 @@ def test_migration_leaves_untouched_when_nothing_to_do(tmp_path):
     assert result["removedForms"] == []
     marker = json.loads((root / ".fireeye" / "migrations.json").read_text("utf-8"))
     assert marker["evidenceFormWorkspace"] == 1
+
+def test_migration_keeps_non_form_directories(tmp_path):
+    """非 QZ 目录、或 kind 不是取证单的目录，不应当被当旧数据删掉。"""
+    root = _root(tmp_path)
+    stray = evidence_forms.forms_dir(root) / "scratch"
+    stray.mkdir(parents=True)
+    (stray / "manifest.json").write_text(
+        json.dumps({"id": "../etc", "kind": "evidence-form", "files": ["manifest.json"]}),
+        "utf-8",
+    )
+    wrong_kind = evidence_forms.forms_dir(root) / "QZ-0009"
+    wrong_kind.mkdir(parents=True)
+    (wrong_kind / "manifest.json").write_text(
+        json.dumps({"id": "QZ-0009", "kind": "reports", "files": ["document.docx"]}),
+        "utf-8",
+    )
+
+    result = migrate.migrate_evidence_form_workspace(root)
+
+    assert result["removedForms"] == []
+    assert stray.is_dir()
+    assert wrong_kind.is_dir()
+
+
+def test_migration_keeps_counter_when_nothing_removed(tmp_path):
+    """没有旧取证单可清时，不得把计数器打回 0（否则新编号会退回 QZ-0001）。"""
+    root = _root(tmp_path)
+    new_dir = evidence_forms.forms_dir(root) / "QZ-0007"
+    new_dir.mkdir(parents=True)
+    (new_dir / "body.json").write_text("{}", "utf-8")
+    (new_dir / "manifest.json").write_text(
+        json.dumps(
+            {"id": "QZ-0007", "kind": "evidence-form", "files": ["body.json"]}
+        ),
+        "utf-8",
+    )
+
+    migrate.migrate_evidence_form_workspace(root)
+
+    project = json.loads((root / ".fireeye" / "project.json").read_text("utf-8"))
+    assert project["counters"]["evidenceForm"] == 7
+    assert evidence_forms.next_form_id(root) == "QZ-0008"
+
+
+def test_migration_drops_stale_document_from_reports(tmp_path):
+    """迁移后旧 docx 与正文已不一致，必须从 files 中摘掉，避免下载到旧版本。"""
+    root = _root(tmp_path)
+    _legacy_form(root, "QZ-0001")
+    report_dir = _report(root, "RPT-0001", ["QZ-0001"], 1)
+
+    migrate.migrate_evidence_form_workspace(root)
+
+    manifest = json.loads((report_dir / "manifest.json").read_text("utf-8"))
+    assert "document.docx" not in manifest["files"]
+    assert manifest["status"] == "draft"

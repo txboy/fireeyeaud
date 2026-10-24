@@ -25,6 +25,7 @@ export function ReportsPanel() {
   const loadForms = useFormsStore((s) => s.load);
   const wsPath = useWorkspaceStore((s) => s.path);
   const openReport = useUiStore((s) => s.openReport);
+  const openPreview = useUiStore((s) => s.openPreview);
   const openEvidenceForm = useUiStore((s) => s.openEvidenceForm);
   const closeRightTab = useUiStore((s) => s.closeRightTab);
   const confirm = useConfirmStore((s) => s.confirm);
@@ -45,8 +46,21 @@ export function ReportsPanel() {
     );
   }
 
+  const isWorkspaceReport = (report: ReportManifest) =>
+    report.status === 'draft' || report.files.includes('body.json');
+
+  /** 旧报告（无 body.json）没有结构化正文，只能看已导出的 docx。 */
+  const previewDocx = (report: ReportManifest) => {
+    void openPreview(
+      wsPath,
+      `${wsPath}/${report.artifactRef}/document.docx`,
+      `${report.id}.docx`,
+    );
+  };
+
   const open = (report: ReportManifest) => {
-    void openReport(report.id, report.title);
+    if (isWorkspaceReport(report)) void openReport(report.id, report.title);
+    else previewDocx(report);
   };
 
   const del = async (report: ReportManifest) => {

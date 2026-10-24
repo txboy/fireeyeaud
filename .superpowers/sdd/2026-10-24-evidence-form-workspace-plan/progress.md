@@ -49,3 +49,11 @@ Task 13: complete (tests: npm test -w @fireeyeaud/renderer -> 73 passed; rendere
 Task 14: Ruling: ¼Æ»®Ö»Ð´¡¸É¾³ý¾É×é¼þ¡¹£¬Êµ¼Ê»¹·¢ÏÖ¾É±¨¸æäÖÈ¾Á´Â·£¨GenerateReportDialog / ±¨¸æ¾É /reports/preview + commit + reports.build_report_context / test_reports.py£©ÒÑÎÞÈë¿Ú ¡ª È«²¿É¾³ý£¬test_report_workspace_api µÄÈ¡Ö¤µ¥¼Ð¾ß¸ÄÎªÐÂ¸ñÊ½ ¡ª cost if wrong: ±¨¸æÐ´×÷Ì¨ÈÔ¿Éµ¼³ö£¬Ö»ÊÇÉÙÁËÒ»ÌõÎÞÈËµ÷ÓÃµÄ¾ÉÂ·¾¶
 Task 14: complete (tests: pytest 625 passed/1 skipped + archive 26 passed; renderer:typecheck/build ok; renderer tests 73; desktop:test 62)
 Task 15: complete (pytest 625 passed/1 skipped + archive 26; renderer typecheck/build ok; renderer tests 73; desktop:test 62; README/Éè¼ÆÎÄµµÒÑ¸üÐÂ)
+Final review: dispatched independent reviewer (fresh context) on main...HEAD.
+Final: fixed C3 old reports without body.json opened a dead workspace â€” test: none (UI branch) â€” ReportsPanel falls back to docx preview again
+Final: Ruling: C1 (clear_body breaks document.save) â€” reproduced: saving after clear_body with a header-bearing template succeeds, header part untouched; reviewer's reproduction did not hold â€” cost if wrong: templates with headers/footnotes lose parts
+Final: Ruling: I3 (outline reorder shifts section content) â€” reproduced: content stays with its section id after reorder â€” cost if wrong: model/user edits land in the wrong section
+Final: fixed I1 migration too broad + counter reset â€” tests: test_migration_keeps_non_form_directories / test_migration_keeps_counter_when_nothing_removed RED->GREEN
+Final: fixed I4 stale document.docx after migration â€” test: test_migration_drops_stale_document_from_reports RED->GREEN
+Final: fixed I5 receipt read-modify-write race â€” test: test_receipt_write_does_not_clobber_concurrent_section_save RED->GREEN
+Final: minor (deferred): M1 next_form_id unbounded loop; M2 title error key reuses outlineEmpty; M3 _dir defensive validation; M5 path join separators; M7 docx_render/test_docx_render now unused; M9 trailing newline
