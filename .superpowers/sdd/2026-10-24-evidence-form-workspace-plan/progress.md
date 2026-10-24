@@ -37,3 +37,5 @@ Task 8: complete (tests: pytest tests/test_evidence_forms_api.py -> 4 passed; 旧
 Task 9: complete (tests: pytest test_form_migration + test_workspaces + test_evidence_forms_api -> 13 passed)
 Task 10: Ruling: archive._counts 在 Task 1 后已指向新 store，补的测试首次即绿（锁定行为，非新代码） — 保留测试 — cost if wrong: 无，纯回归护栏
 Task 10: complete (tests: pytest tests/test_archive_store.py -> 13 passed)
+Task 11: Ruling: worktree 无 node_modules，node_modules 为指向主仓库的 junction；tsconfig 的 @fireeyeaud/shared 解析到主仓库旧源码 — 用 skip-worktree 临时给 tsconfig 加 paths 指向本 worktree 的 packages/shared，不提交 — cost if wrong: 只影响本地类型检查，提交树干净
+Task 11: complete (tests: npm run renderer:typecheck -> 仅剩旧组件 GenerateFormDialog 报错，Task 13/14 删除)

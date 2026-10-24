@@ -1,13 +1,12 @@
 import { create } from 'zustand';
-import type { ArtifactPreview, EvidenceFormManifest } from '@fireeyeaud/shared';
+import type { EvidenceFormDocument, EvidenceFormManifest } from '@fireeyeaud/shared';
 import {
   attachReceipt,
   clearReceipt,
-  commitEvidenceForm,
+  createFormDraft,
   deleteEvidenceForm,
   listEvidenceForms,
-  previewEvidenceForm,
-  type GenerateFormInput,
+  type CreateFormDraftInput,
 } from '../lib/api';
 
 interface FormsState {
@@ -15,8 +14,7 @@ interface FormsState {
   loading: boolean;
   errorKey: string | null;
   load: () => Promise<void>;
-  preview: (input: GenerateFormInput) => Promise<ArtifactPreview>;
-  commit: (token: string, title?: string) => Promise<EvidenceFormManifest>;
+  create: (input: CreateFormDraftInput) => Promise<EvidenceFormDocument>;
   remove: (id: string) => Promise<void>;
   attach: (id: string, path: string, note?: string) => Promise<void>;
   clear: (id: string) => Promise<void>;
@@ -27,7 +25,7 @@ function messageKey(err: unknown): string {
   return (err as { messageKey?: string }).messageKey ?? 'error.internal';
 }
 
-/** 取证单列表：预览与保存分开，保存成功后才刷新列表。 */
+/** 取证单列表：新建即进入写作台（草稿），导出后才生成 document.docx。 */
 export const useFormsStore = create<FormsState>((set, get) => ({
   items: [],
   loading: false,
@@ -43,15 +41,10 @@ export const useFormsStore = create<FormsState>((set, get) => ({
     }
   },
 
-  preview: async (input) => {
-    const preview = await previewEvidenceForm(input);
-    return preview;
-  },
-
-  commit: async (token, title) => {
-    const manifest = await commitEvidenceForm(token, title);
+  create: async (input) => {
+    const doc = await createFormDraft(input);
     await get().load();
-    return manifest;
+    return doc;
   },
 
   remove: async (id) => {
