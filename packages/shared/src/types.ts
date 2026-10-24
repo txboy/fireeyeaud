@@ -728,19 +728,6 @@ export interface ArchiveConflictCheck {
 
 export type TemplateKind = 'evidence-form' | 'report';
 
-export interface TemplateCheck {
-  tags: string[];
-  loops: string[];
-  unknown: string[];
-  missing: string[];
-  /** 有开始标记但没有结束标记的循环（P3 渲染会失败）。 */
-  unclosed?: string[];
-  /** unclosed 为空。 */
-  balanced?: boolean;
-  /** 没有 unknown 且没有 missing。 */
-  ok: boolean;
-}
-
 export interface TemplateInfo {
   id: string;
   /** 与其他配置面板一致：global | project。 */
@@ -757,7 +744,6 @@ export interface TemplateInfo {
   isDefault: boolean;
   /** 全局内置示例，不可删除，只能复制。 */
   builtin?: boolean;
-  check: TemplateCheck;
 }
 
 export interface KbProviderDefaults {

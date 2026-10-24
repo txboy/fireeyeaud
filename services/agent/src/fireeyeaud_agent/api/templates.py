@@ -118,7 +118,7 @@ def inspect(body: InspectBody) -> dict:
         raise ApiError(
             "E_FILE_TOO_LARGE", 400, "error.fileTooLarge", {"name": path.name}
         )
-    check = templates_store.scan_docx(path, body.kind)  # 校验后缀 / 可解析
+    templates_store.scan_docx(path, body.kind)  # 校验后缀 / 可解析
     size = path.stat().st_size
     data = path.read_bytes()
     return {
@@ -130,7 +130,6 @@ def inspect(body: InspectBody) -> dict:
         "path": str(path),
         "name": path.stem,
         "fileName": path.name,
-        "check": check,
     }
 
 

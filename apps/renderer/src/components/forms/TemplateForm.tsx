@@ -4,7 +4,6 @@ import { Checkbox, Radio } from 'antd';
 import { FilePlus2, Upload } from 'lucide-react';
 import type {
   ConfigScope,
-  TemplateCheck,
   TemplateInfo,
   TemplateKind,
 } from '@fireeyeaud/shared';
@@ -88,7 +87,6 @@ export function TemplateForm({
   const [errorKey, setErrorKey] = useState<string | null>(null);
 
   const [preview, setPreview] = useState<{ data: string; mime: string } | null>(null);
-  const [check, setCheck] = useState<TemplateCheck | null>(entity?.check ?? null);
   /** 编辑时选中的新文件（保存时覆盖原模板文件）。 */
   const [replacement, setReplacement] = useState('');
 
@@ -129,7 +127,6 @@ export function TemplateForm({
       setErrorKey(null);
       const info: TemplateInspectResult = await inspectTemplateFile(path, form.kind);
       setPreview({ data: info.data, mime: info.mime });
-      setCheck(info.check);
       if (mode === 'replace') {
         setReplacement(path);
         return;
@@ -271,16 +268,6 @@ export function TemplateForm({
         <div className="tpl-form__preview-head">
           <span className="card__meta">{t('preview')}</span>
           <span className="spacer" />
-          {check && (
-            <span className="tpl-row__check tpl-row__check--ok">
-              {t('referenceTemplate')}
-              {check.tags.length > 0
-                ? ` · ${t('templateFields', { count: check.tags.length })}`
-                : ` · ${t('templateNoFields')}`}
-              {check.loops.length > 0 &&
-                ` · ${t('templateLoops', { count: check.loops.length })}`}
-            </span>
-          )}
         </div>
         {preview ? (
           <div className="tpl-form__pages">
