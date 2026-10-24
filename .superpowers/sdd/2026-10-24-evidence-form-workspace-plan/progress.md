@@ -32,3 +32,4 @@ Task 4: complete (tests: pytest tests/test_form_docs.py -> 6 passed)
 Task 5: complete (tests: pytest tests/test_form_verify.py -> 7 passed)
 Task 6: Ruling: export_form 与 Task 4 一并写好，测试首次运行即绿 — 用变异验证测试有效性：去掉校验守卫→test_export_blocks_when_verification_fails FAIL；改标题对齐→样式测试 FAIL；恢复后 16 passed — cost if wrong: 无（变异已证明测试能抓）
 Task 6: complete (tests: pytest tests/test_form_export.py tests/test_form_docs.py tests/test_form_verify.py -> 16 passed)
+Task 7: complete (tests: pytest test_form_agent + test_report_agent_tools + test_report_docs -> 25 passed)
