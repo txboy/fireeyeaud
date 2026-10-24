@@ -161,6 +161,30 @@ def _mode_size(paragraphs: list[Any]) -> float | None:
     return max(counts.items(), key=lambda item: item[1])[0]
 
 
+def template_text(path: Path) -> dict[str, Any]:
+    """整份模板原文（段落 + 表格，按文档顺序），作为给模型看的参考范本。"""
+    from docx.table import Table
+
+    document = Document(str(Path(path)))
+    blocks: list[dict[str, Any]] = []
+    for element in document.element.body.iterchildren():
+        if element.tag.endswith("}p"):
+            text = "".join(node.text or "" for node in element.iter(qn("w:t")))
+            if text.strip():
+                blocks.append({"kind": "paragraph", "text": text})
+        elif element.tag.endswith("}tbl"):
+            table = Table(element, document)
+            rows = [
+                [
+                    "".join(node.text or "" for node in cell._tc.iter(qn("w:t")))
+                    for cell in row.cells
+                ]
+                for row in table.rows
+            ]
+            blocks.append({"kind": "table", "rows": rows})
+    return {"blocks": blocks}
+
+
 def analyze_template(path: Path) -> dict[str, Any]:
     path = Path(path)
     if not path.is_file():
@@ -294,6 +318,7 @@ def analyze_template(path: Path) -> dict[str, Any]:
         "sections": sections,
         "tables": tables,
         "preamble": preamble,
+        "templateText": template_text(path),
         "warnings": warnings,
         "confidence": confidence,
     }
