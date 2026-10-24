@@ -11,7 +11,8 @@ export type ActivityView =
   | 'models'
   | 'templates'
   | 'reports'
-  | 'evidenceForms';
+  | 'evidenceForms'
+  | 'archive';
 
 export type ThemeMode = 'light' | 'dark';
 

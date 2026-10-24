@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import {
+  Archive,
   BookOpen,
   Cpu,
   Database,
@@ -38,6 +39,7 @@ const TOP_ITEMS: RailItem[] = [
   { view: 'templates', icon: LayoutTemplate, labelKey: 'templates' },
   { view: 'reports', icon: FileCheck2, labelKey: 'reports' },
   { view: 'evidenceForms', icon: FileText, labelKey: 'evidenceForms' },
+  { view: 'archive', icon: Archive, labelKey: 'archive' },
 ];
 
 export function ActivityRail() {

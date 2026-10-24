@@ -7,8 +7,6 @@ import type {
   TemplateKind,
 } from '@fireeyeaud/shared';
 
-export type ResultsTab = 'findings' | 'archive';
-
 /** 右侧区「会话」tab（对话栏 + 成果栏一体），每个会话一个。 */
 export interface SessionTab {
   id: string;
@@ -128,6 +126,26 @@ export interface EvidenceFormTab {
   name: string;
 }
 
+/** 右侧区「差异与冲突」tab（全局单例：始终反映当前工作区与远程的差异）。 */
+export interface ArchiveDiffTab {
+  id: 'archiveDiff';
+  kind: 'archiveDiff';
+}
+
+/** 右侧区「变更文件」tab（每个归档一个，列出该归档包含的文件）。 */
+export interface ArchiveChangesTab {
+  id: string;
+  kind: 'archiveChanges';
+  archiveId: string;
+  name: string;
+}
+
+/** 右侧区「远程设置」tab（全局单例，归档远程仓库与操作人配置）。 */
+export interface ArchiveRemoteTab {
+  id: 'archiveRemote';
+  kind: 'archiveRemote';
+}
+
 export type RightTab =
   | SessionTab
   | PreviewTab
@@ -139,7 +157,10 @@ export type RightTab =
   | KbBrowseTab
   | KbQueryTab
   | ReportTab
-  | EvidenceFormTab;
+  | EvidenceFormTab
+  | ArchiveDiffTab
+  | ArchiveChangesTab
+  | ArchiveRemoteTab;
 
 /**
  * 离开当前右侧 tab 前的守卫（用于未保存确认）。
@@ -157,12 +178,10 @@ export function setLeaveGuard(guard: LeaveGuard | null): void {
 interface UiState {
   activeView: ActivityView;
   sidebarOpen: boolean;
-  resultsTab: ResultsTab;
   selectedFindingId: string | null;
   rightTabs: RightTab[];
   activeRightTabId: string;
   setActiveView: (view: ActivityView) => void;
-  setResultsTab: (tab: ResultsTab) => void;
   setSelectedFindingId: (id: string | null) => void;
   openPreview: (
     root: string,
@@ -183,6 +202,9 @@ interface UiState {
   openSession: (sessionId: string) => Promise<void>;
   openReport: (reportId: string, name: string) => Promise<void>;
   openEvidenceForm: (formId: string, name: string) => Promise<void>;
+  openArchiveDiff: () => Promise<void>;
+  openArchiveChanges: (archiveId: string, name: string) => Promise<void>;
+  openArchiveRemote: () => Promise<void>;
   openSettings: () => Promise<void>;
   openRuleRun: (ruleId: string, name: string) => Promise<void>;
   openDbSchema: (input: {
@@ -224,7 +246,6 @@ export const useUiStore = create<UiState>((set, get) => {
   return {
     activeView: 'explorer',
     sidebarOpen: true,
-    resultsTab: 'findings',
     selectedFindingId: null,
     rightTabs: [],
     activeRightTabId: '',
@@ -234,7 +255,6 @@ export const useUiStore = create<UiState>((set, get) => {
         activeView: view,
         sidebarOpen: state.activeView === view ? !state.sidebarOpen : true,
       })),
-    setResultsTab: (tab) => set({ resultsTab: tab }),
     setSelectedFindingId: (id) => set({ selectedFindingId: id }),
 
     openPreview: async (root, absPath, name, target) => {
@@ -316,6 +336,39 @@ export const useUiStore = create<UiState>((set, get) => {
           ? state.rightTabs.map((item) => (item.id === id ? tab : item))
           : [...state.rightTabs, tab];
         return { rightTabs, activeRightTabId: id };
+      });
+    },
+
+    openArchiveDiff: async () => {
+      const tab: ArchiveDiffTab = { id: 'archiveDiff', kind: 'archiveDiff' };
+      if (!(await allowLeave(tab.id))) return;
+      set((state) => {
+        const exists = state.rightTabs.some((t) => t.id === tab.id);
+        const rightTabs = exists ? state.rightTabs : [...state.rightTabs, tab];
+        return { rightTabs, activeRightTabId: tab.id };
+      });
+    },
+
+    openArchiveChanges: async (archiveId, name) => {
+      const id = `archiveChanges:${archiveId}`;
+      if (!(await allowLeave(id))) return;
+      const tab: ArchiveChangesTab = { id, kind: 'archiveChanges', archiveId, name };
+      set((state) => {
+        const exists = state.rightTabs.some((t) => t.id === id);
+        const rightTabs = exists
+          ? state.rightTabs.map((t) => (t.id === id ? tab : t))
+          : [...state.rightTabs, tab];
+        return { rightTabs, activeRightTabId: id };
+      });
+    },
+
+    openArchiveRemote: async () => {
+      const tab: ArchiveRemoteTab = { id: 'archiveRemote', kind: 'archiveRemote' };
+      if (!(await allowLeave(tab.id))) return;
+      set((state) => {
+        const exists = state.rightTabs.some((t) => t.id === tab.id);
+        const rightTabs = exists ? state.rightTabs : [...state.rightTabs, tab];
+        return { rightTabs, activeRightTabId: tab.id };
       });
     },
 

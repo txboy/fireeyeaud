@@ -12,6 +12,7 @@ import { RulesPanel } from './panels/RulesPanel';
 import { TemplatesPanel } from './panels/TemplatesPanel';
 import { ReportsPanel } from './reports/ReportsPanel';
 import { EvidenceFormsPanel } from './forms/EvidenceFormsPanel';
+import { ArchivePanel } from './archive/ArchivePanel';
 import { PlaceholderPanel } from './panels/PlaceholderPanel';
 
 interface HeadMeta {
@@ -38,6 +39,7 @@ const HEAD: Record<ActivityView, HeadMeta> = {
   },
   reports: { titleNs: 'report', titleKey: 'title' },
   evidenceForms: { titleNs: 'evidence-form', titleKey: 'title' },
+  archive: { titleNs: 'archive', titleKey: 'title' },
 };
 
 function PanelBody({ view }: { view: ActivityView }) {
@@ -64,6 +66,8 @@ function PanelBody({ view }: { view: ActivityView }) {
       return <ReportsPanel />;
     case 'evidenceForms':
       return <EvidenceFormsPanel />;
+    case 'archive':
+      return <ArchivePanel />;
     default:
       return <PlaceholderPanel />;
   }
@@ -88,7 +92,9 @@ export function SideBar() {
         </div>
       </div>
       <div
-        className={`sidebar__body${activeView === 'reports' || activeView === 'evidenceForms' ? ' sidebar__body--reports' : ''}`}
+        className={`sidebar__body${activeView === 'reports' ||
+        activeView === 'evidenceForms' ||
+        activeView === 'archive' ? ' sidebar__body--reports' : ''}`}
       >
         <PanelBody view={activeView} />
       </div>

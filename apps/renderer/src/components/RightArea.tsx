@@ -1,9 +1,12 @@
 import { useTranslation } from 'react-i18next';
 import {
+  Archive,
   BookOpen,
   Database,
   File as FileIcon,
   FileCheck2,
+  FileDiff,
+  GitCompareArrows,
   MessageSquare,
   Play,
   Search,
@@ -13,6 +16,7 @@ import {
 } from 'lucide-react';
 import {
   useUiStore,
+  type ArchiveChangesTab,
   type DbDataTab,
   type DbSchemaTab,
   type EvidenceFormTab,
@@ -38,6 +42,9 @@ import { KbBrowseView } from './KbBrowseView';
 import { KbQueryView } from './KbQueryView';
 import { SettingsPanel } from './panels/SettingsPanel';
 import { ReportWorkspace } from './reports/ReportWorkspace';
+import { ArchiveDiffTab } from './archive/ArchiveDiffTab';
+import { ArchiveChangesTab as ArchiveChangesTabView } from './archive/ArchiveChangesTab';
+import { ArchiveRemoteTab } from './archive/ArchiveRemoteTab';
 import { WorkspaceShell } from './workspace/WorkspaceShell';
 import { FORM_DOMAIN_ICON, useFormTitle } from './forms/meta';
 
@@ -61,6 +68,7 @@ export function RightArea() {
   const { t: te } = useTranslation('explorer');
   const { t: ts } = useTranslation('settings');
   const formTitle = useFormTitle();
+  const ta = useTranslation('archive').t;
   const tabs = useUiStore((s) => s.rightTabs);
   const activeId = useUiStore((s) => s.activeRightTabId);
   const activate = useUiStore((s) => s.activateRightTab);
@@ -83,6 +91,10 @@ export function RightArea() {
           ? formTitle(tab)
           : tab.kind === 'settings'
             ? ts('title')
+            : tab.kind === 'archiveDiff'
+              ? ta('diffTitle')
+              : tab.kind === 'archiveRemote'
+                ? ta('settings')
             : tab.kind === 'dbData'
               ? `${tab.name} / ${tab.table.table}`
               : tab.kind === 'kbQuery' && tab.knowledgeName
@@ -109,7 +121,13 @@ export function RightArea() {
                   ? FORM_DOMAIN_ICON[tab.domain]
                   : tab.kind === 'settings'
                     ? Settings
-                    : tab.kind === 'ruleRun'
+                    : tab.kind === 'archiveDiff'
+                      ? GitCompareArrows
+                      : tab.kind === 'archiveChanges'
+                        ? FileDiff
+                        : tab.kind === 'archiveRemote'
+                          ? Archive
+                          : tab.kind === 'ruleRun'
                       ? Play
                       : tab.kind === 'dbSchema'
                         ? Database
@@ -177,6 +195,38 @@ export function RightArea() {
           <KbBrowseView key={active.id} tab={active as KbBrowseTab} />
         ) : active.kind === 'kbQuery' ? (
           <KbQueryView key={active.id} tab={active as KbQueryTab} />
+        ) : active.kind === 'archiveDiff' ? (
+          <div className="formtab">
+            <div className="formtab__head">
+              <GitCompareArrows size={14} strokeWidth={1.75} />
+              <span className="formtab__title">{ta('diffTitle')}</span>
+            </div>
+            <div className="formtab__body">
+              <ArchiveDiffTab />
+            </div>
+          </div>
+        ) : active.kind === 'archiveChanges' ? (
+          <div className="formtab">
+            <div className="formtab__head">
+              <FileDiff size={14} strokeWidth={1.75} />
+              <span className="formtab__title">
+                {ta('changes')} · {(active as ArchiveChangesTab).name}
+              </span>
+            </div>
+            <div className="formtab__body">
+              <ArchiveChangesTabView archiveId={(active as ArchiveChangesTab).archiveId} />
+            </div>
+          </div>
+        ) : active.kind === 'archiveRemote' ? (
+          <div className="formtab">
+            <div className="formtab__head">
+              <Archive size={14} strokeWidth={1.75} />
+              <span className="formtab__title">{ta('settings')}</span>
+            </div>
+            <div className="formtab__body">
+              <ArchiveRemoteTab />
+            </div>
+          </div>
         ) : active.kind === 'settings' ? (
           <div className="formtab">
             <div className="formtab__head">
