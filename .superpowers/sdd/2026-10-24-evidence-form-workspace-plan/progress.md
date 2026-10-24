@@ -27,3 +27,5 @@ Task 1: Ruling: æ—§æ¸²æŸ“é“¾è·¯çš„æµ‹è¯• `tests/test_reports.py`ï¼ˆæ—§æŠ¥å‘Š pre
   cost if wrong: è‹¥ Task 8/14 æ¼åšï¼ŒCI ä¼šä¸€ç›´çº¢ï¼Œä¸ä¼šé™é»˜ã€‚
 Task 1: complete (tests: pytest tests/test_evidence_forms.py â†’ 5 passed)Task 2: complete (tests: pytest tests/test_report_skeleton.py tests/test_report_docs.py -> 22 passed)
 Task 3: complete (tests: pytest test_report_docs + test_report_workspace_api + test_report_agent_tools -> 24 passed, same as baseline)
+Task 4: Ruling: ²âÊÔÔ­¶ÏÑÔÄ¬ÈÏÈı½Ú´ó¸Ù£¬µ«¼Ğ¾ßÄ£°å×Ô´øÁ½¸ö±êÌâÑùÊ½£¬°´ spec Ó¦È¡Ä£°å´ó¸Ù ¡ª ¸Ä¶ÏÑÔÎªÁ½½Ú ¡ª cost if wrong: ½ö²âÊÔÆÚÍû´íÎó
+Task 4: complete (tests: pytest tests/test_form_docs.py -> 6 passed)
