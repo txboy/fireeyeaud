@@ -13,6 +13,8 @@ import type {
   DbDriver,
   DbQueryResult,
   DbTableSchema,
+  EvidenceFormBody,
+  EvidenceFormDocument,
   EvidenceFormManifest,
   EvidenceItem,
   Finding,
@@ -1144,30 +1146,89 @@ export function getTemplateContent(
   return request<FsFileContent>(`/templates/${id}/content?scope=${scope}`);
 }
 
-// ---- 取证单与项目报告（P3） ----
+// ---- 取证单写作台 ----
 
-export interface GenerateFormInput {
+export interface CreateFormDraftInput {
   templateId: string;
   templateScope: ConfigScope;
   findingIds: string[];
-  header: Record<string, string>;
+  header?: Record<string, string>;
+  title?: string;
 }
 
-export function previewEvidenceForm(input: GenerateFormInput): Promise<ArtifactPreview> {
-  return request<ArtifactPreview>('/evidence-forms/preview', {
+export function createFormDraft(input: CreateFormDraftInput): Promise<EvidenceFormDocument> {
+  return request<EvidenceFormDocument>('/evidence-forms/drafts', {
     method: 'POST',
     body: JSON.stringify(input),
   });
 }
 
-export function commitEvidenceForm(
-  token: string,
+export function getFormDocument(id: string): Promise<EvidenceFormDocument> {
+  return request<EvidenceFormDocument>(`/evidence-forms/${id}/doc`);
+}
+
+export function setFormOutline(
+  id: string,
+  sections: Array<{ id?: string; title: string; level?: number; goal?: string }>,
+  approved: boolean,
+): Promise<EvidenceFormBody> {
+  return request<EvidenceFormBody>(`/evidence-forms/${id}/outline`, {
+    method: 'PUT',
+    body: JSON.stringify({ sections, approved }),
+  });
+}
+
+export function writeFormSection(
+  id: string,
+  sectionId: string,
+  blocks: ReportBlock[],
+): Promise<ReportSection> {
+  return request<ReportSection>(`/evidence-forms/${id}/sections/${sectionId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ blocks }),
+  });
+}
+
+export function setFormTitle(id: string, title: string): Promise<EvidenceFormBody> {
+  return request<EvidenceFormBody>(`/evidence-forms/${id}/title`, {
+    method: 'PUT',
+    body: JSON.stringify({ title }),
+  });
+}
+
+export function setFormFindings(id: string, findingIds: string[]): Promise<EvidenceFormBody> {
+  return request<EvidenceFormBody>(`/evidence-forms/${id}/findings`, {
+    method: 'PUT',
+    body: JSON.stringify({ findingIds }),
+  });
+}
+
+export function verifyFormDocument(id: string): Promise<ReportVerifyResult> {
+  return request<ReportVerifyResult>(`/evidence-forms/${id}/verify`, { method: 'POST' });
+}
+
+export function exportFormDocument(
+  id: string,
   title?: string,
 ): Promise<EvidenceFormManifest> {
-  return request<EvidenceFormManifest>('/evidence-forms', {
+  return request<EvidenceFormManifest>(`/evidence-forms/${id}/export`, {
     method: 'POST',
-    body: JSON.stringify({ token, title }),
+    body: JSON.stringify({ title }),
   });
+}
+
+export function listFormMessages(id: string): Promise<{ items: ReportChatEntry[] }> {
+  return request<{ items: ReportChatEntry[] }>(`/evidence-forms/${id}/messages`);
+}
+
+/** 取证单写作对话流：POST + SSE，逐事件回调。 */
+export async function streamFormChat(
+  id: string,
+  input: { message: string; locale?: string; modelId?: string },
+  onEvent: (event: ReportStreamEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  await streamDocChat(`/evidence-forms/${id}/chat`, input, onEvent, signal);
 }
 
 export function listEvidenceForms(): Promise<{ items: EvidenceFormManifest[] }> {
@@ -1308,14 +1369,14 @@ export interface ReportStreamEvent {
   data: Record<string, unknown>;
 }
 
-/** 报告对话流：POST + SSE，逐事件回调。 */
-export async function streamReportChat(
-  id: string,
+/** 写作台对话流：POST + SSE，逐事件回调（报告与取证单共用）。 */
+async function streamDocChat(
+  path: string,
   input: { message: string; locale?: string; modelId?: string },
   onEvent: (event: ReportStreamEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
-  const res = await safeFetch(`${baseUrl()}/reports/${id}/chat`, {
+  const res = await safeFetch(`${baseUrl()}${path}`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(input),
@@ -1337,6 +1398,16 @@ export async function streamReportChat(
   }
   const tail = parseSseBuffer(buffer, true);
   for (const event of tail.events) onEvent(event);
+}
+
+/** 报告对话流：POST + SSE，逐事件回调。 */
+export async function streamReportChat(
+  id: string,
+  input: { message: string; locale?: string; modelId?: string },
+  onEvent: (event: ReportStreamEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  await streamDocChat(`/reports/${id}/chat`, input, onEvent, signal);
 }
 
 /** 新增模板时的本地文件检查 + 预览（只读，不保存）。 */
