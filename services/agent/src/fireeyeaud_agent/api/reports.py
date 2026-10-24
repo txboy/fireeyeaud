@@ -29,18 +29,6 @@ def _root() -> Path:
     return Path(root)
 
 
-class PreviewBody(BaseModel):
-    templateId: str
-    templateScope: Scope
-    formIds: list[str]
-    header: dict[str, str] = {}
-
-
-class CommitBody(BaseModel):
-    token: str
-    title: str | None = None
-
-
 class DraftBody(BaseModel):
     templateId: str
     templateScope: Scope
@@ -74,22 +62,6 @@ class ReportChatBody(BaseModel):
     message: str = ""
     locale: str | None = None
     modelId: str | None = None
-
-
-@router.post("/reports/preview")
-def preview(body: PreviewBody) -> dict:
-    return reports.preview_report(
-        _root(),
-        template_id=body.templateId,
-        template_scope=body.templateScope,
-        form_ids=body.formIds,
-        header=body.header,
-    )
-
-
-@router.post("/reports", status_code=201)
-def commit(body: CommitBody) -> dict:
-    return reports.commit_report(_root(), body.token, body.title)
 
 
 @router.post("/reports/drafts", status_code=201)

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { message } from 'antd';
-import { Download, FileText, Plus, Trash2 } from 'lucide-react';
-import type { ReportManifest } from '@fireeyeaud/shared';
+import { Download, FileCheck2, FileText, Plus, Trash2 } from 'lucide-react';
+import type { EvidenceFormManifest, ReportManifest } from '@fireeyeaud/shared';
 import { NewReportDialog } from './NewReportDialog';
 import { useReportsStore } from '../../store/reports';
 import { useFormsStore } from '../../store/forms';
@@ -10,11 +10,12 @@ import { useUiStore } from '../../store/ui';
 import { useWorkspaceStore } from '../../store/workspace';
 import { useConfirmStore } from '../../store/confirm';
 
-/** 项目报告模块：上栏报告记录、下栏本项目取证单。 */
+/** 项目报告模块：上栏报告记录、下栏本项目取证单（取证单写作台记录）。 */
 export function ReportsPanel() {
   const { t } = useTranslation('report');
   const { t: tc } = useTranslation('common');
   const { t: terr } = useTranslation('error');
+  const { t: tform } = useTranslation('evidence-form');
   const items = useReportsStore((s) => s.items);
   const loading = useReportsStore((s) => s.loading);
   const errorKey = useReportsStore((s) => s.errorKey);
@@ -23,8 +24,8 @@ export function ReportsPanel() {
   const forms = useFormsStore((s) => s.items);
   const loadForms = useFormsStore((s) => s.load);
   const wsPath = useWorkspaceStore((s) => s.path);
-  const openPreview = useUiStore((s) => s.openPreview);
   const openReport = useUiStore((s) => s.openReport);
+  const openEvidenceForm = useUiStore((s) => s.openEvidenceForm);
   const closeRightTab = useUiStore((s) => s.closeRightTab);
   const confirm = useConfirmStore((s) => s.confirm);
 
@@ -44,31 +45,8 @@ export function ReportsPanel() {
     );
   }
 
-  const isWorkspaceReport = (report: ReportManifest) =>
-    report.status === 'draft' || report.files.includes('body.json');
-
-  const previewDocx = (report: ReportManifest) => {
-    void openPreview(
-      wsPath,
-      `${wsPath}/${report.artifactRef}/document.docx`,
-      `${report.id}.docx`,
-    );
-  };
-
   const open = (report: ReportManifest) => {
-    if (isWorkspaceReport(report)) {
-      void openReport(report.id, report.title);
-    } else {
-      previewDocx(report);
-    }
-  };
-
-  const previewForm = (formId: string, artifactRef: string) => {
-    void openPreview(
-      wsPath,
-      `${wsPath}/${artifactRef}/document.docx`,
-      `${formId}.docx`,
-    );
+    void openReport(report.id, report.title);
   };
 
   const del = async (report: ReportManifest) => {
@@ -103,6 +81,13 @@ export function ReportsPanel() {
   const statusLabel = (report: ReportManifest) => {
     if (isSaved(report)) return t('statusSaved');
     return report.files.includes('document.docx') ? t('statusDirty') : t('statusDraft');
+  };
+
+  const formStatus = (form: EvidenceFormManifest) => {
+    if (form.status === 'saved') return tform('statusSaved');
+    return form.files.includes('document.docx')
+      ? tform('statusDirty')
+      : tform('statusDraft');
   };
 
   return (
@@ -198,16 +183,19 @@ export function ReportsPanel() {
                 key={form.id}
                 type="button"
                 className="report-form-row"
-                onClick={() => previewForm(form.id, form.artifactRef)}
+                onClick={() => void openEvidenceForm(form.id, form.title)}
               >
-                <FileText size={13} strokeWidth={1.75} />
+                <FileCheck2 size={13} strokeWidth={1.75} />
                 <span className="report-form-row__body">
                   <span className="report-form-row__title" title={form.title}>
                     {form.id} · {form.title}
                   </span>
                   <span className="report-form-row__meta">
                     <span>{t('formFindings', { count: form.findingIds.length })}</span>
-                    {form.receipt && <span className="receipt-badge">{form.receipt.name}</span>}
+                    <span className="card__meta">{formStatus(form)}</span>
+                    {form.receipt && (
+                      <span className="receipt-badge">{form.receipt.name}</span>
+                    )}
                   </span>
                 </span>
               </button>

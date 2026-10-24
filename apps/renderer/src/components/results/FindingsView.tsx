@@ -3,9 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { FileCheck2, Plus, X } from 'lucide-react';
 import { FindingCard } from './FindingCard';
 import { NewFindingDialog } from './NewFindingDialog';
-import { GenerateFormDialog } from '../artifacts/GenerateFormDialog';
+import { NewEvidenceFormDialog } from '../forms/NewEvidenceFormDialog';
 import { useFindingsStore } from '../../store/findings';
 import { useWorkspaceStore } from '../../store/workspace';
+import { useUiStore } from '../../store/ui';
 
 /** 疑点列表：统计、新建、多选、删除、详情。 */
 export function FindingsView() {
@@ -21,6 +22,7 @@ export function FindingsView() {
   const clearSelected = useFindingsStore((s) => s.clearSelected);
   const workspace = useWorkspaceStore((s) => s.workspace);
   const path = useWorkspaceStore((s) => s.path);
+  const openEvidenceForm = useUiStore((s) => s.openEvidenceForm);
 
   const [creating, setCreating] = useState(false);
   const [generatingForm, setGeneratingForm] = useState(false);
@@ -61,7 +63,7 @@ export function FindingsView() {
           className="button button--sm button--ghost"
           onClick={() => setGeneratingForm(true)}
         >
-          <FileCheck2 size={12} strokeWidth={1.9} /> {tform('generate')}
+          <FileCheck2 size={12} strokeWidth={1.9} /> {tform('newForm')}
         </button>
         <button
           type="button"
@@ -110,9 +112,12 @@ export function FindingsView() {
       )}
 
       <NewFindingDialog open={creating} onClose={() => setCreating(false)} />
-      <GenerateFormDialog
+      <NewEvidenceFormDialog
         open={generatingForm}
         onClose={() => setGeneratingForm(false)}
+        onCreated={(formId, title) => {
+          void openEvidenceForm(formId, title);
+        }}
       />
     </>
   );
