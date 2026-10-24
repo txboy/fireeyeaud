@@ -10,7 +10,8 @@ export type ActivityView =
   | 'rules'
   | 'models'
   | 'templates'
-  | 'reports';
+  | 'reports'
+  | 'evidenceForms';
 
 export type ThemeMode = 'light' | 'dark';
 
