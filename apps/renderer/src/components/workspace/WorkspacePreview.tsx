@@ -15,39 +15,51 @@ import {
 } from 'lucide-react';
 import type {
   ReportBlock,
-  ReportDocument,
   ReportTextRun,
   ReportVerifyResult,
 } from '@fireeyeaud/shared';
 import {
+  exportFormDocument,
   exportReportDocument,
+  setFormOutline,
+  setFormTitle,
   setReportOutline,
   setReportTitleApi,
+  verifyFormDocument,
   verifyReportDocument,
+  writeFormSection,
   writeReportSection,
 } from '../../lib/api';
 import { useWorkspaceStore } from '../../store/workspace';
 import { useUiStore } from '../../store/ui';
-import { useReportDocStore } from '../../store/reportWorkspace';
+import { useDocStore } from '../../store/workspaceDocs';
+import type { WorkspaceDocument } from '../../store/reportWorkspace';
+import type { WorkspaceKind } from '../../store/workspaceKind';
 import { useConfirmStore } from '../../store/confirm';
-import { ReportEditorToolbar } from './ReportEditorToolbar';
-import { ReportSectionEditor } from './ReportSectionEditor';
-import { sectionFromTiptap } from './editor/reportEditorModel';
+import { ReportEditorToolbar } from '../reports/ReportEditorToolbar';
+import { ReportSectionEditor } from '../reports/ReportSectionEditor';
+import { sectionFromTiptap } from '../reports/editor/reportEditorModel';
 
-/** 右侧报告预览：大纲确认、结构化正文、校验与导出；支持章节富文本编辑。 */
-export function ReportPreview({
+/**
+ * 右侧写作台预览：大纲确认、结构化正文、校验与导出；支持章节富文本编辑。
+ * 报告与取证单共用，按 kind 切换数据接口与文案命名空间。
+ */
+export function WorkspacePreview({
+  kind,
   doc,
   onRefresh,
 }: {
-  doc: ReportDocument;
+  kind: WorkspaceKind;
+  doc: WorkspaceDocument;
   onRefresh: () => void;
 }) {
-  const { t } = useTranslation('report');
+  const { t } = useTranslation(kind === 'report' ? 'report' : 'evidence-form');
   const { t: tc } = useTranslation('common');
   const { t: terr } = useTranslation('error');
   const wsPath = useWorkspaceStore((s) => s.path);
   const openPreview = useUiStore((s) => s.openPreview);
-  const saveOutline = useReportDocStore((s) => s.saveOutline);
+  const store = useDocStore(kind);
+  const saveOutline = store((s) => s.saveOutline);
   const confirm = useConfirmStore((s) => s.confirm);
 
   const [check, setCheck] = useState<ReportVerifyResult | null>(null);
@@ -87,7 +99,10 @@ export function ReportPreview({
     setBusy(true);
     setErrorKey(null);
     try {
-      const result = await verifyReportDocument(doc.manifest.id);
+      const result =
+        kind === 'report'
+          ? await verifyReportDocument(doc.manifest.id)
+          : await verifyFormDocument(doc.manifest.id);
       setCheck(result);
     } catch (err) {
       setErrorKey((err as { messageKey?: string }).messageKey ?? 'error.internal');
@@ -100,7 +115,10 @@ export function ReportPreview({
     setBusy(true);
     setErrorKey(null);
     try {
-      const manifest = await exportReportDocument(doc.manifest.id);
+      const manifest =
+        kind === 'report'
+          ? await exportReportDocument(doc.manifest.id)
+          : await exportFormDocument(doc.manifest.id);
       if (manifest.exportWarnings && manifest.exportWarnings.length > 0) {
         void message.warning(manifest.exportWarnings.join('；'));
       } else {
@@ -117,8 +135,7 @@ export function ReportPreview({
   };
 
   const hasCurrentDocx =
-    doc.manifest.status === 'saved' &&
-    doc.manifest.files.includes('document.docx');
+    doc.manifest.status === 'saved' && doc.manifest.files.includes('document.docx');
 
   const docxPath = () => `${wsPath}/${doc.manifest.artifactRef}/document.docx`;
 
@@ -179,11 +196,13 @@ export function ReportPreview({
     setSaving(true);
     setErrorKey(null);
     try {
+      const writeSection =
+        kind === 'report' ? writeReportSection : writeFormSection;
       for (const section of body.sections) {
         const editor = editorsRef.current.get(section.id);
         if (!editor) continue;
         const blocks = sectionFromTiptap(editor.getJSON().content as JSONContent[] | undefined);
-        await writeReportSection(doc.manifest.id, section.id, blocks);
+        await writeSection(doc.manifest.id, section.id, blocks);
       }
 
       const nextSections = body.sections.map((section) => ({
@@ -196,10 +215,12 @@ export function ReportPreview({
         (section, index) => section.title !== body.sections[index].title,
       );
       if (sectionTitleChanged) {
-        await setReportOutline(doc.manifest.id, nextSections, body.outlineApproved);
+        const setOutline = kind === 'report' ? setReportOutline : setFormOutline;
+        await setOutline(doc.manifest.id, nextSections, body.outlineApproved);
       }
       if (title !== body.title) {
-        await setReportTitleApi(doc.manifest.id, title);
+        const setTitle = kind === 'report' ? setReportTitleApi : setFormTitle;
+        await setTitle(doc.manifest.id, title);
       }
 
       setEditing(false);
@@ -222,6 +243,7 @@ export function ReportPreview({
     doc.manifest.id,
     draftSectionTitles,
     draftTitle,
+    kind,
     onRefresh,
     saving,
     t,
