@@ -15,6 +15,7 @@ import {
   useUiStore,
   type DbDataTab,
   type DbSchemaTab,
+  type EvidenceFormTab,
   type FormTab,
   type KbBrowseTab,
   type KbQueryTab,
@@ -37,6 +38,7 @@ import { KbBrowseView } from './KbBrowseView';
 import { KbQueryView } from './KbQueryView';
 import { SettingsPanel } from './panels/SettingsPanel';
 import { ReportWorkspace } from './reports/ReportWorkspace';
+import { WorkspaceShell } from './workspace/WorkspaceShell';
 import { FORM_DOMAIN_ICON, useFormTitle } from './forms/meta';
 
 /** 「会话」tab：对话栏 + 成果栏一体（左对话、右成果）。 */
@@ -75,7 +77,7 @@ export function RightArea() {
   const labelOf = (tab: RightTab) =>
     tab.kind === 'session'
       ? sessionLabel(tab)
-      : tab.kind === 'report'
+      : tab.kind === 'report' || tab.kind === 'evidenceForm'
         ? tab.name
         : tab.kind === 'form'
           ? formTitle(tab)
@@ -101,7 +103,7 @@ export function RightArea() {
           const Icon =
             tab.kind === 'session'
               ? MessageSquare
-              : tab.kind === 'report'
+              : tab.kind === 'report' || tab.kind === 'evidenceForm'
                 ? FileCheck2
                 : tab.kind === 'form'
                   ? FORM_DOMAIN_ICON[tab.domain]
@@ -157,6 +159,12 @@ export function RightArea() {
           <SessionView sessionId={active.sessionId} />
         ) : active.kind === 'report' ? (
           <ReportWorkspace key={active.id} reportId={(active as ReportTab).reportId} />
+        ) : active.kind === 'evidenceForm' ? (
+          <WorkspaceShell
+            key={active.id}
+            kind="evidence-form"
+            id={(active as EvidenceFormTab).formId}
+          />
         ) : active.kind === 'form' ? (
           <FormTabView key={active.id} tab={active as FormTab} />
         ) : active.kind === 'ruleRun' ? (

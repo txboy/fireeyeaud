@@ -1,13 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FileText, Loader2, Send } from 'lucide-react';
+import type { EvidenceFormManifest } from '@fireeyeaud/shared';
 import {
+  listFormMessages,
   listReportMessages,
+  setFormFindings,
   setReportForms,
+  streamFormChat,
   streamReportChat,
   type ReportStreamEvent,
 } from '../../lib/api';
 import { useFormsStore } from '../../store/forms';
+import { useFindingsStore } from '../../store/findings';
+import type { WorkspaceKind } from '../../store/workspaceKind';
 import { ModelSelect } from '../ModelSelect';
 
 interface ChatItem {
@@ -16,24 +22,41 @@ interface ChatItem {
   error?: boolean;
 }
 
+/** 工具名 → 文案 key；报告与取证单的工具名不同但语义一致。 */
 const TOOL_LABEL: Record<string, string> = {
   report_set_outline: 'toolOutline',
   report_write_section: 'toolSection',
   report_set_title: 'toolTitle',
   report_verify: 'toolCheck',
+  form_set_outline: 'toolOutline',
+  form_write_section: 'toolSection',
+  form_set_title: 'toolTitle',
+  form_verify: 'toolCheck',
 };
 
-/** 报告写作对话：流式增量 + 工具状态；写入后通知父级刷新文档。 */
-export function ReportChat({
-  reportId,
-  selectedFormIds,
+interface SourceOption {
+  id: string;
+  title: string;
+  meta: string;
+}
+
+/**
+ * 写作对话：流式增量 + 工具状态；写入后通知父级刷新文档。
+ * - 报告：本轮来源是「取证单」；
+ * - 取证单：本轮来源是「疑点」。
+ */
+export function WorkspaceChat({
+  kind,
+  id,
+  selectedIds,
   onChanged,
 }: {
-  reportId: string;
-  selectedFormIds: string[];
+  kind: WorkspaceKind;
+  id: string;
+  selectedIds: string[];
   onChanged: () => void;
 }) {
-  const { t } = useTranslation('report');
+  const { t } = useTranslation(kind === 'report' ? 'report' : 'evidence-form');
   const { t: terr } = useTranslation('error');
   const { i18n } = useTranslation();
 
@@ -43,27 +66,48 @@ export function ReportChat({
   const [tool, setTool] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [modelId, setModelId] = useState<string | null>(null);
-  const [selectedForms, setSelectedForms] = useState<string[]>(selectedFormIds);
+  const [selected, setSelected] = useState<string[]>(selectedIds);
 
-  const forms = useFormsStore((s) => s.items);
+  const formItems = useFormsStore((s) => s.items);
   const loadForms = useFormsStore((s) => s.load);
+  const findingItems = useFindingsStore((s) => s.items);
+  const loadFindings = useFindingsStore((s) => s.load);
 
   const abortRef = useRef<AbortController | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    setSelectedForms(selectedFormIds);
-  }, [reportId, selectedFormIds]);
+  const sources: SourceOption[] =
+    kind === 'report'
+      ? formItems.map((form: EvidenceFormManifest) => ({
+          id: form.id,
+          title: `${form.id} · ${form.title}`,
+          meta: t('formFindings', { count: form.findingIds.length }),
+        }))
+      : findingItems.map((finding) => ({
+          id: finding.id,
+          title: `${finding.id} · ${finding.title?.text || finding.ruleKey || ''}`,
+          meta: finding.severity,
+        }));
 
   useEffect(() => {
-    if (forms.length === 0) void loadForms();
-  }, [forms.length, loadForms]);
+    setSelected(selectedIds);
+  }, [id, selectedIds]);
+
+  useEffect(() => {
+    if (kind === 'report') {
+      void loadForms();
+    } else {
+      void loadFindings();
+    }
+  }, [kind, loadForms, loadFindings]);
 
   useEffect(() => {
     setItems([]);
     setError(null);
     setTool(null);
-    void listReportMessages(reportId)
+    const request =
+      kind === 'report' ? listReportMessages(id) : listFormMessages(id);
+    void request
       .then((page) => {
         setItems(
           page.items
@@ -76,7 +120,7 @@ export function ReportChat({
       abortRef.current?.abort();
       abortRef.current = null;
     };
-  }, [reportId]);
+  }, [id, kind]);
 
   useEffect(() => {
     const node = bodyRef.current;
@@ -109,21 +153,24 @@ export function ReportChat({
     }
   };
 
-  const toggleForm = (id: string) =>
-    setSelectedForms((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
+  const toggleSource = (sourceId: string) =>
+    setSelected((prev) =>
+      prev.includes(sourceId)
+        ? prev.filter((item) => item !== sourceId)
+        : [...prev, sourceId],
     );
 
   const send = async () => {
     const text = draft.trim();
     if (!text || streaming) return;
-    const formsChanged =
-      selectedForms.length !== selectedFormIds.length ||
-      selectedForms.some((id, index) => id !== selectedFormIds[index]);
+    const changed =
+      selected.length !== selectedIds.length ||
+      selected.some((sourceId, index) => sourceId !== selectedIds[index]);
     setError(null);
-    if (formsChanged) {
+    if (changed) {
       try {
-        await setReportForms(reportId, selectedForms);
+        if (kind === 'report') await setReportForms(id, selected);
+        else await setFormFindings(id, selected);
       } catch (err) {
         const key = (err as { messageKey?: string }).messageKey ?? 'error.internal';
         setError(terr(key.replace(/^error\./, '')));
@@ -136,16 +183,16 @@ export function ReportChat({
     const controller = new AbortController();
     abortRef.current = controller;
     try {
-      await streamReportChat(
-        reportId,
-        {
-          message: text,
-          locale: i18n.language || 'zh-CN',
-          ...(modelId ? { modelId } : {}),
-        },
-        apply,
-        controller.signal,
-      );
+      const input = {
+        message: text,
+        locale: i18n.language || 'zh-CN',
+        ...(modelId ? { modelId } : {}),
+      };
+      if (kind === 'report') {
+        await streamReportChat(id, input, apply, controller.signal);
+      } else {
+        await streamFormChat(id, input, apply, controller.signal);
+      }
     } catch (err) {
       if (!(err instanceof DOMException && err.name === 'AbortError')) {
         const key = (err as { messageKey?: string }).messageKey ?? 'error.internal';
@@ -158,6 +205,10 @@ export function ReportChat({
       onChanged();
     }
   };
+
+  const sourceButtonKey = kind === 'report' ? 'formsSelected' : 'findingsSelected';
+  const sourceHintKey = kind === 'report' ? 'formsForTurn' : 'findingsForTurn';
+  const sourceEmptyKey = kind === 'report' ? 'noForms' : 'noFindings';
 
   return (
     <section className="report-chat">
@@ -199,40 +250,34 @@ export function ReportChat({
 
       <div className="report-chat__composer">
         <div className="report-chat__composer-tools">
-          <ModelSelect
-            value={modelId}
-            disabled={streaming}
-            onChange={setModelId}
-          />
+          <ModelSelect value={modelId} disabled={streaming} onChange={setModelId} />
           <details className="report-forms">
             <summary
               className="ctx-btn"
-              title={t('formsForTurn')}
-              aria-label={t('formsForTurn')}
+              title={t(sourceHintKey)}
+              aria-label={t(sourceHintKey)}
             >
               <FileText size={11} strokeWidth={1.8} />
-              {t('formsSelected', { count: selectedForms.length })}
+              {t(sourceButtonKey, { count: selected.length })}
             </summary>
             <div className="report-forms__menu">
-              <div className="card__meta report-forms__hint">{t('formsForTurn')}</div>
-              {forms.length === 0 ? (
-                <div className="card__meta">{t('noForms')}</div>
+              <div className="card__meta report-forms__hint">{t(sourceHintKey)}</div>
+              {sources.length === 0 ? (
+                <div className="card__meta">{t(sourceEmptyKey)}</div>
               ) : (
                 <div className="artifact-select report-form-picker">
-                  {forms.map((form) => (
-                    <label key={form.id} className="artifact-select__item">
+                  {sources.map((source) => (
+                    <label key={source.id} className="artifact-select__item">
                       <input
                         type="checkbox"
-                        checked={selectedForms.includes(form.id)}
+                        checked={selected.includes(source.id)}
                         disabled={streaming}
-                        onChange={() => toggleForm(form.id)}
+                        onChange={() => toggleSource(source.id)}
                       />
-                      <span className="artifact-select__label" title={form.title}>
-                        {form.id} · {form.title}
+                      <span className="artifact-select__label" title={source.title}>
+                        {source.title}
                       </span>
-                      <span className="card__meta">
-                        {t('formFindings', { count: form.findingIds.length })}
-                      </span>
+                      <span className="card__meta">{source.meta}</span>
                     </label>
                   ))}
                 </div>
