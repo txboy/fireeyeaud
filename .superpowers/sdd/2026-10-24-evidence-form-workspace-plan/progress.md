@@ -26,3 +26,4 @@ Task 1: Ruling: 旧渲染链路的测试 `tests/test_reports.py`（旧报告 pre
   前者在 Task 14 整文件删除，后者在 Task 8 重写；Task 1 提交时这两处为已知红灯 —
   cost if wrong: 若 Task 8/14 漏做，CI 会一直红，不会静默。
 Task 1: complete (tests: pytest tests/test_evidence_forms.py → 5 passed)Task 2: complete (tests: pytest tests/test_report_skeleton.py tests/test_report_docs.py -> 22 passed)
+Task 3: complete (tests: pytest test_report_docs + test_report_workspace_api + test_report_agent_tools -> 24 passed, same as baseline)
