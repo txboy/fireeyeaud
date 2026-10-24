@@ -80,7 +80,7 @@ def test_snapshot_finding_shape():
     assert snap["evidence"] == ["E-0001"]
 
 def test_receipt_write_does_not_clobber_concurrent_section_save(tmp_path):
-    """回执是锁外读、锁内写：必须锁内重读，否则会把并发的 status 变更覆盖回 draft。"""
+    """回执与正文并发写：锁内重读 manifest，两边都不能互相覆盖。"""
     import threading
 
     root, template_id, finding_id = _setup(tmp_path)
@@ -109,10 +109,14 @@ def test_receipt_write_does_not_clobber_concurrent_section_save(tmp_path):
             errors.append(exc)
 
     def save():
+        # 真实的并发写入口：写作台改正文（锁内读-改-写）
         try:
-            current = evidence_forms.load_manifest(root, "QZ-0001")
-            current["status"] = "saved"
-            evidence_forms.save_manifest(root, current)
+            form_docs.write_section(
+                root,
+                "QZ-0001",
+                "S1",
+                [{"type": "paragraph", "text": "正文。", "sourceRefs": [finding_id]}],
+            )
         except BaseException as exc:  # noqa: BLE001
             errors.append(exc)
 
@@ -125,5 +129,9 @@ def test_receipt_write_does_not_clobber_concurrent_section_save(tmp_path):
 
     assert errors == []
     final = evidence_forms.load_manifest(root, "QZ-0001")
+    # 回执与正文互不覆盖
     assert final["receipt"]["name"] == "客户签收.pdf"
-    assert final["status"] == "saved", "回执写入不能把状态回滚成 draft"
+    written = form_docs.get_document(root, "QZ-0001")["body"]["sections"][0]["blocks"]
+    assert written and written[0]["text"] == "正文。"
+    # 正文一改，已导出状态按设计回到草稿
+    assert final["status"] == "draft"
