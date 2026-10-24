@@ -38,7 +38,6 @@ import type {
   ReportVerifyResult,
   RuleRunResult,
   Skill,
-  TemplateCheck,
   TemplateInfo,
   TemplateKind,
   SseEvent,
@@ -1420,7 +1419,6 @@ export interface TemplateInspectResult {
   path: string;
   name: string;
   fileName: string;
-  check: TemplateCheck;
 }
 
 export function inspectTemplateFile(

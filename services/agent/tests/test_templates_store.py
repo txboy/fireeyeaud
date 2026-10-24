@@ -46,132 +46,29 @@ def _env(tmp_path, monkeypatch) -> Path:
     return root
 
 
-def test_scan_docx(tmp_path):
-    src = _docx(tmp_path / "t.docx")
-    check = scan_docx(src, "evidence-form")
-    assert "项目名称" in check["tags"]
-    assert "疑点" in check["loops"]
-    assert check["missing"] == []
+def test_scan_docx_accepts_any_valid_docx(tmp_path):
+    """模板只作参考范本：体检只关心「能不能打开」，不读取任何占位符。"""
+    src = _docx(tmp_path / "any.docx")
+    assert scan_docx(src, "evidence-form") is None
 
 
-def test_project_upload_list_default_delete(tmp_path, monkeypatch):
-    root = _env(tmp_path, monkeypatch)
-
-    src = _docx(tmp_path / "标准取证单.docx")
-    item = upload_template(root, src, kind="evidence-form", scope="project")
-    assert item["id"] == "tpl_1"
-    assert item["scope"] == "project"
-    assert item["isDefault"] is True
-    assert (
-        root / ".fireeye" / "templates" / "evidence-form" / item["fileName"]
-    ).is_file()
-
-    # 元数据进入统一配置，不生成第二份清单
-    assert (root / ".fireeye" / "config" / "templates.json").is_file()
-    assert not (root / ".fireeye" / "templates" / "templates.json").exists()
-
-    items = list_templates(root, "evidence-form")
-    assert any(i["id"] == item["id"] and i["scope"] == "project" for i in items)
-
-    delete_template(root, item["id"], "project")
-    assert all(i["id"] != item["id"] for i in list_templates(root, "evidence-form"))
-
-
-def test_upload_can_mark_default(tmp_path, monkeypatch):
-    root = _env(tmp_path, monkeypatch)
-
-    first = upload_template(
-        root, _docx(tmp_path / "第一份.docx"), kind="report", scope="project"
-    )
-    second = upload_template(
-        root,
-        _docx(tmp_path / "第二份.docx"),
-        kind="report",
-        scope="project",
-        is_default=True,
-    )
-    assert first["isDefault"] is True
-    assert second["isDefault"] is True
-
-    items = [
-        i
-        for i in list_templates(root, "report")
-        if i["scope"] == "project" and not i.get("builtin")
-    ]
-    assert [i["id"] for i in items if i["isDefault"]] == [second["id"]]
-    assert default_template(root, "report")["id"] == second["id"]
-
-
-def test_global_and_project_scope_and_default(tmp_path, monkeypatch):
-    root = _env(tmp_path, monkeypatch)
-
-    g = upload_template(root, _docx(tmp_path / "全局.docx"), kind="report", scope="global")
-    p = upload_template(root, _docx(tmp_path / "项目.docx"), kind="report", scope="project")
-
-    items = list_templates(root, "report")
-    assert {i["scope"] for i in items if not i.get("builtin")} == {"global", "project"}
-    # 两个作用域各自可以有默认；解析时项目优先
-    assert default_template(root, "report")["id"] == p["id"]
-    delete_template(root, p["id"], "project")
-    assert default_template(root, "report")["id"] == g["id"]
-
-
-def test_samples_are_global_virtual_and_copyable(tmp_path, monkeypatch):
-    root = _env(tmp_path, monkeypatch)
-
-    items = list_templates(root, "evidence-form")
-    sample = next(i for i in items if i.get("builtin"))
-    assert sample["scope"] == "global"
-    assert template_path(root, sample["id"], "global").is_file()
-
-    copied = duplicate_template(root, sample["id"], "global", target_scope="project")
-    assert copied["scope"] == "project"
-    assert copied["builtin"] is False
-    assert template_path(root, copied["id"], "project").is_file()
-
-
-# ---- 计划未覆盖、但实现必须成立的边界 ----
-
-def test_scan_docx_reports_placeholders_without_warnings(tmp_path):
-    """模板只作参考范本：未识别字段 / 缺少字段都不再算问题，占位符只做统计。"""
+def test_scan_docx_ignores_placeholders_and_unclosed_loops(tmp_path):
+    """未识别字段、缺少字段、未闭合循环都不再报错，也不返回统计信息。"""
     doc = Document()
-    doc.add_paragraph("{{项目名称}} {{某个任意字段}}")
+    doc.add_paragraph("{{项目名称}} {{某个任意字段}} {{#疑点}}")
+    doc.add_paragraph("{{疑点.标题}}")
     path = tmp_path / "odd.docx"
     doc.save(path)
 
-    check = scan_docx(path, "evidence-form")
-    assert check["tags"] == ["某个任意字段", "项目名称"]
-    assert check["unknown"] == []
-    assert check["missing"] == []
-    assert check["ok"] is True
+    assert scan_docx(path, "evidence-form") is None
 
 
-def test_scan_docx_never_blocks_on_unclosed_loops(tmp_path):
-    """循环不再执行，未闭合的循环标记不影响生成。"""
-    doc = Document()
-    doc.add_paragraph("{{#疑点}}")
-    doc.add_paragraph("{{疑点.标题}}")
-    path = tmp_path / "loop.docx"
-    doc.save(path)
-
-    check = scan_docx(path, "evidence-form")
-    assert check["loops"] == ["疑点"]
-    assert check["unclosed"] == ["疑点"]
-    assert check["balanced"] is False
-    assert check["ok"] is True
-
-
-def test_scan_docx_reads_headers_and_footers(tmp_path):
-    doc = Document()
-    section = doc.sections[0]
-    section.header.paragraphs[0].text = "{{被审计单位}}"
-    section.footer.paragraphs[0].text = "{{复核人}}"
-    path = tmp_path / "hf.docx"
-    doc.save(path)
-
-    check = scan_docx(path, "report")
-    assert "被审计单位" in check["tags"]
-    assert "复核人" in check["tags"]
+def test_scan_docx_rejects_non_docx(tmp_path):
+    path = tmp_path / "x.txt"
+    path.write_text("nope", "utf-8")
+    with pytest.raises(ApiError) as exc:
+        scan_docx(path, "report")
+    assert exc.value.code == "E_FILE_TYPE"
 
 
 def test_upload_rejects_non_docx(tmp_path, monkeypatch):
@@ -335,53 +232,14 @@ def test_samples_are_not_written_to_any_manifest(tmp_path, monkeypatch):
     assert (samples / "report.docx").is_file()
 
 
-def test_sample_documents_contain_expected_markers(tmp_path, monkeypatch):
+def test_sample_documents_are_valid_docx(tmp_path, monkeypatch):
+    """示例模板只需能被打开；内容不再做占位符校验。"""
     root = _env(tmp_path, monkeypatch)
     ensure_samples(root)
     samples = tmp_path / "global" / "templates" / "samples"
 
-    form = scan_docx(samples / "evidence-form.docx", "evidence-form")
-    assert "项目名称" in form["tags"]
-    assert "疑点" in form["loops"]
-    assert form["missing"] == []
-    assert form["unknown"] == []
-    assert form["unclosed"] == []
-
-    report = scan_docx(samples / "report.docx", "report")
-    assert "报告编号" in report["tags"]
-    assert "取证单" in report["loops"]
-    assert report["missing"] == []
-    assert report["unknown"] == []
-    # 报告附录的顶层 `疑点` 循环必须有结束标记，否则 P3 渲染会报 Jinja 语法错
-    assert report["unclosed"] == []
-    assert report["balanced"] is True
-
-
-def test_scan_docx_detects_unclosed_loop(tmp_path):
-    doc = Document()
-    doc.add_paragraph("{{项目名称}} {{报告编号}}")
-    table = doc.add_table(rows=2, cols=2)
-    table.cell(0, 0).text = "{{#疑点}}"
-    table.cell(0, 1).text = "{{疑点.标题}}"
-    path = tmp_path / "unclosed.docx"
-    doc.save(path)
-
-    check = scan_docx(path, "report")
-    assert check["unclosed"] == ["疑点"]
-    assert check["balanced"] is False
-
-
-def test_scan_docx_reads_all_header_footer_variants(tmp_path):
-    doc = Document()
-    section = doc.sections[0]
-    section.first_page_header.paragraphs[0].text = "{{被审计单位}}"
-    section.even_page_footer.paragraphs[0].text = "{{复核人}}"
-    section.first_page_footer.paragraphs[0].text = "{{编制人}}"
-    path = tmp_path / "hf2.docx"
-    doc.save(path)
-
-    check = scan_docx(path, "report")
-    assert {"被审计单位", "复核人", "编制人"} <= set(check["tags"])
+    assert scan_docx(samples / "evidence-form.docx", "evidence-form") is None
+    assert scan_docx(samples / "report.docx", "report") is None
 
 
 def test_corrupt_sample_does_not_break_list(tmp_path, monkeypatch):
@@ -521,7 +379,7 @@ def test_move_rejects_missing_file(tmp_path, monkeypatch):
 # ---- 重新上传覆盖原文件 ----
 
 
-def test_replace_template_file_keeps_identity_and_updates_check(tmp_path, monkeypatch):
+def test_replace_template_file_keeps_identity(tmp_path, monkeypatch):
     root = _env(tmp_path, monkeypatch)
     item = upload_template(root, _docx(tmp_path / "old.docx"), kind="report", scope="project")
     old_path = template_path(root, item["id"], "project")
@@ -538,7 +396,7 @@ def test_replace_template_file_keeps_identity_and_updates_check(tmp_path, monkey
     assert replaced["id"] == item["id"], "覆盖文件不换 id"
     assert replaced["name"] == item["name"], "覆盖文件不改名称"
     assert replaced["scope"] == "project"
-    assert "取证单数量" in replaced["check"]["tags"]
+    assert "check" not in replaced, "模板不再返回占位符检查结果"
     assert template_path(root, item["id"], "project") == old_path
     assert old_path.is_file()
 

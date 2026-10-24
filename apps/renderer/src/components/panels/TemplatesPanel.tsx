@@ -1,15 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal, Radio, Segmented, message } from 'antd';
-import {
-  Copy,
-  Download,
-  FileType,
-  Pencil,
-  Plus,
-  Star,
-  Trash2,
-} from 'lucide-react';
+import { Copy, Download, Pencil, Plus, Star, Trash2 } from 'lucide-react';
 import type { ConfigScope, TemplateInfo, TemplateKind } from '@fireeyeaud/shared';
 import { getTemplateContent } from '../../lib/api';
 import { ScopeBadge } from '../ScopeBadge';
@@ -130,31 +122,6 @@ export function TemplatesPanel() {
     } catch {
       void message.error(t('downloadFailed'));
     }
-  };
-
-  const renderCheck = (item: TemplateInfo) => {
-    const { check } = item;
-    const tagCount = check.tags.length;
-    const loopCount = check.loops.length;
-    // 模板只作参考范本：占位符只是「范本里写了什么」的说明，不是警告。
-    return (
-      <span className="tpl-row__check tpl-row__check--ok">
-        <FileType size={11} strokeWidth={2} />
-        <span>
-          {t('referenceTemplate')}
-          <span className="tpl-row__detail">
-            {tagCount > 0
-              ? t('templateFields', { count: tagCount })
-              : t('templateNoFields')}
-          </span>
-          {loopCount > 0 && (
-            <span className="tpl-row__detail">
-              {t('templateLoops', { count: loopCount })}
-            </span>
-          )}
-        </span>
-      </span>
-    );
   };
 
   return (
@@ -316,7 +283,6 @@ export function TemplatesPanel() {
                       )}
                     </div>
                   </div>
-                  {renderCheck(item)}
                 </div>
                 );
               })

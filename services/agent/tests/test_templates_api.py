@@ -245,10 +245,8 @@ async def test_inspect_reads_a_local_docx_without_saving(tmp_path, monkeypatch):
         assert body["name"] == "待添加"
         assert body["kind"] == "base64"
         assert base64.b64decode(body["data"])[:2] == b"PK"
-        # 占位符只做统计，不再有「缺少关键字段」的警告
-        assert body["check"]["missing"] == []
-        assert body["check"]["ok"] is True
-        assert body["check"]["tags"]
+        # 模板只作参考范本：不再返回任何占位符检查结果
+        assert "check" not in body
 
         # 没有产生任何模板记录
         listed = (await client.get("/api/v1/templates?kind=report")).json()
@@ -312,7 +310,7 @@ async def test_replace_file_route(tmp_path, monkeypatch):
         body = res.json()
         assert body["id"] == item["id"]
         assert body["name"] == "原名称"
-        assert "取证单数量" in body["check"]["tags"]
+        assert "check" not in body, "模板不再返回占位符检查结果"
 
         content = (
             await client.get(f"/api/v1/templates/{item['id']}/content?scope=project")

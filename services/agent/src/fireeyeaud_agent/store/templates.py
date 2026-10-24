@@ -42,10 +42,6 @@ SAMPLE_IDS = {
     "sample-report": "report",
 }
 
-TAG_RE = re.compile(r"\{\{\s*([^{}#/][^{}]*?)\s*\}\}")
-LOOP_RE = re.compile(r"\{\{\s*#\s*([^{}]+?)\s*\}\}")
-LOOP_END_RE = re.compile(r"\{\{\s*/\s*([^{}]+?)\s*\}\}")
-
 # ---- 路径 ----
 
 
@@ -90,44 +86,11 @@ def _under(base: Path, candidate: Path) -> bool:
 # ---- 体检 ----
 
 
-def _iter_paragraphs(document: Any):
-    for paragraph in document.paragraphs:
-        yield paragraph
-    for table in document.tables:
-        for row in table.rows:
-            for cell in row.cells:
-                for paragraph in cell.paragraphs:
-                    yield paragraph
-                for nested in cell.tables:
-                    for nested_row in nested.rows:
-                        for nested_cell in nested_row.cells:
-                            yield from nested_cell.paragraphs
-    for section in document.sections:
-        # 默认 / 首页 / 偶数页 三种页眉页脚都要看：封面页常用独立页眉。
-        parts = (
-            section.header,
-            section.footer,
-            section.first_page_header,
-            section.first_page_footer,
-            section.even_page_header,
-            section.even_page_footer,
-        )
-        for part in parts:
-            for paragraph in part.paragraphs:
-                yield paragraph
-            for table in part.tables:
-                for row in table.rows:
-                    for cell in row.cells:
-                        for paragraph in cell.paragraphs:
-                            yield paragraph
+def scan_docx(path: Path, kind: str) -> None:
+    """只校验模板能不能用：文件存在、是 .docx、能被 python-docx 打开。
 
-
-def scan_docx(path: Path, kind: str) -> dict[str, Any]:
-    """扫描正文 / 表格 / 页眉页脚里的占位符与循环标记。
-
-    写作台上线后，模板只作**参考范本**：正文由模型参照范本仿写，导出时不再替换占位符。
-    因此这里只统计「范本里写了什么」，不再判断字段缺失或循环未闭合——它们不影响生成，
-    作为警告会误导用户。
+    模板只作**参考范本**，正文由模型参照范本仿写，导出时不替换占位符；
+    因此这里不再扫描、也不再返回任何占位符信息。
     """
     path = Path(path)
     if not path.is_file():
@@ -137,60 +100,21 @@ def scan_docx(path: Path, kind: str) -> dict[str, Any]:
     if path.suffix.lower() != ".docx":
         raise ApiError("E_FILE_TYPE", 400, "error.fileType", {"name": path.name})
     try:
-        document = Document(str(path))
+        Document(str(path))
     except Exception as exc:  # noqa: BLE001 - 损坏的 docx 统一报类型错误
         raise ApiError(
             "E_FILE_TYPE", 400, "error.fileType", {"name": path.name}
         ) from exc
-
-    tags: set[str] = set()
-    loops: set[str] = set()
-    ends: set[str] = set()
-    for paragraph in _iter_paragraphs(document):
-        text = paragraph.text or ""
-        for match in TAG_RE.finditer(text):
-            tag = match.group(1).strip()
-            if tag:
-                tags.add(tag)
-        for match in LOOP_RE.finditer(text):
-            name = match.group(1).strip()
-            if name:
-                loops.add(name)
-        for match in LOOP_END_RE.finditer(text):
-            name = match.group(1).strip()
-            if name:
-                ends.add(name)
-
-    # 保留字段名供界面展示「范本里有哪些占位符」，但不再据此判定通过 / 警告。
-    unclosed = sorted(loops - ends)
-    return {
-        "tags": sorted(tags),
-        "loops": sorted(loops),
-        "unknown": [],
-        "missing": [],
-        "unclosed": unclosed,
-        "balanced": not unclosed,
-        "ok": True,
-    }
 
 
 # ---- 项装饰 ----
 
 
 def _decorate(item: dict[str, Any], scope: str, root: Path | None) -> dict[str, Any]:
-    """补 absPath / size / check（不写回清单）。"""
+    """补 absPath / size（不写回清单）。"""
     kind = str(item.get("kind") or "")
     template_id = str(item.get("id") or "")
     path = template_path(root, template_id, scope)
-    check = item.get("check")
-    if not isinstance(check, dict) or not check:
-        check = scan_docx(path, kind) if path is not None else {
-            "tags": [],
-            "loops": [],
-            "unknown": [],
-            "missing": [],
-            "ok": False,
-        }
     size = item.get("size")
     if path is not None:
         try:
@@ -203,7 +127,6 @@ def _decorate(item: dict[str, Any], scope: str, root: Path | None) -> dict[str, 
         "kind": kind,
         "absPath": str(path) if path is not None else "",
         "size": int(size or 0),
-        "check": check,
         "isDefault": bool(item.get("isDefault")),
         "builtin": bool(item.get("builtin")),
     }
@@ -296,7 +219,6 @@ def _sample_item(template_id: str, kind: str, path: Path) -> dict[str, Any]:
         "createdAt": created,
         "isDefault": False,
         "builtin": True,
-        "check": scan_docx(path, kind),
     }
 
 
@@ -448,7 +370,7 @@ def upload_template(
             "E_FILE_TOO_LARGE", 400, "error.fileTooLarge", {"name": source.name}
         )
 
-    check = scan_docx(source, kind)
+    scan_docx(source, kind)
 
     with WORKSPACE_MUTATION_LOCK:
         existing = [
@@ -475,7 +397,7 @@ def upload_template(
                 KIND,
                 str(created["id"]),
                 scope,
-                {"fileName": target.name, "size": size, "check": check},
+                {"fileName": target.name, "size": size},
                 root,
             )
             if make_default:
@@ -706,7 +628,7 @@ def replace_template_file(
         )
 
     kind = str(item.get("kind") or "")
-    check = scan_docx(source, kind)
+    scan_docx(source, kind)
     target = template_file(scope, root, kind, template_id)
 
     with WORKSPACE_MUTATION_LOCK:
@@ -725,7 +647,7 @@ def replace_template_file(
             KIND,
             template_id,
             scope,
-            {"fileName": target.name, "size": size, "check": check},
+            {"fileName": target.name, "size": size},
             root,
         )
     return _decorate(updated, scope, root)
