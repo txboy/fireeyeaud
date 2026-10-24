@@ -245,7 +245,9 @@ async def test_inspect_reads_a_local_docx_without_saving(tmp_path, monkeypatch):
         assert body["name"] == "待添加"
         assert body["kind"] == "base64"
         assert base64.b64decode(body["data"])[:2] == b"PK"
-        assert "报告编号" in body["check"]["missing"] or body["check"]["missing"]
+        # 占位符只做统计，不再有「缺少关键字段」的警告
+        assert body["check"]["missing"] == []
+        assert body["check"]["ok"] is True
         assert body["check"]["tags"]
 
         # 没有产生任何模板记录

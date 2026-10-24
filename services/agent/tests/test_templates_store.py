@@ -132,17 +132,33 @@ def test_samples_are_global_virtual_and_copyable(tmp_path, monkeypatch):
 
 # ---- 计划未覆盖、但实现必须成立的边界 ----
 
-def test_scan_docx_detects_unknown_and_missing(tmp_path):
+def test_scan_docx_reports_placeholders_without_warnings(tmp_path):
+    """模板只作参考范本：未识别字段 / 缺少字段都不再算问题，占位符只做统计。"""
     doc = Document()
-    doc.add_paragraph("{{项目名称}} {{查无此字段}}")
+    doc.add_paragraph("{{项目名称}} {{某个任意字段}}")
     path = tmp_path / "odd.docx"
     doc.save(path)
 
     check = scan_docx(path, "evidence-form")
-    assert check["unknown"] == ["查无此字段"]
-    # 取证单模板必须有取证单编号
-    assert check["missing"] == ["取证单编号"]
-    assert check["ok"] is False
+    assert check["tags"] == ["某个任意字段", "项目名称"]
+    assert check["unknown"] == []
+    assert check["missing"] == []
+    assert check["ok"] is True
+
+
+def test_scan_docx_never_blocks_on_unclosed_loops(tmp_path):
+    """循环不再执行，未闭合的循环标记不影响生成。"""
+    doc = Document()
+    doc.add_paragraph("{{#疑点}}")
+    doc.add_paragraph("{{疑点.标题}}")
+    path = tmp_path / "loop.docx"
+    doc.save(path)
+
+    check = scan_docx(path, "evidence-form")
+    assert check["loops"] == ["疑点"]
+    assert check["unclosed"] == ["疑点"]
+    assert check["balanced"] is False
+    assert check["ok"] is True
 
 
 def test_scan_docx_reads_headers_and_footers(tmp_path):
