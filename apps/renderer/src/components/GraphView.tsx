@@ -30,7 +30,6 @@ export function GraphView() {
   const selectNode = useGraphStore((s) => s.selectNode);
   const selectedFindingId = useUiStore((s) => s.selectedFindingId);
   const setSelectedFindingId = useUiStore((s) => s.setSelectedFindingId);
-  const setResultsTab = useUiStore((s) => s.setResultsTab);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<cytoscape.Core | null>(null);
@@ -179,7 +178,6 @@ export function GraphView() {
                 className="button button--sm"
                 onClick={() => {
                   setSelectedFindingId(selectedNode.refId);
-                  setResultsTab('findings');
                 }}
               >
                 {t('openFinding')}

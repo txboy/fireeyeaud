@@ -14,7 +14,6 @@ function tpl(over: Partial<TemplateInfo>): TemplateInfo {
     size: 10,
     createdAt: '2026-01-01T00:00:00Z',
     isDefault: false,
-    check: { tags: [], loops: [], unknown: [], missing: [], ok: true },
     ...over,
   };
 }

@@ -1636,6 +1636,202 @@ body {
   min-width: 0;
 }
 
+.archive-actions--panel {
+  margin: 10px 0 6px;
+}
+
+.archive-dirty-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 右侧「差异与冲突」tab */
+.archive-diff {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.archive-diff__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.archive-diff__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.archive-diff__summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.archive-diff__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.archive-diff__badge--ok {
+  background: var(--accent-weak);
+}
+
+.archive-diff__badge-label {
+  color: var(--text-3);
+}
+
+.archive-diff__badge-value {
+  font-family: var(--font-mono);
+}
+
+.archive-diff__state {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  color: var(--text-2);
+}
+
+.archive-diff__state--diverged {
+  color: var(--warning, #b7791f);
+  border-color: currentColor;
+}
+
+.archive-diff__state--synced {
+  color: var(--accent);
+  border-color: currentColor;
+}
+
+.archive-diff__hint {
+  margin-top: -4px;
+}
+
+.archive-diff__sides {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.archive-diff__section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-width: 0;
+}
+
+.archive-diff__section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.archive-diff__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.archive-diff__list li {
+  padding: 2px 0;
+  overflow-wrap: anywhere;
+}
+
+.archive-diff__base {
+  margin: 2px 0 6px;
+}
+
+.archive-diff__footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+/* 右侧「变更文件」tab */
+/* 远程设置 tab：右对齐的取消 / 保存，不要撑满整行 */
+.archive-remote .formtab__actions .button {
+  flex: 0 0 auto;
+}
+
+.archive-changes {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.archive-changes__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.archive-changes__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.archive-changes__summary {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.archive-changes__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.archive-changes__row {
+  display: flex;
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.archive-changes__status {
+  min-width: 28px;
+  color: var(--text-3);
+}
+
+.archive-changes__path {
+  overflow-wrap: anywhere;
+}
+
+.tab-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 32px 16px;
+  color: var(--text-3);
+  text-align: center;
+}
+
 /* ---- 项目报告工作台 ---- */
 .reports-panel {
   display: flex;
@@ -2705,28 +2901,12 @@ body {
   min-height: 0;
 }
 
-.results__tabs {
-  display: flex;
-  gap: 4px;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--border);
-  overflow-x: auto;
-}
-
-.results__tab {
+.results__title {
+  padding: 10px 14px;
   font-size: 12px;
-  color: var(--text-2);
-  background: transparent;
-  border: none;
-  border-radius: 6px;
-  padding: 6px 10px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.results__tab--active {
-  color: var(--accent);
-  background: var(--accent-weak);
+  font-weight: 600;
+  color: var(--text-1);
+  border-bottom: 1px solid var(--border);
 }
 
 .results__body {
