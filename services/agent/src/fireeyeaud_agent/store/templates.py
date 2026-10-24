@@ -46,47 +46,6 @@ TAG_RE = re.compile(r"\{\{\s*([^{}#/][^{}]*?)\s*\}\}")
 LOOP_RE = re.compile(r"\{\{\s*#\s*([^{}]+?)\s*\}\}")
 LOOP_END_RE = re.compile(r"\{\{\s*/\s*([^{}]+?)\s*\}\}")
 
-_COMMON = {"项目名称", "项目编号", "被审计单位", "审计期间", "编制人", "复核人", "日期"}
-
-_EVIDENCE_ITEM = {
-    "疑点.编号",
-    "疑点.标题",
-    "疑点.描述",
-    "疑点.风险",
-    "疑点.状态",
-    "疑点.科目",
-    "疑点.金额",
-    "疑点.证据",
-    "疑点.证据数量",
-}
-
-_KNOWN = {
-    "evidence-form": _COMMON
-    | {"取证单编号", "取证单标题", "疑点数量"}
-    | _EVIDENCE_ITEM,
-    "report": _COMMON
-    | {
-        "报告编号",
-        "报告标题",
-        "取证单数量",
-        "疑点数量",
-        "取证单.编号",
-        "取证单.标题",
-        "取证单.日期",
-        "取证单.疑点数量",
-        "取证单.回执",
-        "取证单.疑点摘要",
-    }
-    # 报告附录允许用顶层 `疑点` 循环单独列示（见计划 §1.1）
-    | _EVIDENCE_ITEM,
-}
-
-_REQUIRED = {
-    "evidence-form": {"项目名称", "取证单编号"},
-    "report": {"项目名称", "报告编号"},
-}
-
-
 # ---- 路径 ----
 
 
@@ -164,7 +123,12 @@ def _iter_paragraphs(document: Any):
 
 
 def scan_docx(path: Path, kind: str) -> dict[str, Any]:
-    """扫描正文 / 表格 / 页眉页脚里的占位符与循环标记。"""
+    """扫描正文 / 表格 / 页眉页脚里的占位符与循环标记。
+
+    写作台上线后，模板只作**参考范本**：正文由模型参照范本仿写，导出时不再替换占位符。
+    因此这里只统计「范本里写了什么」，不再判断字段缺失或循环未闭合——它们不影响生成，
+    作为警告会误导用户。
+    """
     path = Path(path)
     if not path.is_file():
         raise ApiError(
@@ -197,20 +161,16 @@ def scan_docx(path: Path, kind: str) -> dict[str, Any]:
             if name:
                 ends.add(name)
 
-    known = _KNOWN.get(kind, set())
-    required = _REQUIRED.get(kind, set())
-    unknown = sorted(t for t in tags if t not in known)
-    missing = sorted(r for r in required if r not in tags)
-    # 有开始没结束的循环：P3 会渲染失败，必须显式提示（用户上传时也可能犯）
+    # 保留字段名供界面展示「范本里有哪些占位符」，但不再据此判定通过 / 警告。
     unclosed = sorted(loops - ends)
     return {
         "tags": sorted(tags),
         "loops": sorted(loops),
-        "unknown": unknown,
-        "missing": missing,
+        "unknown": [],
+        "missing": [],
         "unclosed": unclosed,
         "balanced": not unclosed,
-        "ok": not unknown and not missing,
+        "ok": True,
     }
 
 

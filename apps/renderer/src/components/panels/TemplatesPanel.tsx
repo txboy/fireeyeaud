@@ -2,10 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal, Radio, Segmented, message } from 'antd';
 import {
-  AlertTriangle,
-  CheckCircle2,
   Copy,
   Download,
+  FileType,
   Pencil,
   Plus,
   Star,
@@ -135,51 +134,23 @@ export function TemplatesPanel() {
 
   const renderCheck = (item: TemplateInfo) => {
     const { check } = item;
-    const unclosed = check.unclosed ?? [];
-    if (check.ok) {
-      return (
-        <span className="tpl-row__check tpl-row__check--ok">
-          <CheckCircle2 size={11} strokeWidth={2} />
-          <span>
-            {t('checkOk')}
-            {check.loops.length === 0 && (
-              <span className="tpl-row__detail">{t('noLoop')}</span>
-            )}
-            {unclosed.length > 0 && (
-              <span className="tpl-row__detail tpl-row__detail--warn">
-                {t('unclosed', { fields: unclosed.join('、') })}
-              </span>
-            )}
-          </span>
-        </span>
-      );
-    }
+    const tagCount = check.tags.length;
+    const loopCount = check.loops.length;
+    // 模板只作参考范本：占位符只是「范本里写了什么」的说明，不是警告。
     return (
-      <span className="tpl-row__check tpl-row__check--warn">
-        <AlertTriangle size={11} strokeWidth={2} />
+      <span className="tpl-row__check tpl-row__check--ok">
+        <FileType size={11} strokeWidth={2} />
         <span>
-          {t('checkWarn')}
-          {check.unknown.length > 0 && (
+          {t('referenceTemplate')}
+          <span className="tpl-row__detail">
+            {tagCount > 0
+              ? t('templateFields', { count: tagCount })
+              : t('templateNoFields')}
+          </span>
+          {loopCount > 0 && (
             <span className="tpl-row__detail">
-              {t('unknown', { fields: check.unknown.join('、') })}
+              {t('templateLoops', { count: loopCount })}
             </span>
-          )}
-          {check.missing.length > 0 && (
-            <span className="tpl-row__detail">
-              {t('missing', { fields: check.missing.join('、') })}
-            </span>
-          )}
-          {unclosed.length > 0 && (
-            <span className="tpl-row__detail">
-              {t('unclosed', { fields: unclosed.join('、') })}
-            </span>
-          )}
-          {check.loops.length > 0 ? (
-            <span className="tpl-row__detail">
-              {t('loops', { fields: check.loops.join('、') })}
-            </span>
-          ) : (
-            <span className="tpl-row__detail">{t('noLoop')}</span>
           )}
         </span>
       </span>

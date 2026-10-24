@@ -272,16 +272,13 @@ export function TemplateForm({
           <span className="card__meta">{t('preview')}</span>
           <span className="spacer" />
           {check && (
-            <span
-              className={`tpl-row__check${check.ok ? ' tpl-row__check--ok' : ' tpl-row__check--warn'}`}
-            >
-              {check.ok ? t('checkOk') : t('checkWarn')}
-              {check.unknown.length > 0 &&
-                ` · ${t('unknown', { fields: check.unknown.join('、') })}`}
-              {check.missing.length > 0 &&
-                ` · ${t('missing', { fields: check.missing.join('、') })}`}
-              {(check.unclosed ?? []).length > 0 &&
-                ` · ${t('unclosed', { fields: (check.unclosed ?? []).join('、') })}`}
+            <span className="tpl-row__check tpl-row__check--ok">
+              {t('referenceTemplate')}
+              {check.tags.length > 0
+                ? ` · ${t('templateFields', { count: check.tags.length })}`
+                : ` · ${t('templateNoFields')}`}
+              {check.loops.length > 0 &&
+                ` · ${t('templateLoops', { count: check.loops.length })}`}
             </span>
           )}
         </div>

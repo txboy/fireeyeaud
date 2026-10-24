@@ -261,10 +261,7 @@ def analyze_template(path: Path) -> dict[str, Any]:
         warnings.append("未识别到章节标题：将按通用报告结构生成，导出时使用正文样式。")
     if title_paragraph is None:
         warnings.append("未识别到独立标题段：导出的报告标题将使用正文样式加粗居中。")
-    if any("{{" in (paragraph.text or "") for paragraph in filled):
-        warnings.append(
-            "模板包含 {{占位符}}：报告工作台不填充模板占位符，导出时会原样保留。"
-        )
+    # 占位符不再需要填值，模板只作参考范本；这里不再给出警告，避免误导。
 
     body_source = None
     for paragraph in filled:
