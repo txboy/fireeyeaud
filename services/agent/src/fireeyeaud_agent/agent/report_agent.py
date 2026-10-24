@@ -22,12 +22,13 @@ from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
 from ..config.models import build_chat_model
+from . import doc_chat
 from ..errors import ApiError
 from ..store import report_docs
 from ..store import reports as reports_store
 from ..store.report_verify import verify_report
 
-MAX_STEPS = 12
+MAX_STEPS = doc_chat.MAX_STEPS
 _CONTEXT_FORM_CHARS = 1500
 
 
@@ -354,7 +355,6 @@ async def stream_report_chat(
         model = build_chat_model(root, model_id)
         tools = _tools(root, report_id)
         tool_map = {tool.name: tool for tool in tools}
-        bound = model.bind_tools(tools) if hasattr(model, "bind_tools") else model
 
         messages: list[BaseMessage] = [
             SystemMessage(content=system_prompt(title, locale)),
@@ -374,78 +374,21 @@ async def stream_report_chat(
             HumanMessage(content=text),
         ]
 
-        for _step in range(MAX_STEPS):
-            merged: Any = None
-            async for chunk in bound.astream(messages):
-                if merged is None:
-                    merged = chunk
-                else:
-                    merged = merged + chunk
-                piece = chunk.content
-                if isinstance(piece, str) and piece:
-                    yield {"event": "delta", "data": {"text": piece}}
-
-            if merged is None:
-                break
-
-            content = merged.content if isinstance(merged.content, str) else ""
-            tool_calls = list(getattr(merged, "tool_calls", []) or [])
-            messages.append(AIMessage(content=content, tool_calls=tool_calls))
-
-            if not tool_calls:
-                if content.strip():
-                    report_docs.append_chat(
-                        root, report_id, {"role": "assistant", "content": content}
-                    )
-                break
-
-            if content.strip():
-                report_docs.append_chat(
-                    root, report_id, {"role": "assistant", "content": content}
-                )
-
-            mutated = False
-            for call in tool_calls:
-                name = str(call.get("name") or "")
-                args = call.get("args") or {}
-                tool = tool_map.get(name)
-                if tool is None:
-                    result: Any = {"ok": False, "error": f"unknown tool {name}"}
-                else:
-                    try:
-                        result = await asyncio.to_thread(tool.invoke, args)
-                    except ApiError as exc:
-                        result = {
-                            "ok": False,
-                            "code": exc.code,
-                            "messageKey": exc.message_key,
-                        }
-                    except Exception as exc:  # noqa: BLE001 - 工具失败回给模型修正
-                        result = {"ok": False, "error": str(exc)[:500]}
-                if not isinstance(result, str):
-                    result = _dump(result)
-                messages.append(
-                    ToolMessage(
-                        content=result,
-                        tool_call_id=str(call.get("id") or name),
-                    )
-                )
-                yield {
-                    "event": "tool",
-                    "data": {"name": name, "ok": '"ok": false' not in result},
-                }
-                if name in {
-                    "report_set_outline",
-                    "report_write_section",
-                    "report_set_title",
-                }:
-                    mutated = True
-
-            if mutated:
-                yield {"event": "report", "data": {"revision": _revision(root, report_id)}}
-
-        yield {"event": "report", "data": {"revision": _revision(root, report_id)}}
-        yield {"event": "done", "data": {}}
+        async for event in doc_chat.run_tool_loop(
+            model,
+            messages,
+            tool_map,
+            mutated_names={
+                "report_set_outline",
+                "report_write_section",
+                "report_set_title",
+            },
+            on_assistant_text=lambda content: report_docs.append_chat(
+                root, report_id, {"role": "assistant", "content": content}
+            ),
+            revision=lambda: _revision(root, report_id),
+        ):
+            yield event
     except ApiError as exc:
         yield {
             "event": "error",
