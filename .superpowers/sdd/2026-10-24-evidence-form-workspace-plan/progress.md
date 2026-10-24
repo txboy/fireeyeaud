@@ -44,3 +44,5 @@ pm test，根 package.json 无此 script — 改用
 pm test -w @fireeyeaud/renderer — cost if wrong: 无
 Task 12: Ruling: 初版 useDocStore(kind) 每渲染返回新 hook，违反 Hooks 规则且 store 被重复创建 — 抽 createWorkspaceStore 工厂 + workspaceDocs 注册表（模块级建一次，useDocStore 返回稳定 selector）；测试改为直接测工厂 — cost if wrong: 若注册表失效，报告与取证单会互相覆盖文档缓存，workspaceStore.test 会失败
 Task 12: complete (tests: npm test -w @fireeyeaud/renderer -> 70 passed; 变异：saveOutline 丢掉章节 → 测试失败)
+Task 13: Ruling: 旧面板删除用的是 evidence-form:<id> 而 openReport 用 eport:<id>，前缀不一致会让 tab 关不掉 — 统一为 orm:<id> 并加测试锁定 — cost if wrong: 删除取证单后 tab 残留
+Task 13: complete (tests: npm test -w @fireeyeaud/renderer -> 73 passed; renderer:typecheck 仅剩待删旧弹窗)
