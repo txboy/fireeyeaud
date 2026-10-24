@@ -48,3 +48,4 @@ Task 13: Ruling: 旧面板删除用的是 evidence-form:<id> 而 openReport 用 eport:<id
 Task 13: complete (tests: npm test -w @fireeyeaud/renderer -> 73 passed; renderer:typecheck 仅剩待删旧弹窗)
 Task 14: Ruling: 计划只写「删除旧组件」，实际还发现旧报告渲染链路（GenerateReportDialog / 报告旧 /reports/preview + commit + reports.build_report_context / test_reports.py）已无入口 — 全部删除，test_report_workspace_api 的取证单夹具改为新格式 — cost if wrong: 报告写作台仍可导出，只是少了一条无人调用的旧路径
 Task 14: complete (tests: pytest 625 passed/1 skipped + archive 26 passed; renderer:typecheck/build ok; renderer tests 73; desktop:test 62)
+Task 15: complete (pytest 625 passed/1 skipped + archive 26; renderer typecheck/build ok; renderer tests 73; desktop:test 62; README/设计文档已更新)
