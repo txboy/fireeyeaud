@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 from pathlib import Path
 from typing import Any
@@ -35,7 +36,15 @@ def _read_json(path: Path) -> dict[str, Any] | None:
     return data if isinstance(data, dict) else None
 
 
-def _is_legacy(manifest: dict[str, Any]) -> bool:
+_FORM_DIR = re.compile(r"QZ-\d{4,}")
+
+
+def _is_legacy(manifest: dict[str, Any], entry_name: str = "") -> bool:
+    """只认「旧取证单」：实质是取证单目录、编号形如 QZ-xxxx、且没有新格式的 body.json。"""
+    if manifest.get("kind") != evidence_forms.KIND:
+        return False
+    if not _FORM_DIR.fullmatch(str(manifest.get("id") or entry_name)):
+        return False
     return NEW_FORM_FILES not in (manifest.get("files") or [])
 
 
@@ -47,7 +56,7 @@ def _remove_legacy_forms(root: Path) -> list[str]:
     receipts_dir = evidence_forms.receipts_dir(root)
     for entry in list(base.iterdir()):
         manifest = _read_json(entry / "manifest.json")
-        if manifest is None or not _is_legacy(manifest):
+        if manifest is None or not _is_legacy(manifest, entry.name):
             continue
         form_id = str(manifest.get("id") or entry.name)
         receipt = manifest.get("receipt") or {}
@@ -95,6 +104,10 @@ def _rewrite_reports(root: Path, removed: set[str]) -> list[str]:
         )
         if "document.docx" in (manifest.get("files") or []):
             manifest["status"] = "draft"
+            # 旧 docx 里还引用着已清理的取证单，留着会让「下载」拿到与正文不一致的版本。
+            manifest["files"] = [
+                name for name in manifest.get("files") or [] if name != "document.docx"
+            ]
             warnings = list(manifest.get("exportWarnings") or [])
             note = "部分取证单已被清理，请重新导出报告。"
             if note not in warnings:
@@ -106,6 +119,7 @@ def _rewrite_reports(root: Path, removed: set[str]) -> list[str]:
 
 
 def _reset_counter(root: Path) -> None:
+    """清库后才把编号归零；没有旧取证单时保持计数器，避免把新编号拉回 QZ-0001。"""
     fe = root / ".fireeye"
     project = load_project(fe)
     if project is None:
@@ -135,7 +149,8 @@ def migrate_evidence_form_workspace(root: Path) -> dict[str, Any]:
         if staging.is_dir():
             shutil.rmtree(staging, ignore_errors=True)
         updated_reports = _rewrite_reports(root, set(removed))
-        _reset_counter(root)
+        if removed:
+            _reset_counter(root)
         marker[MARKER_KEY] = MARKER_VERSION
         write_json_atomic(_marker_path(root), marker)
 

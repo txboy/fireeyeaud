@@ -7,7 +7,9 @@ from pathlib import Path
 import pytest
 
 from fireeyeaud_agent.errors import ApiError
-from fireeyeaud_agent.store import evidence_forms
+from fireeyeaud_agent.store import evidence_forms, form_docs
+
+from test_form_docs import _setup
 
 
 def _root(tmp_path: Path) -> Path:
@@ -76,3 +78,52 @@ def test_snapshot_finding_shape():
     assert snap["title"] == "关联方交易"
     assert snap["amount"] == "99"
     assert snap["evidence"] == ["E-0001"]
+
+def test_receipt_write_does_not_clobber_concurrent_section_save(tmp_path):
+    """回执是锁外读、锁内写：必须锁内重读，否则会把并发的 status 变更覆盖回 draft。"""
+    import threading
+
+    root, template_id, finding_id = _setup(tmp_path)
+    form_docs.create_form(
+        root, template_id=template_id, template_scope="project", finding_ids=[finding_id]
+    )
+    form_docs.set_outline(root, "QZ-0001", [{"title": "一、事项经过", "level": 1}], approved=True)
+    form_docs.write_section(
+        root,
+        "QZ-0001",
+        "S1",
+        [{"type": "paragraph", "text": "正文。", "sourceRefs": [finding_id]}],
+    )
+    manifest = evidence_forms.load_manifest(root, "QZ-0001")
+    manifest["status"] = "saved"
+    evidence_forms.save_manifest(root, manifest)
+
+    receipt = tmp_path / "客户签收.pdf"
+    receipt.write_bytes(b"%PDF")
+    errors: list[BaseException] = []
+
+    def attach():
+        try:
+            evidence_forms.attach_receipt(root, "QZ-0001", receipt)
+        except BaseException as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    def save():
+        try:
+            current = evidence_forms.load_manifest(root, "QZ-0001")
+            current["status"] = "saved"
+            evidence_forms.save_manifest(root, current)
+        except BaseException as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    threads = [threading.Thread(target=attach) for _ in range(5)]
+    threads += [threading.Thread(target=save) for _ in range(5)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
+    final = evidence_forms.load_manifest(root, "QZ-0001")
+    assert final["receipt"]["name"] == "客户签收.pdf"
+    assert final["status"] == "saved", "回执写入不能把状态回滚成 draft"
