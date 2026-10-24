@@ -30,3 +30,5 @@ Task 3: complete (tests: pytest test_report_docs + test_report_workspace_api + t
 Task 4: Ruling: 测试原断言默认三节大纲，但夹具模板自带两个标题样式，按 spec 应取模板大纲 — 改断言为两节 — cost if wrong: 仅测试期望错误
 Task 4: complete (tests: pytest tests/test_form_docs.py -> 6 passed)
 Task 5: complete (tests: pytest tests/test_form_verify.py -> 7 passed)
+Task 6: Ruling: export_form 与 Task 4 一并写好，测试首次运行即绿 — 用变异验证测试有效性：去掉校验守卫→test_export_blocks_when_verification_fails FAIL；改标题对齐→样式测试 FAIL；恢复后 16 passed — cost if wrong: 无（变异已证明测试能抓）
+Task 6: complete (tests: pytest tests/test_form_export.py tests/test_form_docs.py tests/test_form_verify.py -> 16 passed)
