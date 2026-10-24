@@ -158,6 +158,18 @@ aggregate_subject / parse_ledger / check_tie）、对话 Agent（plan → tool_c
   以**纯文本**抽取后随每轮对话注入（作为参考资料、非指令；单文件 ≤2 万字符、合计 ≤6 万字符），
   **不写入工作区**（不注册数据源、不写 files/schema/project）；附件为会话级、内存持有，可逐个移除。
 
+### Phase 9 · 取证单写作台（已完成）
+- **新建**：选取证单模板 + 勾选疑点 → 直接在右侧写作台打开（不再有「渲染预览」步骤）。
+- **模板作参考范本**：整份模板原文（含 `{{占位符}}` 与表格）随每轮对话注入，模型据此仿写新正文；
+  导出时**不执行** `{{疑点}}` / `{{#疑点}}` 循环，正文完全来自结构化 JSON。
+- **正文**：`.fireeye/artifacts/evidence-forms/QZ-xxxx/body.json`（大纲 → 逐节段落 / 列表 / 表格），
+  大纲需人工确认后才可写入；导出按模板骨架样式（字体 / 字号 / 行距 / 页边距）重建 docx。
+- **校验**：大纲确认、章节非空、疑点编号引用在范围内、正文金额可在疑点快照追溯到，未通过则拦截导出。
+- **面板**：成果栏「疑点」tab 与左侧「项目报告」下栏都可打开取证单写作台；「取证单」在项目报告面板
+  下栏统一展示，点击即进写作台。
+- **迁移**：旧格式取证单产物、暂存区与回执单一并清除，报告里指向它们的 `formIds` / `formsSnapshot`
+  同步剔除并重算疑点数（导出过的报告回到草稿态）；编号从 `QZ-0001` 重新开始。
+
 已知偏差（详见 [`docs/plans/2026-10-09-phase1-mvp.md`](docs/plans/2026-10-09-phase1-mvp.md)、[`docs/plans/2026-10-09-phase2-evidence-review.md`](docs/plans/2026-10-09-phase2-evidence-review.md)、
 [`docs/plans/2026-10-09-phase3-evidence-graph.md`](docs/plans/2026-10-09-phase3-evidence-graph.md)、
 [`docs/plans/2026-10-09-phase4-working-paper-export.md`](docs/plans/2026-10-09-phase4-working-paper-export.md)、
@@ -179,6 +191,8 @@ DB 只读依赖 SQL 白名单（非数据库侧强制），字段级授权为 be
 预览仅支持现代格式（旧版 `.doc`/`.xls` 需用系统程序打开）；Word/Excel/PDF 仅预览不可编辑；
 `.csv` 按纯文本处理（可编辑）；预览 tab 不持久化；各格式在真实 Electron 下的渲染需人工 QA。
 真实模型 / 非 SQLite 数据库 / Dify·RAGFlow 知识库 / Tavily 联网检索 E2E 需人工按计划步骤验证。
+取证单模板不再执行占位符与 `{{#疑点}}` 循环（模型按范本仿写正文）；旧取证单与旧回执单在首次打开
+工作区时被一次性清除且不可恢复，报告里的相关快照同步剔除；取证单写作台的真实模型 E2E 需人工验证。
 
 ## 文档
 
