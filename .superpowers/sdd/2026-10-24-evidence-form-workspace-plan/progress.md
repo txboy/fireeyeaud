@@ -39,3 +39,8 @@ Task 10: Ruling: archive._counts ÔÚ Task 1 ºóÒÑÖ¸ÏòĞÂ store£¬²¹µÄ²âÊÔÊ×´Î¼´ÂÌ£¨Ë
 Task 10: complete (tests: pytest tests/test_archive_store.py -> 13 passed)
 Task 11: Ruling: worktree ÎŞ node_modules£¬node_modules ÎªÖ¸ÏòÖ÷²Ö¿âµÄ junction£»tsconfig µÄ @fireeyeaud/shared ½âÎöµ½Ö÷²Ö¿â¾ÉÔ´Âë ¡ª ÓÃ skip-worktree ÁÙÊ±¸ø tsconfig ¼Ó paths Ö¸Ïò±¾ worktree µÄ packages/shared£¬²»Ìá½» ¡ª cost if wrong: Ö»Ó°Ïì±¾µØÀàĞÍ¼ì²é£¬Ìá½»Ê÷¸É¾»
 Task 11: complete (tests: npm run renderer:typecheck -> ½öÊ£¾É×é¼ş GenerateFormDialog ±¨´í£¬Task 13/14 É¾³ı)
+Task 12: Ruling: ¼Æ»®Ğ´ 
+pm test£¬¸ù package.json ÎŞ´Ë script ¡ª ¸ÄÓÃ 
+pm test -w @fireeyeaud/renderer ¡ª cost if wrong: ÎŞ
+Task 12: Ruling: ³õ°æ useDocStore(kind) Ã¿äÖÈ¾·µ»ØĞÂ hook£¬Î¥·´ Hooks ¹æÔòÇÒ store ±»ÖØ¸´´´½¨ ¡ª ³é createWorkspaceStore ¹¤³§ + workspaceDocs ×¢²á±í£¨Ä£¿é¼¶½¨Ò»´Î£¬useDocStore ·µ»ØÎÈ¶¨ selector£©£»²âÊÔ¸ÄÎªÖ±½Ó²â¹¤³§ ¡ª cost if wrong: Èô×¢²á±íÊ§Ğ§£¬±¨¸æÓëÈ¡Ö¤µ¥»á»¥Ïà¸²¸ÇÎÄµµ»º´æ£¬workspaceStore.test »áÊ§°Ü
+Task 12: complete (tests: npm test -w @fireeyeaud/renderer -> 70 passed; ±äÒì£ºsaveOutline ¶ªµôÕÂ½Ú ¡ú ²âÊÔÊ§°Ü)
