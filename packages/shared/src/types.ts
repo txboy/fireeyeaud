@@ -446,12 +446,15 @@ export interface ReceiptInfo {
 export interface EvidenceFormManifest {
   id: string;
   kind: 'evidence-form';
+  /** 草稿未导出；旧版本取证单没有该字段，视为已保存。 */
+  status?: 'draft' | 'saved';
   title: string;
   templateId: string;
   /** 生成时使用的模板作用域；全局模板不随项目归档。 */
   templateScope: ConfigScope;
   templateName: string;
   createdAt: string;
+  updatedAt?: string;
   createdBy: string;
   header: Record<string, string>;
   findingIds: string[];
@@ -461,6 +464,26 @@ export interface EvidenceFormManifest {
   artifactRef: string;
   /** document.docx + 原始模板快照 template.docx。 */
   files: string[];
+  /** 导出时被丢弃的模板固定内容提示。 */
+  exportWarnings?: string[];
+}
+
+/** 取证单写作台正文：与 ReportBody 同构，疑点范围字段为 selectedFindingIds。 */
+export interface EvidenceFormBody {
+  schemaVersion: number;
+  formId: string;
+  title: string;
+  outlineApproved: boolean;
+  selectedFindingIds: string[];
+  sections: ReportSection[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface EvidenceFormDocument {
+  manifest: EvidenceFormManifest;
+  body: EvidenceFormBody;
+  skeleton: ReportSkeleton;
 }
 
 export interface ReportFormSnapshot {

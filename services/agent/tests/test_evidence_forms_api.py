@@ -1,165 +1,160 @@
-"""取证单 / 报告路由：预览 → 保存 → 列表 → 回执 → 删除。"""
+"""取证单 API：草稿、大纲、章节、校验、导出、回执与删除。"""
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import httpx
-from docx import Document
+import pytest
 
 from fireeyeaud_agent.main import app
 from fireeyeaud_agent.store.findings import create_finding
-from fireeyeaud_agent.store.templates import upload_template
+
+from test_form_docs import _setup
 
 
-def _template(path: Path, kind: str) -> Path:
-    doc = Document()
-    if kind == "evidence-form":
-        doc.add_paragraph("项目：{{项目名称}}")
-        doc.add_paragraph("编号：{{取证单编号}}")
-        table = doc.add_table(rows=3, cols=2)
-        table.cell(0, 0).text = "编号"
-        table.cell(0, 1).text = "标题"
-        table.cell(1, 0).text = "{{#疑点}}"
-        table.cell(1, 1).text = "{{疑点.标题}}"
-        table.cell(2, 0).text = "{{/疑点}}"
-    else:
-        doc.add_paragraph("报告：{{报告编号}}")
-        table = doc.add_table(rows=3, cols=2)
-        table.cell(0, 0).text = "编号"
-        table.cell(0, 1).text = "标题"
-        table.cell(1, 0).text = "{{#取证单}}"
-        table.cell(1, 1).text = "{{取证单.编号}} {{取证单.标题}}"
-        table.cell(2, 0).text = "{{/取证单}}"
-    doc.save(path)
-    return path
-
-
-async def _open(client, root: Path) -> None:
-    await client.post("/api/v1/workspaces/open", json={"path": str(root)})
-
-
-async def test_forms_flow(tmp_path, monkeypatch):
+@pytest.fixture(autouse=True)
+def _global_dir(tmp_path, monkeypatch):
     monkeypatch.setenv("FIREYEAUD_GLOBAL_DIR", str(tmp_path / "global"))
-    root = tmp_path / "ws"
-    (root / ".fireeye").mkdir(parents=True)
-    fid = create_finding(
-        root,
-        title="关联方交易",
-        description="未披露",
-        severity="high",
-        dataRefs=[],
-        sessionId="",
-        origin="manual",
-    )["id"]
-    form_tpl = upload_template(
-        root,
-        _template(tmp_path / "f.docx", "evidence-form"),
-        kind="evidence-form",
-        scope="project",
-    )
-    report_tpl = upload_template(
-        root,
-        _template(tmp_path / "r.docx", "report"),
-        kind="report",
-        scope="project",
-    )
 
+
+async def test_form_workspace_flow(tmp_path):
+    root, template_id, finding_id = _setup(tmp_path)
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
-        await _open(client, root)
+        await client.post("/api/v1/workspaces/open", json={"path": str(root)})
 
-        preview = await client.post(
-            "/api/v1/evidence-forms/preview",
+        created = await client.post(
+            "/api/v1/evidence-forms/drafts",
             json={
-                "templateId": form_tpl["id"],
+                "templateId": template_id,
                 "templateScope": "project",
-                "findingIds": [fid],
-                "header": {"projectName": "年报审计"},
+                "findingIds": [finding_id],
+                "title": "关联方取证单",
             },
         )
-        assert preview.status_code == 200
-        pv = preview.json()
-        assert pv["relPath"].endswith("document.docx")
+        assert created.status_code == 201, created.text
+        draft = created.json()
+        form_id = draft["manifest"]["id"]
+        assert form_id == "QZ-0001"
+        assert draft["manifest"]["status"] == "draft"
 
-        committed = await client.post(
-            "/api/v1/evidence-forms",
-            json={"token": pv["token"], "title": "关联方取证单"},
+        doc = (await client.get(f"/api/v1/evidence-forms/{form_id}/doc")).json()
+        assert doc["body"]["selectedFindingIds"] == [finding_id]
+        assert doc["skeleton"]["templateText"]["blocks"]
+
+        outline = await client.put(
+            f"/api/v1/evidence-forms/{form_id}/outline",
+            json={
+                "approved": True,
+                "sections": [{"id": "S1", "title": "一、事项经过", "level": 1}],
+            },
         )
-        assert committed.status_code == 201
-        form = committed.json()
-        assert form["id"].startswith("QZ-")
-        assert form["templateScope"] == "project"
+        assert outline.status_code == 200
 
-        listed = (await client.get("/api/v1/evidence-forms")).json()
-        assert [i["id"] for i in listed["items"]] == [form["id"]]
-        assert (await client.get(f"/api/v1/evidence-forms/{form['id']}")).status_code == 200
+        section = await client.put(
+            f"/api/v1/evidence-forms/{form_id}/sections/S1",
+            json={
+                "blocks": [
+                    {
+                        "type": "paragraph",
+                        "text": "关联方交易未披露。",
+                        "sourceRefs": [finding_id],
+                    }
+                ]
+            },
+        )
+        assert section.status_code == 200
+
+        check = (await client.post(f"/api/v1/evidence-forms/{form_id}/verify")).json()
+        assert check["ok"] is True, check["errors"]
+
+        exported = await client.post(f"/api/v1/evidence-forms/{form_id}/export", json={})
+        assert exported.status_code == 200
+        assert exported.json()["status"] == "saved"
+        assert (
+            root
+            / ".fireeye"
+            / "artifacts"
+            / "evidence-forms"
+            / form_id
+            / "document.docx"
+        ).is_file()
+
+        listed = (await client.get("/api/v1/evidence-forms")).json()["items"]
+        assert [item["id"] for item in listed] == [form_id]
 
         receipt = tmp_path / "客户签收.pdf"
         receipt.write_bytes(b"%PDF")
         attached = await client.post(
-            f"/api/v1/evidence-forms/{form['id']}/receipt",
-            json={"path": str(receipt)},
+            f"/api/v1/evidence-forms/{form_id}/receipt", json={"path": str(receipt)}
         )
-        assert attached.status_code == 200
         assert attached.json()["receipt"]["name"] == "客户签收.pdf"
+        assert (
+            await client.delete(f"/api/v1/evidence-forms/{form_id}/receipt")
+        ).json()["receipt"] is None
 
-        cleared = await client.delete(f"/api/v1/evidence-forms/{form['id']}/receipt")
-        assert cleared.status_code == 200
-        assert cleared.json()["receipt"] is None
-
-        # 报告：用刚保存的取证单
-        rpv = await client.post(
-            "/api/v1/reports/preview",
-            json={
-                "templateId": report_tpl["id"],
-                "templateScope": "project",
-                "formIds": [form["id"]],
-                "header": {"projectName": "年报审计"},
-            },
-        )
-        assert rpv.status_code == 200
-        report = (
-            await client.post(
-                "/api/v1/reports",
-                json={"token": rpv.json()["token"], "title": "项目报告"},
-            )
-        ).json()
-        assert report["id"].startswith("RPT-")
-        assert report["formIds"] == [form["id"]]
-        assert [i["id"] for i in (await client.get("/api/v1/reports")).json()["items"]] == [
-            report["id"]
-        ]
-
-        assert (await client.delete(f"/api/v1/reports/{report['id']}")).status_code == 200
-        assert (await client.delete(f"/api/v1/evidence-forms/{form['id']}")).status_code == 200
+        assert (await client.delete(f"/api/v1/evidence-forms/{form_id}")).status_code == 200
         assert (await client.get("/api/v1/evidence-forms")).json()["items"] == []
         await client.post("/api/v1/workspaces/close")
 
 
-async def test_artifact_routes_require_workspace(tmp_path, monkeypatch):
-    monkeypatch.setenv("FIREYEAUD_GLOBAL_DIR", str(tmp_path / "global"))
+async def test_form_findings_endpoint(tmp_path):
+    root, template_id, first = _setup(tmp_path)
+    second = create_finding(
+        root,
+        title="服务器采购",
+        description="",
+        severity="low",
+        dataRefs=[],
+        sessionId="",
+        origin="manual",
+    )["id"]
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        await client.post("/api/v1/workspaces/open", json={"path": str(root)})
+        created = await client.post(
+            "/api/v1/evidence-forms/drafts",
+            json={
+                "templateId": template_id,
+                "templateScope": "project",
+                "findingIds": [first],
+            },
+        )
+        form_id = created.json()["manifest"]["id"]
+        updated = await client.put(
+            f"/api/v1/evidence-forms/{form_id}/findings",
+            json={"findingIds": [first, second]},
+        )
+        assert updated.status_code == 200
+        assert updated.json()["selectedFindingIds"] == [first, second]
+        doc = (await client.get(f"/api/v1/evidence-forms/{form_id}/doc")).json()
+        assert doc["manifest"]["findingCount"] == 2
+        await client.post("/api/v1/workspaces/close")
+
+
+async def test_legacy_preview_routes_are_gone(tmp_path):
+    root, template_id, finding_id = _setup(tmp_path)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        await client.post("/api/v1/workspaces/open", json={"path": str(root)})
+        response = await client.post(
+            "/api/v1/evidence-forms/preview",
+            json={
+                "templateId": template_id,
+                "templateScope": "project",
+                "findingIds": [finding_id],
+            },
+        )
+        assert response.status_code in (404, 405)
+        await client.post("/api/v1/workspaces/close")
+
+
+async def test_forms_api_requires_workspace():
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
         await client.post("/api/v1/workspaces/close")
         assert (await client.get("/api/v1/evidence-forms")).status_code == 409
-        assert (await client.get("/api/v1/reports")).status_code == 409
-
-
-async def test_artifact_404s(tmp_path, monkeypatch):
-    monkeypatch.setenv("FIREYEAUD_GLOBAL_DIR", str(tmp_path / "global"))
-    root = tmp_path / "ws"
-    (root / ".fireeye").mkdir(parents=True)
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        await _open(client, root)
-        assert (await client.get("/api/v1/evidence-forms/QZ-9999")).status_code == 404
-        assert (await client.delete("/api/v1/evidence-forms/QZ-9999")).status_code == 404
-        assert (await client.get("/api/v1/reports/RPT-9999")).status_code == 404
-        assert (
-            await client.post("/api/v1/evidence-forms", json={"token": "nope"})
-        ).status_code == 404
-        await client.post("/api/v1/workspaces/close")
+        assert (await client.get("/api/v1/evidence-forms/QZ-0001/doc")).status_code == 409

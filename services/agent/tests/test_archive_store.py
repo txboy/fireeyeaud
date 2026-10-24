@@ -210,3 +210,24 @@ def test_push_reports_skipped_tag_conflicts(tmp_path):
     assert result["ok"] is True
     assert third["id"] in result["pushed"]
     assert (remote / "refs" / "tags" / "archive" / third["id"]).is_file()
+
+
+def test_archive_counts_new_format_evidence_forms(tmp_path):
+    from fireeyeaud_agent.store import evidence_forms
+    from fireeyeaud_agent.store.archive import _counts
+
+    root = tmp_path / "ws"
+    (root / ".fireeye").mkdir(parents=True)
+    directory = evidence_forms.forms_dir(root) / "QZ-0001"
+    directory.mkdir(parents=True)
+    evidence_forms.save_manifest(
+        root,
+        {
+            "id": "QZ-0001",
+            "kind": "evidence-form",
+            "title": "新取证单",
+            "createdAt": "2026-10-24",
+            "files": ["manifest.json", "body.json"],
+        },
+    )
+    assert _counts(root)["evidenceForms"] == 1

@@ -19,6 +19,7 @@ from .duckdb import Database
 from .evidence import verify_evidence_chain
 from .fsutil import write_json_atomic
 from .lock import WORKSPACE_MUTATION_LOCK
+from .migrate import migrate_evidence_form_workspace
 
 _SUBDIRS = ["config", "templates", "index", "artifacts"]
 _COUNTERS = [
@@ -122,6 +123,10 @@ class WorkspaceManager:
         if self.db is not None:
             self.db.close()
         self.db = Database(fe / "workspace.duckdb")
+        try:
+            migrate_evidence_form_workspace(root)
+        except OSError:
+            pass  # 迁移失败不阻塞打开；下次打开重试
         project["evidence"] = verify_evidence_chain(root)
         return project
 

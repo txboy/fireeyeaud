@@ -9,7 +9,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt
 
-from fireeyeaud_agent.store.report_skeleton import analyze_template
+from fireeyeaud_agent.store.report_skeleton import analyze_template, template_text
 
 
 def _set_east_asia(style_or_run, name: str) -> None:
@@ -114,6 +114,45 @@ def test_template_without_headings(tmp_path):
     skeleton = analyze_template(path)
     assert skeleton["sections"] == []
     assert any("未识别到章节标题" in w for w in skeleton["warnings"])
+
+
+def test_template_text_keeps_paragraphs_tables_and_placeholders(tmp_path):
+    doc = Document()
+    doc.add_paragraph("项目：{{项目名称}}")
+    table = doc.add_table(rows=2, cols=2)
+    table.cell(0, 0).text = "编号"
+    table.cell(0, 1).text = "标题"
+    table.cell(1, 0).text = "{{#疑点}}"
+    table.cell(1, 1).text = "{{疑点.标题}}"
+    doc.add_paragraph("说明：{{#疑点}}…{{/疑点}}")
+    doc.save(str(tmp_path / "t.docx"))
+
+    text = template_text(tmp_path / "t.docx")
+    assert text["blocks"][0] == {"kind": "paragraph", "text": "项目：{{项目名称}}"}
+    assert text["blocks"][1]["kind"] == "table"
+    assert text["blocks"][1]["rows"] == [["编号", "标题"], ["{{#疑点}}", "{{疑点.标题}}"]]
+    assert text["blocks"][2]["text"] == "说明：{{#疑点}}…{{/疑点}}"
+
+
+def test_template_text_skips_empty_paragraphs(tmp_path):
+    doc = Document()
+    doc.add_paragraph("")
+    doc.add_paragraph("   ")
+    doc.add_paragraph("唯一一段")
+    doc.save(str(tmp_path / "empty.docx"))
+    assert template_text(tmp_path / "empty.docx")["blocks"] == [
+        {"kind": "paragraph", "text": "唯一一段"}
+    ]
+
+
+def test_analyze_template_includes_template_text(tmp_path):
+    path = _build_template(tmp_path / "template.docx")
+    skeleton = analyze_template(path)
+    assert skeleton["templateText"]["blocks"]
+    assert any(
+        block["kind"] == "table" and block["rows"][0] == ["序号", "疑点", "金额"]
+        for block in skeleton["templateText"]["blocks"]
+    )
 
 
 def test_heading_falls_back_to_bold_larger_text(tmp_path):

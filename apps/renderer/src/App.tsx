@@ -16,7 +16,7 @@ import { useUiStore } from './store/ui';
 import { useChatStore } from './store/chat';
 import { useDbSqlAssistantStore } from './store/dbSqlAssistant';
 import { useFindingsStore } from './store/findings';
-import { useReportDocStore } from './store/reportWorkspace';
+import { useFormDocStore, useReportDocStore } from './store/workspaceDocs';
 
 export default function App() {
   const init = useSidecarStore((s) => s.init);
@@ -39,6 +39,7 @@ export default function App() {
     void (async () => {
       resetRightTabs();
       useReportDocStore.getState().reset();
+      useFormDocStore.getState().reset();
       clearAllChats();
       // SQL 助手对话只在内存中；切换工作区后表结构/连接都变了，必须一并清空并中断生成。
       clearDbSqlAssistant();

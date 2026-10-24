@@ -73,29 +73,30 @@ def _workspace(tmp_path: Path) -> tuple[Path, str]:
     target.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(target))
 
+    # 新格式取证单（写作台产物）：files 含 body.json，迁移不会清理它。
     form_dir = evidence_forms.forms_dir(root) / "QZ-0001"
     form_dir.mkdir(parents=True, exist_ok=True)
-    (form_dir / "manifest.json").write_text(
-        json.dumps(
-            {
-                "id": "QZ-0001",
-                "title": "采购取证单",
-                "createdAt": "2026-10-22T10:00:00+08:00",
-                "header": {"preparedBy": "张审计"},
-                "receipt": None,
-                "findingsSnapshot": [
-                    {
-                        "id": "F-0001",
-                        "title": "服务器费用",
-                        "description": "采购阿里云服务器，费用99元。",
-                        "severity": "low",
-                        "status": "confirmed",
-                    }
-                ],
-            },
-            ensure_ascii=False,
-        ),
-        "utf-8",
+    evidence_forms.save_manifest(
+        root,
+        {
+            "id": "QZ-0001",
+            "kind": "evidence-form",
+            "title": "采购取证单",
+            "createdAt": "2026-10-22T10:00:00+08:00",
+            "header": {"preparedBy": "张审计"},
+            "receipt": None,
+            "findingIds": ["F-0001"],
+            "files": ["manifest.json", "body.json", "skeleton.json", "template.docx"],
+            "findingsSnapshot": [
+                {
+                    "id": "F-0001",
+                    "title": "服务器费用",
+                    "description": "采购阿里云服务器，费用99元。",
+                    "severity": "low",
+                    "status": "confirmed",
+                }
+            ],
+        },
     )
     return root, str(item["id"])
 
