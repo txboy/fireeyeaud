@@ -11,6 +11,7 @@ import { SkillsPanel } from './panels/SkillsPanel';
 import { RulesPanel } from './panels/RulesPanel';
 import { TemplatesPanel } from './panels/TemplatesPanel';
 import { ReportsPanel } from './reports/ReportsPanel';
+import { EvidenceFormsPanel } from './forms/EvidenceFormsPanel';
 import { PlaceholderPanel } from './panels/PlaceholderPanel';
 
 interface HeadMeta {
@@ -36,6 +37,7 @@ const HEAD: Record<ActivityView, HeadMeta> = {
     subKey: 'subtitle',
   },
   reports: { titleNs: 'report', titleKey: 'title' },
+  evidenceForms: { titleNs: 'evidence-form', titleKey: 'title' },
 };
 
 function PanelBody({ view }: { view: ActivityView }) {
@@ -60,6 +62,8 @@ function PanelBody({ view }: { view: ActivityView }) {
       return <TemplatesPanel />;
     case 'reports':
       return <ReportsPanel />;
+    case 'evidenceForms':
+      return <EvidenceFormsPanel />;
     default:
       return <PlaceholderPanel />;
   }
@@ -84,7 +88,7 @@ export function SideBar() {
         </div>
       </div>
       <div
-        className={`sidebar__body${activeView === 'reports' ? ' sidebar__body--reports' : ''}`}
+        className={`sidebar__body${activeView === 'reports' || activeView === 'evidenceForms' ? ' sidebar__body--reports' : ''}`}
       >
         <PanelBody view={activeView} />
       </div>
