@@ -35,3 +35,5 @@ Task 6: complete (tests: pytest tests/test_form_export.py tests/test_form_docs.p
 Task 7: complete (tests: pytest test_form_agent + test_report_agent_tools + test_report_docs -> 25 passed)
 Task 8: complete (tests: pytest tests/test_evidence_forms_api.py -> 4 passed; 旧 test_reports.py 仍依赖已删渲染链路，Task 14 删除)
 Task 9: complete (tests: pytest test_form_migration + test_workspaces + test_evidence_forms_api -> 13 passed)
+Task 10: Ruling: archive._counts 在 Task 1 后已指向新 store，补的测试首次即绿（锁定行为，非新代码） — 保留测试 — cost if wrong: 无，纯回归护栏
+Task 10: complete (tests: pytest tests/test_archive_store.py -> 13 passed)
