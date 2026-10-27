@@ -10,7 +10,6 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
-from ..agent.form_agent import stream_form_chat
 from ..errors import ApiError
 from ..store import evidence_forms, form_docs
 from ..store.form_verify import verify_form
@@ -135,6 +134,9 @@ def messages(form_id: str) -> dict:
 
 @router.post("/evidence-forms/{form_id}/chat")
 async def chat(form_id: str, body: ChatBody) -> EventSourceResponse:
+    # 惰性导入：写作代理会拉起整套 LLM 栈，路由模块导入时不需要。
+    from ..agent.form_agent import stream_form_chat
+
     async def generate():
         async for event in stream_form_chat(
             _root(),

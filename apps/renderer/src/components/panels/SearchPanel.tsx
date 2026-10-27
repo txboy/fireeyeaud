@@ -23,7 +23,6 @@ function joinPath(root: string, relPath: string) {
 
 export function SearchPanel() {
   const { t } = useTranslation('search');
-  const { t: te } = useTranslation('error');
   const root = useWorkspaceStore((s) => s.path);
   const openPreview = useUiStore((s) => s.openPreview);
 
@@ -133,7 +132,7 @@ export function SearchPanel() {
         </div>
       ) : null}
 
-      {error && <span className="panel-error">{te('internal')}</span>}
+      {error && <span className="panel-error">{t('failed')}</span>}
       {!root && <span className="panel-error">{t('noResults')}</span>}
 
       {result && result.files.length === 0 && !loading && (

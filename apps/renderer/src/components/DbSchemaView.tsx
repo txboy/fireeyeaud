@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import type { DbColumn, DbTableSchema } from '@fireeyeaud/shared';
 import { useDatabaseStore } from '../store/database';
+import { useDatasourcesStore } from '../store/datasources';
 import { useUiStore, type DbSchemaTab } from '../store/ui';
 
 /** 表 / 字段授权：每张表一个表格，展示字段、类型、注释并勾选允许范围。 */
@@ -139,6 +140,9 @@ export function DbSchemaView({ tab }: { tab: DbSchemaTab }) {
     return list.length;
   };
 
+  // 后台还在准备项目数据时，读不到表不是「表不存在」，而是还没导入完。
+  const tablesEmptyHint = useDatasourcesStore((s) => Boolean(s.backgroundSync));
+
   return (
     <div className="dbschema">
       <div className="dbschema__bar">
@@ -184,6 +188,12 @@ export function DbSchemaView({ tab }: { tab: DbSchemaTab }) {
 
       {errorKey && (
         <div className="panel-error">{terr(errorKey.replace(/^error\./, ''))}</div>
+      )}
+      {!tables && !loading && tablesEmptyHint && (
+        <div className="panel-hint panel-hint--progress" role="status">
+          <RefreshCw size={12} strokeWidth={2} />
+          <span>{t('dataPreparing')}</span>
+        </div>
       )}
       {saved && !errorKey && (
         <div className="dbschema__saved">{tc('save')} ✓</div>

@@ -4,6 +4,8 @@ export default {
     phaseBadge: 'Phase 0 · 骨架',
     loading: '加载中…',
     retry: '重试',
+    /** Agent 服务（本地后端）正在启动：点击后会自动等到就绪，不算错误。 */
+    sidecarStarting: 'Agent 服务正在启动，就绪后会自动进入项目…',
     cancel: '取消',
     confirm: '确认',
     close: '关闭',
@@ -141,6 +143,8 @@ export default {
     attachDbBusy: '正在附加…',
     syncing: '正在同步数据…',
     reimporting: '正在重新导入数据…',
+    /** 打开项目后后台对账：大项目可能要一会儿，界面不阻塞。 */
+    preparingData: '正在准备项目数据（文件较多时需要几分钟）…',
     importFailed: '导入失败',
   },
   search: {
@@ -157,12 +161,16 @@ export default {
     removeScope: '移除',
     clearScope: '清空',
     scopeEmpty: '工作区为空',
+    /** 搜索失败：不再笼统显示「发生内部错误」。 */
+    failed: '搜索失败，请检查工作区是否可访问后重试',
   },
   database: {
     title: '数据库连接',
     subtitle: '配置只读数据库连接并限定 Agent 可访问的表 / 字段',
     addConnection: '新建连接',
     editConnection: '编辑连接',
+    /** 价值：后台正在准备项目数据时，表结构还没导入完，先提示，避免误判为「表不存在」。 */
+    dataPreparing: '项目数据准备中，表结构稍后可用…',
     isDefault: '默认',
     empty: '暂无数据库连接',
     name: '名称',
@@ -700,6 +708,8 @@ export default {
     stopStreamingTitle: '正在生成回答',
     stopStreamingConfirm: '该会话正在生成回答，继续操作将停止生成（已生成的部分会保留）。是否继续？',
     toolCall: '调用工具…',
+    /** 工具执行失败：不再笼统显示「发生内部错误」。 */
+    toolFailed: '工具执行失败',
     toolResult: '工具结果',
     findingCreated: '发现疑点 {{id}}',
     compactionDivider: '较早的 {{count}} 条对话已压缩为摘要（约 {{before}} → {{after}} tokens）',
@@ -879,6 +889,10 @@ export default {
   },
   error: {
     internal: '发生内部错误',
+    /** 连不上本地后端（还没起来 / 已退出），不是业务错误。 */
+    network: '暂时连不上本地 Agent 服务，已自动重试；若持续失败请重启应用',
+    /** 打开项目时后端仍在启动：界面会自动等，不算失败。 */
+    sidecarStarting: 'Agent 服务正在启动，请稍候…',
     pathInvalid: '路径无效或文件夹不存在',
     wsLocked: '该工作区已被其它实例占用',
     wsSchemaTooNew: '工作区数据版本高于当前应用，请升级应用',

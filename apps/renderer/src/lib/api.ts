@@ -101,7 +101,8 @@ async function safeFetch(url: string, init?: RequestInit): Promise<Response> {
     return await fetch(url, init);
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') throw err;
-    throw new ApiError('E_NETWORK', 0, 'error.internal');
+    // 连不上本地后端 ≠ 程序内部错误：独立文案，避免用户看到「发生内部错误」而以为数据坏了。
+    throw new ApiError('E_NETWORK', 0, 'error.network');
   }
 }
 

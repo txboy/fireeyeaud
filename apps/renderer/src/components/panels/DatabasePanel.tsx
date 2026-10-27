@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pencil, Plus, Trash2, X, Zap, KeyRound } from 'lucide-react';
+import { Pencil, Plus, Trash2, X, Zap, KeyRound, Database } from 'lucide-react';
 import type { DbConnection } from '@fireeyeaud/shared';
 import { ScopeBadge } from '../ScopeBadge';
 import { useDatabaseStore } from '../../store/database';
+import { useDatasourcesStore } from '../../store/datasources';
 import { useUiStore } from '../../store/ui';
 import { useWorkspaceStore } from '../../store/workspace';
 
@@ -22,6 +23,8 @@ export function DatabasePanel() {
   const openForm = useUiStore((s) => s.openForm);
   const openDbSchema = useUiStore((s) => s.openDbSchema);
   const path = useWorkspaceStore((s) => s.path);
+  // 项目数据还在后台准备（首次打开 / 文件很多）时，表结构尚未就绪，先别让用户误判为「表不存在」。
+  const preparing = useDatasourcesStore((s) => Boolean(s.backgroundSync));
 
   const [status, setStatus] = useState<Record<string, 'ok' | 'fail'>>({});
   const [testing, setTesting] = useState<Record<string, boolean>>({});
@@ -57,6 +60,13 @@ export function DatabasePanel() {
       >
         <Plus size={12} strokeWidth={2} /> {t('addConnection')}
       </button>
+
+      {preparing && (
+        <div className="panel-hint panel-hint--progress" role="status">
+          <Database size={12} strokeWidth={2} />
+          <span>{t('dataPreparing')}</span>
+        </div>
+      )}
 
       {errorKey && (
         <div className="panel-error">
@@ -112,6 +122,7 @@ export function DatabasePanel() {
                 type="button"
                 className="icon-btn"
                 title={t('authorize')}
+                disabled={preparing}
                 onClick={() =>
                   void openDbSchema({
                     id: conn.id,

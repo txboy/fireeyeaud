@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from fireeyeaud_agent.agent.graph import run_agent
 from fireeyeaud_agent.agent import graph as graph_mod
+from fireeyeaud_agent.config import models as models_mod
 from fireeyeaud_agent.mcp import manager as manager_mod
 from fireeyeaud_agent.store import mcp as mcp_store
 
@@ -163,7 +164,7 @@ async def test_stream_chat_closes_mcp_on_early_abandon(tmp_path, monkeypatch):
 
     monkeypatch.setattr(manager_mod, "build_mcp_tools", fake_build)
     monkeypatch.setattr(
-        graph_mod,
+        models_mod,
         "build_chat_model",
         lambda *_a, **_k: FakeChatModel(messages=iter([AIMessage(content="hi")])),
     )

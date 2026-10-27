@@ -46,6 +46,28 @@ def scan_table_files(root: Path) -> list[Path]:
     return out
 
 
+def _unchanged(path: Path, fingerprint: dict | None) -> bool:
+    """size + mtime（纳秒）都没变 → 不必重读文件算指纹。
+
+    旧版本指纹只记了导入时刻的 `mtime`（ISO 字符串），不是源文件时间，无法用于比较，
+    一律视为「不确定」→ 回退到算 sha256。
+    """
+    if not fingerprint:
+        return False
+    source_mtime = fingerprint.get("mtimeNs")
+    if not isinstance(source_mtime, int):
+        return False
+    try:
+        stat = path.stat()
+    except OSError:
+        return False
+    return (
+        fingerprint.get("size") == stat.st_size
+        and source_mtime == stat.st_mtime_ns
+        and bool(fingerprint.get("sha256"))
+    )
+
+
 def sync_sources(
     root: Path,
     *,
@@ -134,10 +156,14 @@ def _sync_sources_locked(
                 else:
                     added.append(result["sourceId"])
             else:
+                # 增量：size + mtime 未变就不再读文件算 sha256（大工作区里这一步最贵）。
                 changed = (
                     full
                     or path_str not in fingerprints
-                    or fingerprints[path_str].get("sha256") != _sha256(path)
+                    or (
+                        not _unchanged(path, fingerprints.get(path_str))
+                        and fingerprints[path_str].get("sha256") != _sha256(path)
+                    )
                 )
                 if changed:
                     source_id = str(source.get("id"))

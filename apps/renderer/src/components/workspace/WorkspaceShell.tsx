@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FileText } from 'lucide-react';
 import { WorkspaceChat } from './WorkspaceChat';
@@ -22,14 +22,27 @@ export function WorkspaceShell({
   const { t: terr } = useTranslation('error');
   // useDocStore 按 kind 返回同一个 selector hook，kind 不变时 hook 身份不变。
   const store = useDocStore(kind);
+  const sharedErrorKey = store((s) => s.errorKey);
   const doc = store((s) => s.docs[id]);
   const loading = store((s) => Boolean(s.loading[id]));
-  const errorKey = store((s) => s.errorKey);
   const load = store((s) => s.load);
 
   useEffect(() => {
     void load(id);
   }, [id, load]);
+
+  // store 的 errorKey 是全局共享的：切换文档时可能还残留上一份文档的失败，
+  // 只有「这次加载」确实报错才展示，避免把无关错误显示成「发生内部错误」。
+  // 顺序：共享 errorKey 变化 → 标记失败；文档加载成功 → 清除。
+  const [loadFailed, setLoadFailed] = useState(false);
+  useEffect(() => {
+    if (sharedErrorKey) setLoadFailed(true);
+  }, [sharedErrorKey]);
+  useEffect(() => {
+    if (doc) setLoadFailed(false);
+  }, [doc]);
+
+  const errorKey = loadFailed ? sharedErrorKey : null;
 
   const refresh = useCallback(() => {
     void load(id);

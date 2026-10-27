@@ -97,6 +97,8 @@ def _fingerprint(path: Path, source_id: str) -> dict:
     return {
         "path": str(path),
         "size": stat.st_size,
+        # 源文件 mtime（纳秒）：增量对账时与磁盘比较；`mtime` 保留为导入时刻（兼容旧索引）。
+        "mtimeNs": stat.st_mtime_ns,
         "mtime": now_iso(),
         "sha256": _sha256(path),
         "sourceId": source_id,

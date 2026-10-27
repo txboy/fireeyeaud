@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
-from ..agent import stream_chat
 from ..errors import ApiError
 from ..store import sessions as sessions_store
 from ..store.workspace import workspace_manager
@@ -100,6 +99,9 @@ def delete_session(session_id: str) -> dict[str, object]:
 
 @router.post("/sessions/{session_id}/chat")
 async def chat(session_id: str, body: ChatBody) -> EventSourceResponse:
+    # 惰性导入：`graph` 会拉起整套 LLM 栈，sidecar 启动时不需要（见 docs/plans/2026-10-27-startup-performance.md）。
+    from ..agent import stream_chat
+
     return EventSourceResponse(
         stream_chat(
             session_id,

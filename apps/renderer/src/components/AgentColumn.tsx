@@ -216,7 +216,7 @@ export function AgentColumn({ sessionId }: { sessionId: string }) {
                             ? t('toolCall')
                             : tool.ok
                               ? tool.summary
-                              : te('internal')}
+                              : t('toolFailed')}
                         </span>
                       </div>
                     ))}

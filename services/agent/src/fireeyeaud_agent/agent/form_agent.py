@@ -14,7 +14,6 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
-from ..config.models import build_chat_model
 from ..errors import ApiError
 from ..store import evidence_forms
 from ..store import form_docs
@@ -362,6 +361,8 @@ async def stream_form_chat(
     yield {"event": "status", "data": {"phase": "thinking"}}
 
     try:
+        from ..config.models import build_chat_model
+
         model = build_chat_model(root, model_id)
         tool_map = {tool.name: tool for tool in _tools(root, form_id)}
 

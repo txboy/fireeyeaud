@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { ChevronRight, Clock, CloudDownload, FolderOpen, Loader2, X } from 'lucide-react';
 import { useWorkspaceStore } from '../store/workspace';
+import { useSidecarStore } from '../store/sidecar';
 import { logoUrl } from '../lib/logo';
 import { RestoreFromRemoteDialog } from './archive/RestoreFromRemoteDialog';
 
@@ -23,13 +24,20 @@ export function Welcome() {
   const { t: te } = useTranslation('error');
   const recent = useWorkspaceStore((s) => s.recent);
   const loading = useWorkspaceStore((s) => s.loading);
-  const error = useWorkspaceStore((s) => s.error);
+  const errorKey = useWorkspaceStore((s) => s.errorKey);
+  const sidecarStatus = useSidecarStore((s) => s.info?.status ?? 'starting');
   const openFromDialog = useWorkspaceStore((s) => s.openFromDialog);
   const openPath = useWorkspaceStore((s) => s.openPath);
   const removeRecent = useWorkspaceStore((s) => s.removeRecent);
   const [restoreOpen, setRestoreOpen] = useState(false);
 
   const mostRecent = recent[0];
+  // 后端还在启动：不拦用户点，但要说清「正在启动 Agent 服务」，而不是报内部错误。
+  // 打开失败要能区分：Agent 还在启动 → 提示启动中；后端就绪但真失败 → 显示错误 + 重试。
+  const sidecarStarting = sidecarStatus === 'starting';
+  const rolling = loading || sidecarStarting;
+  const failed = Boolean(errorKey) && !rolling;
+  const lastOpened = useRef<string | null>(null);
 
   return (
     <div className="welcome">
@@ -52,7 +60,10 @@ export function Welcome() {
             type="button"
             className="welcome__btn welcome__btn--ghost"
             disabled={!mostRecent || loading}
-            onClick={() => mostRecent && void openPath(mostRecent.path)}
+            onClick={() => {
+              if (mostRecent) lastOpened.current = mostRecent.path;
+              if (mostRecent) void openPath(mostRecent.path);
+            }}
           >
             <Clock size={15} />
             {t('openRecent')}
@@ -68,9 +79,34 @@ export function Welcome() {
           </button>
         </div>
 
-        {error && (
-          <div className="welcome__error">
-            <span>{te((error.messageKey ?? 'error.internal').replace(/^error\./, ''))}</span>
+        {sidecarStarting && (
+          <div className="welcome__status" role="status">
+            <Loader2 size={13} className="welcome__spin" />
+            <span>{tc('sidecarStarting')}</span>
+          </div>
+        )}
+
+        {loading && (
+          <div className="welcome__status" role="status">
+            <Loader2 size={13} className="welcome__spin" />
+            <span>{t('opening')}</span>
+          </div>
+        )}
+
+        {failed && (
+          <div className="welcome__error" role="alert">
+            <span>{te((errorKey ?? 'error.internal').replace(/^error\./, ''))}</span>
+            <button
+              type="button"
+              className="button button--sm"
+              onClick={() => {
+                const target = lastOpened.current ?? mostRecent?.path;
+                if (target) void openPath(target);
+              }}
+              disabled={!lastOpened.current && !mostRecent}
+            >
+              {tc('retry')}
+            </button>
           </div>
         )}
 
@@ -83,7 +119,10 @@ export function Welcome() {
                   <button
                     type="button"
                     className="welcome__item-main"
-                    onClick={() => void openPath(item.path)}
+                    onClick={() => {
+                      lastOpened.current = item.path;
+                      void openPath(item.path);
+                    }}
                   >
                     <FolderOpen size={16} className="welcome__item-icon" />
                     <span className="welcome__item-text">
