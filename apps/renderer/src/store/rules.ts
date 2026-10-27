@@ -7,6 +7,7 @@ import {
   updateRuleApi,
   type RuleInput,
 } from '../lib/api';
+import { errorKeyOf } from '../lib/errorKey';
 
 interface RulesState {
   items: AuditRule[];
@@ -32,7 +33,7 @@ export const useRulesStore = create<RulesState>((set, get) => ({
     } catch (err) {
       set({
         loading: false,
-        errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal',
+        errorKey: errorKeyOf(err),
       });
     }
   },
@@ -44,7 +45,7 @@ export const useRulesStore = create<RulesState>((set, get) => ({
       await get().load();
       return true;
     } catch (err) {
-      set({ errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal' });
+      set({ errorKey: errorKeyOf(err) });
       return false;
     }
   },
@@ -56,7 +57,7 @@ export const useRulesStore = create<RulesState>((set, get) => ({
       await get().load();
       return true;
     } catch (err) {
-      set({ errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal' });
+      set({ errorKey: errorKeyOf(err) });
       return false;
     }
   },

@@ -15,6 +15,7 @@ import {
   resolveArchiveConflict,
   setArchiveRemote,
 } from '../lib/api';
+import { errorKeyOf } from '../lib/errorKey';
 
 interface ArchiveState {
   status: ArchiveStatus | null;
@@ -38,10 +39,6 @@ interface ArchiveState {
   reset: () => void;
 }
 
-function messageKey(err: unknown): string {
-  return (err as { messageKey?: string }).messageKey ?? 'error.internal';
-}
-
 /** 归档视图状态：状态 + 历史；写操作成功后重新加载。 */
 export const useArchiveStore = create<ArchiveState>((set, get) => ({
   status: null,
@@ -59,7 +56,7 @@ export const useArchiveStore = create<ArchiveState>((set, get) => ({
       ]);
       set({ status, history: history.items, loading: false });
     } catch (err) {
-      set({ loading: false, errorKey: messageKey(err) });
+      set({ loading: false, errorKey: errorKeyOf(err) });
     }
   },
 
@@ -68,7 +65,7 @@ export const useArchiveStore = create<ArchiveState>((set, get) => ({
       await initArchive();
       await get().load();
     } catch (err) {
-      set({ errorKey: messageKey(err) });
+      set({ errorKey: errorKeyOf(err) });
       throw err;
     }
   },
@@ -78,7 +75,7 @@ export const useArchiveStore = create<ArchiveState>((set, get) => ({
       await commitArchive(message);
       await get().load();
     } catch (err) {
-      set({ errorKey: messageKey(err) });
+      set({ errorKey: errorKeyOf(err) });
       throw err;
     }
   },
@@ -89,7 +86,7 @@ export const useArchiveStore = create<ArchiveState>((set, get) => ({
       await get().load();
       return result;
     } catch (err) {
-      set({ errorKey: messageKey(err) });
+      set({ errorKey: errorKeyOf(err) });
       throw err;
     }
   },
@@ -99,7 +96,7 @@ export const useArchiveStore = create<ArchiveState>((set, get) => ({
       await setArchiveRemote(input);
       await get().load();
     } catch (err) {
-      set({ errorKey: messageKey(err) });
+      set({ errorKey: errorKeyOf(err) });
       throw err;
     }
   },
@@ -118,7 +115,7 @@ export const useArchiveStore = create<ArchiveState>((set, get) => ({
       await resolveArchiveConflict(input);
       await get().load();
     } catch (err) {
-      set({ errorKey: messageKey(err) });
+      set({ errorKey: errorKeyOf(err) });
       throw err;
     }
   },

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Modal, message } from 'antd';
 import type { Severity } from '@fireeyeaud/shared';
 import { useFindingsStore } from '../../store/findings';
+import { errorKeyOf } from '../../lib/errorKey';
 
 /** 人工新建疑点。 */
 export function NewFindingDialog({
@@ -60,7 +61,7 @@ export function NewFindingDialog({
       void message.success(t('created'));
       onClose();
     } catch (err) {
-      setErrorKey((err as { messageKey?: string }).messageKey ?? 'error.internal');
+      setErrorKey(errorKeyOf(err));
     } finally {
       setBusy(false);
     }

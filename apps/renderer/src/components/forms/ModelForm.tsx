@@ -6,6 +6,7 @@ import { useModelsStore } from '../../store/models';
 import { FormActions } from './FormActions';
 import { FormError } from './FormError';
 import { useUnsavedGuard } from './UnsavedGuard';
+import { errorKeyOf } from '../../lib/errorKey';
 
 interface FormState {
   name: string;
@@ -104,7 +105,7 @@ export function ModelForm({
       else await add(payload);
       return true;
     } catch (err) {
-      setLocalError((err as { messageKey?: string }).messageKey ?? 'error.internal');
+      setLocalError(errorKeyOf(err));
       return false;
     } finally {
       setBusy(false);

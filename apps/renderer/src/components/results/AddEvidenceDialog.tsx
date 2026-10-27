@@ -3,6 +3,7 @@ import { Modal, Radio } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { FileUp } from 'lucide-react';
 import { addFindingEvidenceApi, type AddEvidenceInput } from '../../lib/api';
+import { errorKeyOf } from '../../lib/errorKey';
 
 /** 补充证据：上传文件 / 文字说明 / 手工核查记录。 */
 export function AddEvidenceDialog({
@@ -70,7 +71,7 @@ export function AddEvidenceDialog({
       onAdded();
       onClose();
     } catch (err) {
-      setErrorKey((err as { messageKey?: string }).messageKey ?? 'error.internal');
+      setErrorKey(errorKeyOf(err));
     } finally {
       setBusy(false);
     }

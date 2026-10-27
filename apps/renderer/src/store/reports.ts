@@ -7,6 +7,7 @@ import {
   previewReport,
   type GenerateReportInput,
 } from '../lib/api';
+import { errorKeyOf } from '../lib/errorKey';
 
 interface ReportsState {
   items: ReportManifest[];
@@ -17,10 +18,6 @@ interface ReportsState {
   commit: (token: string, title?: string) => Promise<ReportManifest>;
   remove: (id: string) => Promise<void>;
   reset: () => void;
-}
-
-function messageKey(err: unknown): string {
-  return (err as { messageKey?: string }).messageKey ?? 'error.internal';
 }
 
 /** 项目报告列表：预览与保存分开，保存成功后才刷新列表。 */
@@ -35,7 +32,7 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
       const page = await listReports();
       set({ items: page.items, loading: false });
     } catch (err) {
-      set({ loading: false, errorKey: messageKey(err) });
+      set({ loading: false, errorKey: errorKeyOf(err) });
     }
   },
 
@@ -52,7 +49,7 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
       await deleteReport(id);
       await get().load();
     } catch (err) {
-      set({ errorKey: messageKey(err) });
+      set({ errorKey: errorKeyOf(err) });
       throw err;
     }
   },

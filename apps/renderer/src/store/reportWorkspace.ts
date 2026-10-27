@@ -1,5 +1,8 @@
 import { create } from 'zustand';
 import type { EvidenceFormDocument, ReportDocument } from '@fireeyeaud/shared';
+// 用相对导入 + `.ts` 后缀：本模块被 node 单测直接加载（不经 Vite），
+// 无扩展名的相对导入在原生 ESM 下解析不到 errorKey.ts。
+import { errorKeyOf } from '../lib/errorKey.ts';
 
 export type WorkspaceDocument = ReportDocument | EvidenceFormDocument;
 
@@ -21,10 +24,6 @@ export interface DocState {
   saveOutline: (id: string, approved: boolean) => Promise<void>;
   setDoc: (id: string, doc: WorkspaceDocument) => void;
   reset: () => void;
-}
-
-function messageKey(err: unknown): string {
-  return (err as { messageKey?: string }).messageKey ?? 'error.internal';
 }
 
 /** 写作台文档缓存：按 id 存 body / skeleton / manifest；报告与取证单共用同一实现。 */
@@ -49,7 +48,7 @@ export function createWorkspaceStore(api: WorkspaceApi) {
       } catch (err) {
         set((state) => ({
           loading: { ...state.loading, [id]: false },
-          errorKey: messageKey(err),
+          errorKey: errorKeyOf(err),
         }));
         return null;
       }

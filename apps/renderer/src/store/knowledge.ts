@@ -20,6 +20,7 @@ import {
   type KbQueryInput,
   type KbTestInput,
 } from '../lib/api';
+import { errorKeyOf } from '../lib/errorKey';
 
 interface KnowledgeState {
   items: KbProvider[];
@@ -65,7 +66,7 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
     } catch (err) {
       set({
         loading: false,
-        errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal',
+        errorKey: errorKeyOf(err),
       });
     }
   },
@@ -77,7 +78,7 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
       await get().load();
       return true;
     } catch (err) {
-      set({ errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal' });
+      set({ errorKey: errorKeyOf(err) });
       return false;
     }
   },
@@ -89,7 +90,7 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
       await get().load();
       return true;
     } catch (err) {
-      set({ errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal' });
+      set({ errorKey: errorKeyOf(err) });
       return false;
     }
   },
@@ -105,7 +106,7 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
       const res = await testKbProvider(id, scope);
       return { ok: res.ok, knowledgeCount: res.knowledgeCount ?? 0 };
     } catch (err) {
-      set({ errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal' });
+      set({ errorKey: errorKeyOf(err) });
       return { ok: false, knowledgeCount: 0 };
     }
   },
@@ -116,7 +117,7 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
       const res = await testKbParams(input);
       return res.ok;
     } catch (err) {
-      set({ errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal' });
+      set({ errorKey: errorKeyOf(err) });
       return false;
     }
   },
@@ -126,9 +127,9 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
     try {
       return await queryKbProvider(id, input);
     } catch (err) {
-      const e = err as { messageKey?: string; params?: { reason?: string } };
+      const e = err as { params?: { reason?: string } };
       set({
-        errorKey: e.messageKey ?? 'error.internal',
+        errorKey: errorKeyOf(err),
         queryError: e.params?.reason ?? null,
       });
       return null;
@@ -143,7 +144,7 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
         knowledgeByProvider: { ...s.knowledgeByProvider, [id]: res.items },
       }));
     } catch (err) {
-      set({ errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal' });
+      set({ errorKey: errorKeyOf(err) });
     }
   },
 

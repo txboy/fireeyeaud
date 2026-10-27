@@ -18,6 +18,7 @@ import { useWorkspaceStore } from '../store/workspace';
 import { useUiStore } from '../store/ui';
 import { useConfirmStore } from '../store/confirm';
 import { AddEvidenceDialog } from './results/AddEvidenceDialog';
+import { errorKeyOf } from '../lib/errorKey';
 
 const REVIEWER = '审计员';
 
@@ -167,7 +168,7 @@ export function FindingDetail({ finding }: { finding: Finding }) {
       await removeFindingEvidenceApi(finding.id, item.id);
       await reloadFindings();
     } catch (err) {
-      setErrorKey((err as { messageKey?: string }).messageKey ?? 'error.internal');
+      setErrorKey(errorKeyOf(err));
     }
   };
 

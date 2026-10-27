@@ -5,6 +5,7 @@ import type { TemplateInfo } from '@fireeyeaud/shared';
 import { listTemplates } from '../../lib/api';
 import { useFormsStore } from '../../store/forms';
 import { useFindingsStore } from '../../store/findings';
+import { errorKeyOf } from '../../lib/errorKey';
 
 /** 新建取证单：选取证单模板 + 本轮勾选的疑点，创建后直接进入写作台。 */
 export function NewEvidenceFormDialog({
@@ -46,7 +47,7 @@ export function NewEvidenceFormDialog({
         setTemplateId(preferred?.id ?? '');
       })
       .catch((err) => {
-        setErrorKey((err as { messageKey?: string }).messageKey ?? 'error.internal');
+        setErrorKey(errorKeyOf(err));
       });
   }, [open, t]);
 
@@ -75,7 +76,7 @@ export function NewEvidenceFormDialog({
       void message.success(t('created'));
       onClose();
     } catch (err) {
-      setErrorKey((err as { messageKey?: string }).messageKey ?? 'error.internal');
+      setErrorKey(errorKeyOf(err));
     } finally {
       setBusy(false);
     }

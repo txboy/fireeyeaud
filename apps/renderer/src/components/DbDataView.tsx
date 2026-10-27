@@ -8,6 +8,7 @@ import { useDbSqlAssistantStore } from '../store/dbSqlAssistant';
 import { useSettingsStore } from '../store/settings';
 import type { DbDataTab } from '../store/ui';
 import { DbSqlAssistantPanel } from './DbSqlAssistantPanel';
+import { errorKeyOf } from '../lib/errorKey';
 
 // CodeMirror / SQL 语言包按需加载，避免进入主包。
 const SqlEditor = lazy(() =>
@@ -146,7 +147,7 @@ export function DbDataView({ tab }: { tab: DbDataTab }) {
       if (includeTotal) setTotal(res.total);
       setPage(nextPage);
     } catch (err) {
-      setErrorKey((err as { messageKey?: string }).messageKey ?? 'error.internal');
+      setErrorKey(errorKeyOf(err));
       setResult(null);
     } finally {
       setBusy(false);

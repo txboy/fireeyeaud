@@ -9,6 +9,7 @@ import {
   updateModel,
   type ModelInput,
 } from '../lib/api';
+import { errorKeyOf } from '../lib/errorKey';
 
 interface ModelsState {
   items: ModelProfile[];
@@ -36,7 +37,7 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
     } catch (err) {
       set({
         loading: false,
-        errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal',
+        errorKey: errorKeyOf(err),
       });
     }
   },

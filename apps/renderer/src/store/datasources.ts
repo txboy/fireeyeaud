@@ -6,6 +6,7 @@ import {
   listDatasources,
   syncDatasources,
 } from '../lib/api';
+import { errorKeyOf } from '../lib/errorKey';
 
 export interface ImportState {
   path: string;
@@ -138,7 +139,7 @@ export const useDatasourcesStore = create<DatasourcesState>((set, get) => {
       await get().load();
     } catch (err) {
       set({
-        errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal',
+        errorKey: errorKeyOf(err),
       });
     } finally {
       if (run.background) set({ backgroundSync: null });
@@ -172,7 +173,7 @@ export const useDatasourcesStore = create<DatasourcesState>((set, get) => {
       set({ items: page.items, errorKey: null });
     } catch (err) {
       set({
-        errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal',
+        errorKey: errorKeyOf(err),
       });
     }
   },
@@ -215,7 +216,7 @@ export const useDatasourcesStore = create<DatasourcesState>((set, get) => {
       });
     } catch (err) {
       set({
-        errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal',
+        errorKey: errorKeyOf(err),
       });
     }
     set({ importing: null });
@@ -239,9 +240,7 @@ export const useDatasourcesStore = create<DatasourcesState>((set, get) => {
       await deleteDataSource(id);
       set({ items: get().items.filter((item) => item.id !== id), errorKey: null });
     } catch (err) {
-      set({
-        errorKey: (err as { messageKey?: string }).messageKey ?? 'error.deleteFailed',
-      });
+      set({ errorKey: errorKeyOf(err, 'error.deleteFailed') });
     }
   },
 
