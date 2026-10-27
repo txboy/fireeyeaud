@@ -10,6 +10,33 @@
 
 ---
 
+## 界面预览
+
+**主工作区** —— 左侧资源管理器、中间与 AI 对话、右侧疑点清单：
+
+<p>
+  <img src="docs/design/preview/01-workspace.png" alt="主工作区 · 浅色" width="100%">
+</p>
+
+<p>
+  <img src="docs/design/preview-dark/01-workspace.png" alt="主工作区 · 深色" width="100%">
+</p>
+
+**从打开文件夹开始，到交付取证单和报告：**
+
+| | |
+|---|---|
+| ![欢迎页](docs/design/preview/00-welcome.png)<br><sub>欢迎 · 打开文件夹</sub> | ![数据库连接](docs/design/preview/02-database.png)<br><sub>数据库连接 · 只读 + 表字段授权</sub> |
+| ![模型](docs/design/preview/03-models.png)<br><sub>模型 · 本机或云端</sub> | ![知识库](docs/design/preview/04-knowledge.png)<br><sub>知识库 · Dify / RAGFlow</sub> |
+| ![SQL库](docs/design/preview/05-sql.png)<br><sub>SQL库 · 自定义审计规则</sub> | ![MCP](docs/design/preview/06-mcp.png)<br><sub>MCP · 挂载外部工具</sub> |
+| ![Skills](docs/design/preview/07-skills.png)<br><sub>Skills · 可复用技能包</sub> | ![模板中心](docs/design/preview/08-templates.png)<br><sub>模板中心 · 按你的模板出表</sub> |
+| ![项目报告](docs/design/preview/09-reports.png)<br><sub>项目报告</sub> | ![取证单](docs/design/preview/10-evidence-forms.png)<br><sub>取证单</sub> |
+| ![项目归档](docs/design/preview/11-archive.png)<br><sub>项目归档 · 基于 Git</sub> | |
+
+<sub>深色主题预览见 [`docs/design/preview-dark/`](docs/design/preview-dark/)。以上为界面设计稿，与 `docs/design/main.pen` 画板一一对应，详见[设计说明](docs/design/设计说明.md)。</sub>
+
+---
+
 ## 为什么用它
 
 传统做法是：在 Excel 里翻凭证 → 手工筛异常 → 截图存证据 → 再拼一份 Word 底稿。中间任何一步返工，前面的记录就散落一地。

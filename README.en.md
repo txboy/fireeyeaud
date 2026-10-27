@@ -10,6 +10,33 @@ Your files and outputs stay in that folder. No relay server sits in between, and
 
 ---
 
+## Screenshots
+
+**Main workspace** — explorer on the left, the AI conversation in the middle, findings on the right:
+
+<p>
+  <img src="docs/design/preview/01-workspace.png" alt="Main workspace - light" width="100%">
+</p>
+
+<p>
+  <img src="docs/design/preview-dark/01-workspace.png" alt="Main workspace - dark" width="100%">
+</p>
+
+**From opening a folder to handing over evidence forms and reports:**
+
+| | |
+|---|---|
+| ![Welcome](docs/design/preview/00-welcome.png)<br><sub>Welcome · open a folder</sub> | ![Database connections](docs/design/preview/02-database.png)<br><sub>Database connections · read-only, table/column grants</sub> |
+| ![Models](docs/design/preview/03-models.png)<br><sub>Models · local or cloud</sub> | ![Knowledge base](docs/design/preview/04-knowledge.png)<br><sub>Knowledge base · Dify / RAGFlow</sub> |
+| ![SQL rules](docs/design/preview/05-sql.png)<br><sub>SQL library · custom audit rules</sub> | ![MCP](docs/design/preview/06-mcp.png)<br><sub>MCP · bring in external tools</sub> |
+| ![Skills](docs/design/preview/07-skills.png)<br><sub>Skills · reusable skill packs</sub> | ![Templates](docs/design/preview/08-templates.png)<br><sub>Templates · export with your own formats</sub> |
+| ![Reports](docs/design/preview/09-reports.png)<br><sub>Project reports</sub> | ![Evidence forms](docs/design/preview/10-evidence-forms.png)<br><sub>Evidence forms</sub> |
+| ![Archive](docs/design/preview/11-archive.png)<br><sub>Archive · Git-based versioning</sub> | |
+
+<sub>Dark theme previews live in [`docs/design/preview-dark/`](docs/design/preview-dark/). These are design mockups matching the boards in `docs/design/main.pen`; see the [design notes](docs/design/设计说明.md) (Chinese).</sub>
+
+---
+
 ## Why it exists
 
 The usual routine: dig through vouchers in Excel → hand-filter the anomalies → screenshot the evidence → stitch together a Word working paper. Any rework along the way scatters the record you built.
