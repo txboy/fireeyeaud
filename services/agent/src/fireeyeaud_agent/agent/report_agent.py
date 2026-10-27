@@ -335,7 +335,13 @@ async def stream_report_chat(
     root = Path(root)
     text = (message or "").strip()
     if not text:
-        yield {"event": "error", "data": {"messageKey": "error.internal"}}
+        yield {
+            "event": "error",
+            "data": {
+                "code": "E_EMPTY_MESSAGE",
+                "messageKey": "error.emptyMessage",
+            },
+        }
         return
 
     doc = report_docs.get_document(root, report_id)

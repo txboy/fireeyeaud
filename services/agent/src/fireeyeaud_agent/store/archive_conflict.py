@@ -327,7 +327,7 @@ def resolve_conflict(
 ) -> dict[str, Any]:
     """按文件选择合并为双亲 commit；不自动推送。"""
     if base not in {"local", "remote"}:
-        raise ApiError("E_INVALID_BASE", 400, "error.internal")
+        raise ApiError("E_INVALID_BASE", 400, "error.invalidBase")
     root = Path(root)
     check = check_conflict(root, password=password)
     if not check["diverged"]:
@@ -386,7 +386,7 @@ def resolve_conflict(
                 auto_paths.append(path)
                 _set(target, local_files, path)
             else:
-                raise ApiError("E_INVALID_CHOICE", 400, "error.internal")
+                raise ApiError("E_INVALID_CHOICE", 400, "error.invalidChoice")
 
         # 工作区变成目标版本
         current_files = archive._commit_files(repo, _commit(repo, local))

@@ -171,7 +171,7 @@ def review_finding(
             "ts": now_iso(),
         }
     else:
-        raise ApiError("E_INVALID_ACTION", 400, "error.internal", {"action": action})
+        raise ApiError("E_INVALID_ACTION", 400, "error.invalidAction", {"action": action})
     return append_event(findings_path(root), event)
 
 

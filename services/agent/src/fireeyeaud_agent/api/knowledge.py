@@ -168,7 +168,7 @@ def query_provider(provider_id: str, body: KbQueryBody) -> dict:
 
     query = (body.query or "").strip()
     if not query:
-        raise ApiError("E_KB_QUERY", 400, "error.internal")
+        raise ApiError("E_KB_QUERY", 400, "error.emptyQuery")
 
     adapter = kb.adapter_for(provider["type"])
     key = knowledge.get_secret(provider.get("apiKeyRef") or provider_id) or ""
@@ -253,6 +253,6 @@ def get_enabled(scope: str | None = Query(default=None)) -> dict:
 @router.patch("/kb/enabled")
 def patch_enabled(body: EnabledBody) -> dict:
     if body.scope not in ("global", "project"):
-        raise ApiError("E_INVALID_SCOPE", 400, "error.internal")
+        raise ApiError("E_INVALID_SCOPE", 400, "error.invalidScope")
     items = knowledge.set_enabled(body.scope, body.items, _root())
     return {"ok": True, "items": items}
