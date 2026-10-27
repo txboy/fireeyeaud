@@ -347,7 +347,13 @@ async def stream_form_chat(
     root = Path(root)
     text = (message or "").strip()
     if not text:
-        yield {"event": "error", "data": {"messageKey": "error.internal"}}
+        yield {
+            "event": "error",
+            "data": {
+                "code": "E_EMPTY_MESSAGE",
+                "messageKey": "error.emptyMessage",
+            },
+        }
         return
 
     doc = form_docs.get_document(root, form_id)

@@ -114,7 +114,7 @@ def create_item(
     item = dict(data)
     scope = item.get("scope") or "global"
     if scope not in ("global", "project"):
-        raise ApiError("E_INVALID_SCOPE", 400, "error.internal")
+        raise ApiError("E_INVALID_SCOPE", 400, "error.invalidScope")
     item["id"] = _next_id(kind)
     item["scope"] = scope
     ts = now_iso()

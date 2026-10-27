@@ -122,7 +122,7 @@ def append_manual_evidence(
     if get_finding(root, finding_id) is None:
         raise ApiError("E_NOT_FOUND", 404, "error.notFound", {"id": finding_id})
     if kind not in {"file", "text", "record"}:
-        raise ApiError("E_INVALID_KIND", 400, "error.internal", {"kind": kind})
+        raise ApiError("E_INVALID_KIND", 400, "error.invalidEvidenceKind", {"kind": kind})
     if kind == "file" and source_path is None:
         raise ApiError("E_FILE_REQUIRED", 400, "error.fileRequired")
 

@@ -816,11 +816,11 @@ async def stream_sql_assistant(
                         data = {
                             "callId": call_id,
                             "ok": False,
-                            "messageKey": "error.internal",
+                            "messageKey": "error.dbConn",
                             "table": table,
                             "summary": f"{table}：查询失败",
                         }
-                        content = json.dumps({"error": "internal"}, ensure_ascii=False)
+                        content = json.dumps({"error": "db_conn"}, ensure_ascii=False)
                     else:
                         data = {
                             "callId": call_id,
@@ -852,7 +852,9 @@ async def stream_sql_assistant(
         return
     except Exception:  # 模型侧异常统一转 error 事件
         logger.exception("sql assistant stream failed")
-        yield emit("error", {"messageKey": "error.internal"})
+        yield emit(
+            "error", {"messageKey": "error.llmUnavailable", "code": "E_LLM"}
+        )
         return
 
     if not streamed_any:

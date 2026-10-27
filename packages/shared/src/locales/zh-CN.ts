@@ -936,6 +936,19 @@ export default {
     webConn: '联网检索请求失败',
     webProvider: '不支持的联网检索提供方',
     agentLimit: '已达到单轮步数或时间上限，请补充说明后重试',
+    /** 会话 / 报告 / 取证单对话发送了空消息（此前被误报为「发生内部错误」）。 */
+    emptyMessage: '请输入内容后再发送',
+    /** config 层的 scope 只能是 global / project。 */
+    invalidScope: '作用域无效（仅支持全局或本项目）',
+    /** 归档冲突裁决：base 只能是 local / remote；每个文件的选择必须合法。 */
+    invalidBase: '合并基准无效，请重新检测冲突',
+    invalidChoice: '冲突裁决选项无效，请重新选择',
+    /** 人工证据的类型只能是 file / text / record。 */
+    invalidEvidenceKind: '证据类型无效（仅支持文件、文字或核查记录）',
+    /** 疑点审核动作不在允许列表内。 */
+    invalidAction: '审核操作无效',
+    /** 知识库检索的查询为空。 */
+    emptyQuery: '请输入检索内容',
     fileNotFound: '文件不存在或不可读',
     fileType: '文件类型不支持（仅接受 .docx）',
     fileTooLarge: '文件过大（单个模板不超过 20MB）',

@@ -226,7 +226,7 @@ def get_template(
 ) -> dict[str, Any] | None:
     """只查询指定作用域。"""
     if scope not in ("global", "project"):
-        raise ApiError("E_INVALID_SCOPE", 400, "error.internal")
+        raise ApiError("E_INVALID_SCOPE", 400, "error.invalidScope")
     sample_kind = _kind_of_sample(template_id)
     if sample_kind is not None:
         # 示例是全局虚拟项：列表里带 scope=global，显式作用域解析必须也能拿到（P3 依赖）。
@@ -350,7 +350,7 @@ def upload_template(
 ) -> dict[str, Any]:
     """导入一份 docx；同作用域同 kind 的第一份自动成为默认。"""
     if scope not in ("global", "project"):
-        raise ApiError("E_INVALID_SCOPE", 400, "error.internal")
+        raise ApiError("E_INVALID_SCOPE", 400, "error.invalidScope")
     if kind not in KINDS:
         raise ApiError("E_FILE_TYPE", 400, "error.fileType", {"name": str(source)})
     if scope == "project" and root is None:
@@ -433,9 +433,9 @@ def update_template(
 ) -> dict[str, Any]:
     """重命名 / 设默认 / 搬家；kind 不可改。"""
     if scope not in ("global", "project"):
-        raise ApiError("E_INVALID_SCOPE", 400, "error.internal")
+        raise ApiError("E_INVALID_SCOPE", 400, "error.invalidScope")
     if target_scope is not None and target_scope not in ("global", "project"):
-        raise ApiError("E_INVALID_SCOPE", 400, "error.internal")
+        raise ApiError("E_INVALID_SCOPE", 400, "error.invalidScope")
     if _is_sample_id(template_id):
         raise ApiError(
             "E_TEMPLATE_BUILTIN", 403, "error.templateBuiltinReadonly", {"id": template_id}
@@ -524,7 +524,7 @@ def _move_template(
 
 def delete_template(root: Path | None, template_id: str, scope: str) -> bool:
     if scope not in ("global", "project"):
-        raise ApiError("E_INVALID_SCOPE", 400, "error.internal")
+        raise ApiError("E_INVALID_SCOPE", 400, "error.invalidScope")
     if _is_sample_id(template_id):
         raise ApiError(
             "E_TEMPLATE_BUILTIN", 403, "error.templateBuiltinReadonly", {"id": template_id}
@@ -602,7 +602,7 @@ def replace_template_file(
     写入用「临时文件 + os.replace」，避免中途失败留下半截文件。
     """
     if scope not in ("global", "project"):
-        raise ApiError("E_INVALID_SCOPE", 400, "error.internal")
+        raise ApiError("E_INVALID_SCOPE", 400, "error.invalidScope")
     if _is_sample_id(template_id):
         raise ApiError(
             "E_TEMPLATE_BUILTIN", 403, "error.templateBuiltinReadonly", {"id": template_id}
@@ -661,7 +661,7 @@ def duplicate_template(
 ) -> dict[str, Any]:
     """把模板（含内置示例）复制为目标作用域下的可编辑模板。"""
     if target_scope not in ("global", "project"):
-        raise ApiError("E_INVALID_SCOPE", 400, "error.internal")
+        raise ApiError("E_INVALID_SCOPE", 400, "error.invalidScope")
     if target_scope == "project" and root is None:
         raise ApiError("E_NO_WORKSPACE", 409, "error.noWorkspace")
 
