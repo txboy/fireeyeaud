@@ -74,7 +74,7 @@ export interface DbSchemaTab {
   name: string;
 }
 
-/** 右侧区「数据预览」tab（每个数据库连接的一张表一个，SQL 查询 + 分页结果）。 */
+/** 右侧区「数据预览」tab（每张表一个，SQL 查询 + 分页结果）。 */
 export interface DbDataTab {
   id: string;
   kind: 'dbData';
@@ -86,6 +86,11 @@ export interface DbDataTab {
   driver: DbDriver;
   /** 表结构，用于默认 SQL 的主键排序与标识符转义。 */
   table: DbTableSchema;
+  /**
+   * 数据来源。缺省为 `connection`（普通数据库连接）；
+   * `workspace-duckdb` 表示工作区 DuckDB 里的文件型数据源表（走 /datasources/workspace-duckdb）。
+   */
+  source?: 'connection' | 'workspace-duckdb';
 }
 
 /** 右侧区「知识库浏览」tab（每个 Provider 一个，远端知识库列表 + 勾选启用）。 */
@@ -218,6 +223,9 @@ interface UiState {
     name: string;
     driver: DbDriver;
     table: DbTableSchema;
+    source?: 'connection' | 'workspace-duckdb';
+    /** 同表不同来源（例如两个文件都有 sheet1）时用于区分 tab。 */
+    tabKey?: string;
   }) => Promise<void>;
   openKbBrowse: (input: {
     id: string;
@@ -413,8 +421,8 @@ export const useUiStore = create<UiState>((set, get) => {
       });
     },
 
-    openDbData: async ({ id: connId, scope, name, driver, table }) => {
-      const id = `dbData:${connId}:${table.table}`;
+    openDbData: async ({ id: connId, scope, name, driver, table, source, tabKey }) => {
+      const id = `dbData:${tabKey ?? connId}:${table.table}`;
       if (!(await allowLeave(id))) return;
       const tab: DbDataTab = {
         id,
@@ -424,6 +432,7 @@ export const useUiStore = create<UiState>((set, get) => {
         name,
         driver,
         table,
+        source: source ?? 'connection',
       };
       set((state) => {
         const exists = state.rightTabs.some((t) => t.id === id);

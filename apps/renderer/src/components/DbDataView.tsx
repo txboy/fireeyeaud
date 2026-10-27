@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronLeft, ChevronRight, Copy, Check, Play, Sparkles } from 'lucide-react';
 import type { DbDriver, DbQueryResult, DbTableSchema } from '@fireeyeaud/shared';
-import { runDbQuery } from '../lib/api';
+import { runDbQuery, runWorkspaceQuery, getWorkspaceTableSchema } from '../lib/api';
 import { useDatabaseStore } from '../store/database';
 import { useDbSqlAssistantStore } from '../store/dbSqlAssistant';
 import { useSettingsStore } from '../store/settings';
@@ -69,16 +69,36 @@ export function DbDataView({ tab }: { tab: DbDataTab }) {
   // SQL 助手面板开合按 tab 记录：切到别的表再回来保持原状态。
   const assistantOpen = useDbSqlAssistantStore((s) => s.threads[tab.id]?.open ?? false);
   const setAssistantOpen = useDbSqlAssistantStore((s) => s.setOpen);
+  // 文件型数据源：表结构与字段补全来自工作区 DuckDB（不进 reflectByConn 缓存）。
+  const [duckSchema, setDuckSchema] = useState<DbTableSchema | null>(null);
 
   // 补全尽量使用整个连接的最新反射结果；尚未反射时回退到当前预览表。
   const tables = useMemo(() => {
     const byName = new Map<string, DbTableSchema>();
-    for (const table of reflectByConn[tab.connectionId] ?? []) {
-      byName.set(table.table, table);
+    if (tab.source !== 'workspace-duckdb') {
+      for (const table of reflectByConn[tab.connectionId] ?? []) {
+        byName.set(table.table, table);
+      }
     }
+    if (duckSchema) byName.set(duckSchema.table, duckSchema);
     if (!byName.has(tab.table.table)) byName.set(tab.table.table, tab.table);
     return [...byName.values()];
-  }, [reflectByConn, tab.connectionId, tab.table]);
+  }, [reflectByConn, tab.connectionId, tab.source, tab.table, duckSchema]);
+
+  useEffect(() => {
+    if (tab.source !== 'workspace-duckdb') return;
+    let cancelled = false;
+    getWorkspaceTableSchema(tab.table.table)
+      .then((schema) => {
+        if (!cancelled) setDuckSchema(schema);
+      })
+      .catch(() => {
+        /* 结构拿不到不影响查询：回退到打开 tab 时带进来的表结构。 */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tab.source, tab.table.table]);
 
   const copySql = async () => {
     const text = result?.sql ?? '';
@@ -111,12 +131,17 @@ export function DbDataView({ tab }: { tab: DbDataTab }) {
     setBusy(true);
     setErrorKey(null);
     try {
-      const res = await runDbQuery(tab.connectionId, tab.scope, {
+      const payload = {
         sql: execSql,
         limit: size,
         offset: (nextPage - 1) * size,
         includeTotal,
-      });
+      };
+      // 文件型数据源的表在工作区 DuckDB 里，走另一条只读接口。
+      const res =
+        tab.source === 'workspace-duckdb'
+          ? await runWorkspaceQuery(payload)
+          : await runDbQuery(tab.connectionId, tab.scope, payload);
       setResult(res);
       if (includeTotal) setTotal(res.total);
       setPage(nextPage);
@@ -240,17 +265,20 @@ export function DbDataView({ tab }: { tab: DbDataTab }) {
             </Suspense>
             <div className="dbdata__actions">
               {busy && <span className="card__meta">{t('loadingRows')}</span>}
-              <button
-                type="button"
-                className={`button button--sm button--ghost${
-                  assistantOpen ? ' button--active' : ''
-                }`}
-                aria-pressed={assistantOpen}
-                title={t('aiGenerateSql')}
-                onClick={() => setAssistantOpen(tab.id, !assistantOpen)}
-              >
-                <Sparkles size={13} strokeWidth={1.9} /> {t('aiGenerateSql')}
-              </button>
+              {/* 工作区 DuckDB 的表没有对应的数据库连接，AI 助手不适用。 */}
+              {tab.source !== 'workspace-duckdb' && (
+                <button
+                  type="button"
+                  className={`button button--sm button--ghost${
+                    assistantOpen ? ' button--active' : ''
+                  }`}
+                  aria-pressed={assistantOpen}
+                  title={t('aiGenerateSql')}
+                  onClick={() => setAssistantOpen(tab.id, !assistantOpen)}
+                >
+                  <Sparkles size={13} strokeWidth={1.9} /> {t('aiGenerateSql')}
+                </button>
+              )}
               <button
                 type="button"
                 className="button button--sm"

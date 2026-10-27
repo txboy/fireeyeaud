@@ -9,7 +9,9 @@
 from __future__ import annotations
 
 import contextlib
+import threading
 import warnings
+from pathlib import Path
 from typing import Any
 
 from ..errors import ApiError
@@ -274,6 +276,9 @@ def run_query(
         offset = 0
     offset = max(0, offset)
     driver = str(conn.get("driver") or "").lower()
+    if driver == "duckdb":
+        # 工作区 DuckDB：只读连接，避免与导入/对账的写连接争锁。
+        return _duckdb_run_query(conn, text_sql, limit=limit, offset=offset)
     first = text_sql.split()[0].lower()
     executed = text_sql
     drop_tail = 0
@@ -341,6 +346,8 @@ def count_query(
         return None
     count_inner = text_sql
     driver = str(conn.get("driver") or "").lower()
+    if driver == "duckdb":
+        return _duckdb_count_query(conn, count_inner)
     # MSSQL：派生表里不能有 ORDER BY，计数前去掉最外层 ORDER BY。
     if driver == "mssql" and _has_top_level_order(text_sql, "tsql"):
         count_inner = _strip_top_level_order(text_sql, "tsql")
@@ -396,6 +403,134 @@ def _access_count(conn: dict[str, Any], sql: str) -> int | None:
         return None
 
 
+# ---- 工作区 DuckDB（内置只读连接） ----
+#
+# sidecar 里的写入方（导入 / 对账 / 规则）用 duckdb.connect() 默认读写；
+# 预览这边统一以只读方式打开，避免与写连接争锁、也彻底杜绝误写。
+
+_DUCKDB_LOCK = threading.Lock()
+
+
+@contextlib.contextmanager
+def _duckdb_connect(conn: dict[str, Any]):
+    """以**读写**方式打开工作区 DuckDB，但只执行只读 SQL。
+
+    为什么不用 `read_only=True`：同一个数据库文件在同一进程内不能存在两种配置的连接
+    （DuckDB 会报 "Can't open a connection to same database file with a different
+    configuration"）。导入 / 对账 / 规则都用默认读写连接，所以这里必须保持一致；
+    真正的只读保证来自 `sandbox.validate_sql`（只放行 SELECT/WITH/EXPLAIN/DESCRIBE）。
+    """
+    import duckdb
+
+    path = str(conn.get("path") or "")
+    if not path or not Path(path).is_file():
+        raise ApiError(
+            "E_DB_CONN", 502, "error.dbConn", {"reason": "workspace.duckdb 不存在"}
+        )
+    # 同一文件只允许一个写连接；预览与导入/对账串行化，避免争锁。
+    with _DUCKDB_LOCK:
+        handle = duckdb.connect(path)
+        try:
+            yield handle
+        finally:
+            handle.close()
+
+
+def _duckdb_execute(conn: dict[str, Any], sql: str, params: list[Any] | None = None):
+    with _duckdb_connect(conn) as handle:
+        cursor = handle.execute(sql, params or [])
+        return cursor.fetchall(), list(cursor.description or [])
+
+
+def _pages_on_any_driver(conn: dict[str, Any]) -> bool:
+    return True
+
+
+def _duckdb_run_query(
+    conn: dict[str, Any],
+    text_sql: str,
+    *,
+    limit: int,
+    offset: int,
+) -> dict[str, Any]:
+    """只读执行一条 SQL 并分页返回；返回结构与其它驱动一致。"""
+    first = text_sql.split()[0].lower()
+    paginated = first not in ("explain", "describe") and not _has_top_level_limit(
+        text_sql, dialect_for(conn)
+    )
+    try:
+        if not paginated:
+            fetched, description = _duckdb_execute(conn, text_sql)
+            rows = [list(r) for r in fetched]
+            has_more = False
+            executed = text_sql
+        else:
+            executed = (
+                f"SELECT * FROM ({text_sql}) AS _sub LIMIT {limit + 1} OFFSET {offset}"
+            )
+            fetched, description = _duckdb_execute(conn, executed)
+            has_more = len(fetched) > limit
+            rows = [list(r) for r in fetched[:limit]]
+    except ApiError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise ApiError("E_DB_CONN", 502, "error.dbConn", {"reason": str(exc)}) from exc
+
+    return {
+        "columns": [str(d[0]) for d in description],
+        "rows": rows,
+        "rowCount": len(rows),
+        "hasMore": has_more,
+        "truncated": has_more,
+        "paginated": paginated,
+        "sql": executed,
+    }
+
+
+def _duckdb_count_query(conn: dict[str, Any], text_sql: str) -> int | None:
+    first = text_sql.split()[0].lower()
+    if first in ("explain", "describe"):
+        return None
+    try:
+        fetched, _ = _duckdb_execute(
+            conn, f"SELECT COUNT(*) FROM ({text_sql}) AS _sub"
+        )
+        return int(fetched[0][0])
+    except Exception:  # noqa: BLE001 - 计数失败不阻断预览
+        return None
+
+
+def duckdb_inspect_table(conn: dict[str, Any], table: str) -> dict[str, Any] | None:
+    """读取一张表的列信息（供预览页的默认 SQL 与补全）。"""
+    try:
+        fetched, _ = _duckdb_execute(
+            conn,
+            "SELECT column_name, data_type FROM information_schema.columns "
+            "WHERE table_name = ? ORDER BY ordinal_position",
+            [table],
+        )
+    except ApiError:
+        raise
+    except Exception:  # noqa: BLE001
+        return None
+    if not fetched:
+        return None
+    return {
+        "table": table,
+        "comment": None,
+        "columns": [
+            {
+                "name": str(name),
+                "type": str(dtype),
+                "comment": None,
+                "nullable": True,
+                "primaryKey": False,
+            }
+            for name, dtype in fetched
+        ],
+    }
+
+
 _DIALECT = {
     "sqlite": "sqlite",
     "postgresql": "postgres",
@@ -403,6 +538,8 @@ _DIALECT = {
     "mssql": "tsql",
     "access": "tsql",
     "oracle": "oracle",
+    # 工作区 DuckDB：方言与 PostgreSQL 接近（sqlglot 走 postgres）。
+    "duckdb": "postgres",
 }
 
 
