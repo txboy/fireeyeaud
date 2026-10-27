@@ -6,6 +6,7 @@ from langchain_core.messages import AIMessage, AIMessageChunk
 from fake_model import FakeChatModel
 
 from fireeyeaud_agent.agent import graph as graph_mod
+from fireeyeaud_agent.config import models as models_mod
 from fireeyeaud_agent.main import app
 
 
@@ -19,7 +20,7 @@ def _parse_sse(text: str) -> list[dict]:
 
 async def test_chat_streams_sse_envelope(tmp_path, monkeypatch) -> None:
     fake = FakeChatModel(messages=iter([AIMessage(content="你好，这是回答")]))
-    monkeypatch.setattr(graph_mod, "build_chat_model", lambda *_a, **_k: fake)
+    monkeypatch.setattr(models_mod, "build_chat_model", lambda *_a, **_k: fake)
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
@@ -88,7 +89,7 @@ async def test_chat_persists_context_and_attachments(tmp_path, monkeypatch) -> N
     )
 
     fake = FakeChatModel(messages=iter([AIMessage(content="好的")]))
-    monkeypatch.setattr(graph_mod, "build_chat_model", lambda *_a, **_k: fake)
+    monkeypatch.setattr(models_mod, "build_chat_model", lambda *_a, **_k: fake)
 
     attachment = {"path": "D:/tmp/a.pdf", "name": "a.pdf"}
     async with httpx.AsyncClient(
@@ -164,7 +165,7 @@ async def test_chat_vision_model_sends_image_block(tmp_path, monkeypatch) -> Non
     Image.new("RGB", (200, 120), "white").save(image)
 
     model = _CapturingModel()
-    monkeypatch.setattr(graph_mod, "build_chat_model", lambda *_a, **_k: model)
+    monkeypatch.setattr(models_mod, "build_chat_model", lambda *_a, **_k: model)
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
@@ -210,7 +211,7 @@ async def test_chat_text_model_keeps_text_extraction(tmp_path, monkeypatch) -> N
     Image.new("RGB", (200, 120), "white").save(image)
 
     model = _CapturingModel()
-    monkeypatch.setattr(graph_mod, "build_chat_model", lambda *_a, **_k: model)
+    monkeypatch.setattr(models_mod, "build_chat_model", lambda *_a, **_k: model)
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
@@ -265,7 +266,7 @@ async def test_attachment_text_persists_into_history(tmp_path, monkeypatch) -> N
     Image.new("RGB", (200, 120), "white").save(image)
 
     model = _CapturingModel()
-    monkeypatch.setattr(graph_mod, "build_chat_model", lambda *_a, **_k: model)
+    monkeypatch.setattr(models_mod, "build_chat_model", lambda *_a, **_k: model)
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"

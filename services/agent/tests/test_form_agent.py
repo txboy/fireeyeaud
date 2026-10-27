@@ -8,6 +8,7 @@ import pytest
 from langchain_core.messages import AIMessageChunk, HumanMessage, SystemMessage
 
 from fireeyeaud_agent.agent import form_agent
+from fireeyeaud_agent.config import models as models_mod
 from fireeyeaud_agent.store import form_docs
 
 from test_form_docs import _setup
@@ -100,7 +101,7 @@ async def test_stream_chat_runs_tools_and_injects_template(tmp_path, monkeypatch
     root, template_id, finding_id = _setup(tmp_path)
     _create(root, template_id, finding_id)
     fake = _FakeModel()
-    monkeypatch.setattr(form_agent, "build_chat_model", lambda *a, **k: fake)
+    monkeypatch.setattr(models_mod, "build_chat_model", lambda *a, **k: fake)
 
     events = [event async for event in form_agent.stream_form_chat(root, "QZ-0001", "先给大纲")]
     kinds = [event["event"] for event in events]

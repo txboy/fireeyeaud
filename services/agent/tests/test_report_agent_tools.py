@@ -8,6 +8,7 @@ import pytest
 from langchain_core.messages import AIMessageChunk
 
 from fireeyeaud_agent.agent import report_agent
+from fireeyeaud_agent.config import models as models_mod
 from fireeyeaud_agent.store import report_docs
 
 from test_report_docs import _create, _form, _workspace
@@ -177,7 +178,7 @@ async def test_stream_chat_runs_tools(tmp_path, monkeypatch):
     )
 
     fake = _FakeModel()
-    monkeypatch.setattr(report_agent, "build_chat_model", lambda *a, **k: fake)
+    monkeypatch.setattr(models_mod, "build_chat_model", lambda *a, **k: fake)
 
     events = []
     async for event in report_agent.stream_report_chat(

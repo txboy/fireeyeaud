@@ -3,6 +3,7 @@ from langchain_core.messages import AIMessageChunk
 
 from fireeyeaud_agent.agent import graph as graph_mod
 from fireeyeaud_agent.agent.graph import _compose_user_message, _normalize_mentions
+from fireeyeaud_agent.config import models as models_mod
 from fireeyeaud_agent.main import app
 
 
@@ -64,7 +65,7 @@ async def test_chat_with_mentions_persists_and_informs_model(tmp_path, monkeypat
     root = tmp_path / "ws"
     (root / ".fireeye").mkdir(parents=True)
     model = _CapturingModel()
-    monkeypatch.setattr(graph_mod, "build_chat_model", lambda *_a, **_k: model)
+    monkeypatch.setattr(models_mod, "build_chat_model", lambda *_a, **_k: model)
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"

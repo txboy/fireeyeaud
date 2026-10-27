@@ -5,6 +5,7 @@ const net = require('node:net');
 const http = require('node:http');
 const path = require('node:path');
 const fs = require('node:fs');
+const { StringDecoder } = require('node:string_decoder');
 
 /** 选一个 127.0.0.1 上的空闲端口。 */
 function findFreePort(host = '127.0.0.1') {
@@ -52,10 +53,16 @@ function getHealth(port, token, timeoutMs = 1000) {
 }
 
 /** 轮询 /health 直到就绪或超时。 */
-async function waitForHealth(port, token, { attempts = 60, intervalMs = 500 } = {}) {
+async function waitForHealth(
+  port,
+  token,
+  { attempts = 60, intervalMs = 500, isCancelled = () => false } = {},
+) {
   for (let i = 0; i < attempts; i += 1) {
+    if (isCancelled()) return null;
     const health = await getHealth(port, token);
     if (health && health.status === 'ok') return health;
+    if (isCancelled()) return null;
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
   return null;
@@ -98,6 +105,12 @@ class SidecarManager {
     this.restarts = 0;
     this.onStatus = () => {};
     this._stopping = false;
+    // 冷启动时机器可能很卡（Electron/Chromium 抢磁盘 + 杀毒扫描），默认最多等 120 秒。
+    this.healthTimeoutMs = options.healthTimeoutMs ?? 120_000;
+    this.healthIntervalMs = options.healthIntervalMs ?? 500;
+    // 启动阶段先同步等一段时间，超过就转后台继续探测，避免一直卡在「启动中」。
+    this.startWaitMs = options.startWaitMs ?? 5_000;
+    this._readyProbe = null;
   }
 
   getInfo() {
@@ -158,23 +171,97 @@ class SidecarManager {
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     });
-    this.child.stdout.on('data', (d) => this.logger.info(`[sidecar:out] ${String(d).trimEnd()}`));
-    this.child.stderr.on('data', (d) => this.logger.info(`[sidecar:err] ${String(d).trimEnd()}`));
+    this.child.stdout.on('data', (d) => this._pipeOutput('out', d));
+    this.child.stderr.on('data', (d) => this._pipeOutput('err', d));
     this.child.on('exit', (code, signal) => this._onExit(code, signal));
 
-    const health = await waitForHealth(this.port, this.token);
+    const health = await this._waitReady(this.startWaitMs);
     if (this._stopping) {
       return this.getInfo();
     }
     if (health) {
       this.status = 'running';
       this.health = health;
+      this._emit();
     } else {
-      this.status = 'failed';
-      this.logger.error('[sidecar] health check timed out');
+      // 还没起来：保持 starting，转后台继续探测（就绪后自动变 running 并通知前端）。
+      this.logger.info(
+        `[sidecar] 启动较慢，继续在后台探测（最多 ${Math.round(this.healthTimeoutMs / 1000)}s）`,
+      );
+      this._emit();
+      this._probeInBackground();
     }
-    this._emit();
     return this.getInfo();
+  }
+
+  /**
+   * stdout/stderr 用同一个写流：分包时多字节汉字会被拆成两半，分别写入会变成乱码。
+   */
+  _pipeOutput(stream, chunk) {
+    this._outBuffer = this._outBuffer || { out: '', err: '' };
+    // 先做 UTF-8 解码再拆分：直接 String(chunk) 会把跨包的多字节汉字拆坏。
+    const pending = this._outBuffer[stream] + this._decoder(stream).write(chunk);
+    const lines = pending.split(/\r?\n/);
+    this._outBuffer[stream] = lines.pop() ?? '';
+    for (const line of lines) {
+      if (line.trim()) this.logger.info(`[sidecar:${stream}] ${line}`);
+    }
+  }
+
+  /** 每个输出流一个增量解码器（跨 chunk 保留未完成的多字节序列）。 */
+  _decoder(stream) {
+    this._decoders = this._decoders || {};
+    this._decoders[stream] = this._decoders[stream] || new StringDecoder('utf8');
+    return this._decoders[stream];
+  }
+
+  /** 等进程就绪；`timeoutMs` 内没就绪返回 null（不判失败）。 */
+  async _waitReady(timeoutMs) {
+    const attempts = Math.max(1, Math.round(timeoutMs / this.healthIntervalMs));
+    return waitForHealth(this.port, this.token, {
+      attempts,
+      intervalMs: this.healthIntervalMs,
+      isCancelled: () => this._stopping,
+    });
+  }
+
+  /** 后台继续探测直到就绪或超时；就绪后自动切到 running，前端无需重启后端。 */
+  _probeInBackground() {
+    if (this._readyProbe || this._stopping) return;
+    const deadline = Date.now() + this.healthTimeoutMs;
+    const currentChild = this.child;
+
+    const tick = async () => {
+      if (this._stopping || this.status === 'running' || this.child !== currentChild) {
+        this._readyProbe = null;
+        return;
+      }
+      const health = await getHealth(this.port, this.token);
+      if (this._stopping || this.child !== currentChild) {
+        this._readyProbe = null;
+        return;
+      }
+      if (health && health.status === 'ok') {
+        this.status = 'running';
+        this.health = health;
+        this._readyProbe = null;
+        this.logger.info(`[sidecar] 后台探测成功，已就绪 (port ${this.port})`);
+        this._emit();
+        return;
+      }
+      if (Date.now() >= deadline) {
+        this.status = 'failed';
+        this._readyProbe = null;
+        this.logger.error('[sidecar] 等待就绪超时');
+        this._emit();
+        return;
+      }
+      this._readyProbe = setTimeout(tick, this.healthIntervalMs);
+      if (typeof this._readyProbe.unref === 'function') this._readyProbe.unref();
+    };
+
+    this._readyProbe = setTimeout(tick, this.healthIntervalMs);
+    if (typeof this._readyProbe.unref === 'function') this._readyProbe.unref();
   }
 
   _onExit(code, signal) {
@@ -182,6 +269,10 @@ class SidecarManager {
     this.logger.info(`[sidecar] exited code=${code} signal=${signal}`);
     this.health = null;
     this.child = null;
+    if (this._readyProbe) {
+      clearTimeout(this._readyProbe);
+      this._readyProbe = null;
+    }
     if (this.restarts < this.maxRestarts) {
       this.restarts += 1;
       this.logger.info(`[sidecar] restarting (${this.restarts}/${this.maxRestarts})`);
@@ -197,6 +288,10 @@ class SidecarManager {
   async stop() {
     this._stopping = true;
     this.status = 'stopped';
+    if (this._readyProbe) {
+      clearTimeout(this._readyProbe);
+      this._readyProbe = null;
+    }
     const child = this.child;
     this.child = null;
     if (child && child.pid) {

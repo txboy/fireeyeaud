@@ -10,7 +10,6 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
-from ..agent.report_agent import stream_report_chat
 from ..errors import ApiError
 from ..store import report_docs, reports
 from ..store.report_verify import verify_report
@@ -130,6 +129,9 @@ def messages(report_id: str) -> dict:
 
 @router.post("/reports/{report_id}/chat")
 async def chat(report_id: str, body: ReportChatBody) -> EventSourceResponse:
+    # 惰性导入：写作代理会拉起整套 LLM 栈，路由模块导入时不需要。
+    from ..agent.report_agent import stream_report_chat
+
     async def generate():
         async for event in stream_report_chat(
             _root(),

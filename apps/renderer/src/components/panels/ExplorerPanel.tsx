@@ -49,6 +49,7 @@ export function ExplorerPanel() {
   const importing = useDatasourcesStore((s) => s.importing);
   const syncing = useDatasourcesStore((s) => s.syncing);
   const syncingFull = useDatasourcesStore((s) => s.syncingFull);
+  const backgroundSync = useDatasourcesStore((s) => s.backgroundSync);
   const importError = useDatasourcesStore((s) => s.errorKey);
   const load = useDatasourcesStore((s) => s.load);
   const importPath = useDatasourcesStore((s) => s.importPath);
@@ -351,7 +352,7 @@ export function ExplorerPanel() {
             title={t('refresh')}
             aria-label={t('refresh')}
             onClick={handleRefresh}
-            disabled={syncing}
+            disabled={syncing || Boolean(backgroundSync)}
           >
             <RefreshCw size={14} strokeWidth={1.9} />
           </button>
@@ -403,6 +404,18 @@ export function ExplorerPanel() {
             <span className="panel-hint">
               {syncingFull ? t('reimporting') : t('syncing')}
             </span>
+          )}
+
+          {backgroundSync && (
+            <div className="panel-hint panel-hint--progress" role="status">
+              <RefreshCw size={12} strokeWidth={2} />
+              <span>
+                {t('preparingData')}
+                {backgroundSync.total > 0
+                  ? ` ${backgroundSync.done}/${backgroundSync.total}`
+                  : ''}
+              </span>
+            </div>
           )}
 
           {items.length > 0 && (

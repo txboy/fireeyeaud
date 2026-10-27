@@ -4,6 +4,7 @@ import type { SidecarStatus } from '@fireeyeaud/shared';
 import { useSidecarStore } from '../store/sidecar';
 import { useWorkspaceStore } from '../store/workspace';
 import { useModelsStore } from '../store/models';
+import { useDatasourcesStore } from '../store/datasources';
 
 const STATUS_KEY: Record<SidecarStatus, string> = {
   running: 'statusRunning',
@@ -19,6 +20,7 @@ export function StatusBar() {
   const path = useWorkspaceStore((s) => s.path);
   const models = useModelsStore((s) => s.items);
   const loadModels = useModelsStore((s) => s.load);
+  const backgroundSync = useDatasourcesStore((s) => s.backgroundSync);
   const status: SidecarStatus = info?.status ?? 'starting';
 
   // sidecar 就绪后加载模型配置（与上下文栏同一数据源）。
@@ -40,6 +42,15 @@ export function StatusBar() {
         <span className="statusbar__item statusbar__item--path">
           {workspace ? path : t('noWorkspace')}
         </span>
+        {backgroundSync && (
+          <span className="statusbar__item statusbar__item--busy" role="status">
+            <span className="statusbar__dot statusbar__dot--starting" />
+            {t('preparingData')}
+            {backgroundSync.total > 0
+              ? ` ${backgroundSync.done}/${backgroundSync.total}`
+              : ''}
+          </span>
+        )}
       </div>
 
       <span className="statusbar__brand">{t('copyright', { year })}</span>

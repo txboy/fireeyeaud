@@ -9,7 +9,6 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
-from ..agent.sql_assistant import SAMPLE_ROWS, build_preview_sql, stream_sql_assistant
 from ..errors import ApiError
 from ..store import authorization, db, db_engine
 from ..store.workspace import workspace_manager
@@ -211,6 +210,9 @@ async def db_sql_chat(body: SqlChatBody) -> EventSourceResponse:
     可按表名读取样本行（`SELECT ... LIMIT 5`，SQL 由服务端拼接），但不执行模型生成的
     SQL、不返回全量数据；凭据只在服务端用于建连，不进提示词与事件。
     """
+    # 惰性导入：SQL 助手会拉起 LLM 栈，路由模块导入时不需要。
+    from ..agent.sql_assistant import SAMPLE_ROWS, build_preview_sql, stream_sql_assistant
+
     root = workspace_manager.root
     if root is None:
         raise ApiError("E_NO_WORKSPACE", 409, "error.noWorkspace")

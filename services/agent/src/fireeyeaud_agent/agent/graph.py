@@ -25,7 +25,6 @@ from langchain_core.messages import (
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
-from ..config.models import build_chat_model, select_profile
 from ..config.settings import settings
 from ..mcp import manager
 from ..store import app_settings
@@ -249,6 +248,8 @@ async def run_agent(
     root = Path(root)
     event = event_factory or _event_factory(session_id)
     fe = root / ".fireeye"
+    from ..config.models import build_chat_model
+
     active_model = model or build_chat_model(root, model_id)
     registry_ctx = _registry_context(root, context)
     build_file_model = lambda: build_chat_model(root, model_id)  # noqa: E731
@@ -338,6 +339,8 @@ async def run_agent(
         # 上下文压缩（Phase 9）：按当前模型预算，必要时把较早对话并入摘要。
         if history_entries is not None:
             from ..store.sessions import get_summary
+
+            from ..config.models import select_profile
 
             app_compact = app_settings.load().get("compaction") or {}
             profile = select_profile(root, model_id)
@@ -752,6 +755,8 @@ async def stream_chat(
         return
 
     fe = root / ".fireeye"
+    from ..config.models import build_chat_model
+
     event = _event_factory(session_id)
     history_entries = _history_entries(fe, session_id)
     snapshot = build_snapshot(root, context, model_id)

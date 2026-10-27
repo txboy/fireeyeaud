@@ -4,6 +4,7 @@ export default {
     phaseBadge: 'Phase 0 · Skeleton',
     loading: 'Loading…',
     retry: 'Retry',
+    sidecarStarting: 'The Agent service is starting; the project will open as soon as it is ready…',
     cancel: 'Cancel',
     confirm: 'Confirm',
     close: 'Close',
@@ -143,6 +144,7 @@ export default {
     attachDbBusy: 'Attaching…',
     syncing: 'Syncing data…',
     reimporting: 'Re-importing data…',
+    preparingData: 'Preparing project data (may take a few minutes for large projects)…',
     importFailed: 'Import failed',
   },
   search: {
@@ -159,12 +161,14 @@ export default {
     removeScope: 'Remove',
     clearScope: 'Clear',
     scopeEmpty: 'Workspace is empty',
+    failed: 'Search failed. Check the workspace is accessible and try again',
   },
   database: {
     title: 'Database connections',
     subtitle: 'Configure read-only connections and limit tables/columns the agent may access',
     addConnection: 'New connection',
     editConnection: 'Edit connection',
+    dataPreparing: 'Project data is still being prepared; tables will be available shortly…',
     isDefault: 'Default',
     empty: 'No database connections yet',
     name: 'Name',
@@ -707,6 +711,7 @@ export default {
     stopStreamingConfirm:
       'This session is still generating. Continuing will stop it (partial content is kept). Continue?',
     toolCall: 'Calling tool…',
+    toolFailed: 'Tool failed',
     toolResult: 'Tool result',
     findingCreated: 'Finding {{id}} created',
     compactionDivider:
@@ -891,6 +896,8 @@ export default {
   },
   error: {
     internal: 'An internal error occurred',
+    network: 'Cannot reach the local Agent service right now; retrying automatically',
+    sidecarStarting: 'The Agent service is starting, please wait…',
     pathInvalid: 'Invalid path or folder does not exist',
     wsLocked: 'This workspace is already open in another instance',
     wsSchemaTooNew: 'Workspace data version is newer than this app; please upgrade',

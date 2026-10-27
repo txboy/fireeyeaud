@@ -1,9 +1,11 @@
 import json
+import os
 from pathlib import Path
 
 import httpx
 
 from fireeyeaud_agent.main import app
+from fireeyeaud_agent.store import sync as sync_mod
 from fireeyeaud_agent.store.duckdb import Database
 from fireeyeaud_agent.store.project import load_project
 from fireeyeaud_agent.store.sync import sync_sources
@@ -168,6 +170,81 @@ def test_full_sync_keeps_database_data_sources(tmp_path) -> None:
     result = sync_sources(root, full=True)
     assert result["removed"] == []
     assert [s["id"] for s in _datasources(root)] == ["ds_1"]
+
+
+def _count_sha256(monkeypatch) -> list[Path]:
+    """记录哪些文件被真正读盘算了 sha256（大工作区里最贵的一步）。"""
+    calls: list[Path] = []
+    original = sync_mod._sha256
+
+    def wrapped(path: Path) -> str:
+        calls.append(Path(path))
+        return original(path)
+
+    monkeypatch.setattr(sync_mod, "_sha256", wrapped)
+    return calls
+
+
+def test_incremental_sync_does_not_reread_unchanged_files(tmp_path, monkeypatch) -> None:
+    """size + mtime 未变时不再读盘算 sha256，也不触发替换。"""
+    root = tmp_path / "ws"
+    root.mkdir()
+    for name in ("a.csv", "b.csv"):
+        (root / name).write_text("x\n1\n", encoding="utf-8")
+    assert sync_sources(root)["added"] == ["ds_1", "ds_2"]
+
+    calls = _count_sha256(monkeypatch)
+    result = sync_sources(root)
+    assert result == {"added": [], "removed": [], "updated": [], "errors": []}
+    assert calls == []
+
+
+def test_incremental_sync_detects_edit_with_same_size(tmp_path, monkeypatch) -> None:
+    """同名同大小的改动也要靠 mtime 识别出来（不能只看 size）。"""
+    root = tmp_path / "ws"
+    root.mkdir()
+    a = root / "a.csv"
+    a.write_text("x\n1\n", encoding="utf-8")
+    sync_sources(root)
+
+    a.write_text("x\n2\n", encoding="utf-8")
+    stat = a.stat()
+    os.utime(a, ns=(stat.st_atime_ns, stat.st_mtime_ns + 5_000_000_000))
+
+    result = sync_sources(root)
+    assert result["updated"] == ["ds_1"]
+
+
+def test_legacy_fingerprint_without_mtime_ns_falls_back_to_sha(tmp_path, monkeypatch) -> None:
+    """旧索引只有导入时刻的 mtime：没有 mtimeNs 时必须回退算 sha，不能被当成「未变」。"""
+    root = tmp_path / "ws"
+    root.mkdir()
+    a = root / "a.csv"
+    a.write_text("x\n1\n", encoding="utf-8")
+    sync_sources(root)
+
+    files_path = root / ".fireeye" / "index" / "files.json"
+    files = json.loads(files_path.read_text("utf-8"))
+    for entry in files:
+        entry.pop("mtimeNs", None)
+    files_path.write_text(json.dumps(files), encoding="utf-8")
+
+    calls = _count_sha256(monkeypatch)
+    result = sync_sources(root)
+    assert [Path(p).name for p in calls] == ["a.csv"]
+    assert result["updated"] == []
+
+
+def test_fingerprint_records_source_file_mtime(tmp_path) -> None:
+    root = tmp_path / "ws"
+    root.mkdir()
+    a = root / "a.csv"
+    a.write_text("x\n1\n", encoding="utf-8")
+    sync_sources(root)
+
+    files = json.loads((root / ".fireeye" / "index" / "files.json").read_text("utf-8"))
+    assert files[0]["mtimeNs"] == a.stat().st_mtime_ns
+    assert files[0]["size"] == a.stat().st_size
 
 
 def _client() -> httpx.AsyncClient:
