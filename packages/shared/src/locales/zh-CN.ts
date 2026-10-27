@@ -56,7 +56,7 @@ export default {
     mcp: 'MCP',
     skills: 'Skills',
     rules: 'SQL库',
-    models: 'Models',
+    models: '模型',
     templates: '模板中心',
     reports: '项目报告',
     evidenceForms: '取证单',
@@ -375,7 +375,7 @@ export default {
     empty: '尚无技能包',
   },
   models: {
-    title: 'Models',
+    title: '模型',
     subtitle: '管理模型配置（provider / base URL / model / 参数）',
     addModel: '新增模型',
     editModel: '编辑模型',
