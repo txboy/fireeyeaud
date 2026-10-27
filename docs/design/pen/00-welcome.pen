@@ -1,0 +1,1013 @@
+{
+  "version": "2.21",
+  "children": [
+    {
+      "type": "frame",
+      "id": "bJlrQ",
+      "x": -1520,
+      "y": 0,
+      "name": "00 欢迎",
+      "clip": true,
+      "width": 1440,
+      "height": 900,
+      "fill": "#F5F6F8",
+      "cornerRadius": 10,
+      "stroke": "#E3E6EA",
+      "strokeWidth": 1,
+      "layout": "vertical",
+      "children": [
+        {
+          "type": "frame",
+          "id": "cgwxy",
+          "name": "Title bar",
+          "width": "fill_container",
+          "height": 40,
+          "fill": "#F8F9FB",
+          "stroke": "#E3E6EA",
+          "strokeWidth": {
+            "bottom": 1
+          },
+          "gap": 10,
+          "padding": [
+            0,
+            0,
+            0,
+            14
+          ],
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "icon",
+              "id": "QGJJr",
+              "name": "Logo",
+              "width": 16,
+              "height": 16,
+              "icon": "flame",
+              "library": "lucide",
+              "fill": "#E8590C"
+            },
+            {
+              "type": "text",
+              "id": "dYfdt",
+              "name": "Brand",
+              "fill": "#1A1D21",
+              "content": "火眼审计助手",
+              "fontFamily": "'Noto Sans SC', 'Segoe UI', system-ui, sans-serif",
+              "fontSize": 13,
+              "fontWeight": "600"
+            },
+            {
+              "type": "frame",
+              "id": "VweY3",
+              "name": "Spacer",
+              "width": "fill_container",
+              "height": 1
+            },
+            {
+              "type": "frame",
+              "id": "t6xw5",
+              "name": "Win minus",
+              "width": 38,
+              "height": 40,
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "K9mBLr",
+                  "name": "i",
+                  "width": 13,
+                  "height": 13,
+                  "icon": "minus",
+                  "library": "lucide",
+                  "fill": "#5A6069"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "XAMqH",
+              "name": "Win square",
+              "width": 38,
+              "height": 40,
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "i26xN5",
+                  "name": "i",
+                  "width": 13,
+                  "height": 13,
+                  "icon": "square",
+                  "library": "lucide",
+                  "fill": "#5A6069"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "fdnat",
+              "name": "Win x",
+              "width": 38,
+              "height": 40,
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "f5lCTj",
+                  "name": "i",
+                  "width": 13,
+                  "height": 13,
+                  "icon": "x",
+                  "library": "lucide",
+                  "fill": "#5A6069"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "N7f3eo",
+          "name": "Center",
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "vertical",
+          "gap": 18,
+          "justifyContent": "center",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "Y4sTL",
+              "name": "Mark",
+              "width": 64,
+              "height": 64,
+              "fill": "#FDEDE4",
+              "cornerRadius": 16,
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "tiozc",
+                  "name": "i",
+                  "width": 32,
+                  "height": 32,
+                  "icon": "flame",
+                  "library": "lucide",
+                  "fill": "#E8590C"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "znyiz",
+              "name": "Title",
+              "fill": "#1A1D21",
+              "content": "火眼审计助手",
+              "textAlign": "center",
+              "fontFamily": "'Noto Sans SC', 'Segoe UI', system-ui, sans-serif",
+              "fontSize": 26,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "crmsx",
+              "name": "Tagline",
+              "fill": "#5A6069",
+              "content": "fireeyeaud · 本地智能审计工作台，数据不出本机",
+              "textAlign": "center",
+              "fontFamily": "'Noto Sans SC', 'Segoe UI', system-ui, sans-serif",
+              "fontSize": 13,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "mPsUP",
+              "name": "Actions",
+              "gap": 10,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "ktD6W",
+                  "name": "B 打开文件夹",
+                  "fill": "#E8590C",
+                  "cornerRadius": 7,
+                  "gap": 7,
+                  "padding": [
+                    10,
+                    18
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "MEqg5",
+                      "name": "i",
+                      "width": 15,
+                      "height": 15,
+                      "icon": "folder-open",
+                      "library": "lucide",
+                      "fill": "#FFFFFF"
+                    },
+                    {
+                      "type": "text",
+                      "id": "o8JuX",
+                      "name": "t",
+                      "fill": "#FFFFFF",
+                      "content": "打开文件夹",
+                      "fontFamily": "'Noto Sans SC', 'Segoe UI', system-ui, sans-serif",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Cc79z",
+                  "name": "B 打开最近",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 7,
+                  "stroke": "#D5D9DE",
+                  "strokeWidth": 1,
+                  "gap": 7,
+                  "padding": [
+                    10,
+                    18
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "wME0N",
+                      "name": "i",
+                      "width": 15,
+                      "height": 15,
+                      "icon": "clock",
+                      "library": "lucide",
+                      "fill": "#5A6069"
+                    },
+                    {
+                      "type": "text",
+                      "id": "ZlyWY",
+                      "name": "t",
+                      "fill": "#1A1D21",
+                      "content": "打开最近",
+                      "fontFamily": "'Noto Sans SC', 'Segoe UI', system-ui, sans-serif",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "satRd",
+                  "name": "B 从远程还原项目",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 7,
+                  "stroke": "#D5D9DE",
+                  "strokeWidth": 1,
+                  "gap": 7,
+                  "padding": [
+                    10,
+                    18
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "EzVDv",
+                      "name": "i",
+                      "width": 15,
+                      "height": 15,
+                      "icon": "cloud-download",
+                      "library": "lucide",
+                      "fill": "#5A6069"
+                    },
+                    {
+                      "type": "text",
+                      "id": "BvToW",
+                      "name": "t",
+                      "fill": "#1A1D21",
+                      "content": "从远程还原项目",
+                      "fontFamily": "'Noto Sans SC', 'Segoe UI', system-ui, sans-serif",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "PnSs5",
+              "name": "Recent",
+              "width": 560,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "bTR3W",
+                  "name": "h",
+                  "fill": "#8A9099",
+                  "content": "最近打开的工作区",
+                  "fontFamily": "'Noto Sans SC', 'Segoe UI', system-ui, sans-serif",
+                  "fontSize": 11,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "frame",
+                  "id": "CLP8T",
+                  "name": "R 2024年度年报",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 8,
+                  "stroke": "#E8590C",
+                  "strokeWidth": 1,
+                  "gap": 10,
+                  "padding": [
+                    10,
+                    12
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "MuQxN",
+                      "name": "i",
+                      "width": 17,
+                      "height": 17,
+                      "icon": "folder-open",
+                      "library": "lucide",
+                      "fill": "#E8590C"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "NEZ72",
+                      "name": "Meta",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "flIXI",
+                          "name": "n",
+                          "fill": "#1A1D21",
+                          "content": "2024年度年报审计 · 星海集团",
+                          "fontFamily": "'Noto Sans SC', 'Segoe UI', system-ui, sans-serif",
+                          "fontSize": 13,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "O98fhA",
+                          "name": "p",
+                          "fill": "#8A9099",
+                          "content": "D:\\审计项目\\2024\\星海集团",
+                          "fontFamily": "'Noto Sans SC', 'Segoe UI', system-ui, sans-serif",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "RryD4",
+                      "name": "c",
+                      "fill": "#5A6069",
+                      "content": "疑点 7",
+                      "fontFamily": "'Noto Sans SC', 'Segoe UI', system-ui, sans-serif",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "VJim9",
+                      "name": "t",
+                      "fill": "#8A9099",
+                      "content": "刚刚",
+                      "fontFamily": "'Noto Sans SC', 'Segoe UI', system-ui, sans-serif",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "icon",
+                      "id": "ORDxS",
+                      "name": "i",
+                      "width": 14,
+                      "height": 14,
+                      "icon": "chevron-right",
+                      "library": "lucide",
+                      "fill": "#8A9099"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "vlJGo",
+                  "name": "R 2023年度专项",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 8,
+                  "stroke": "#E3E6EA",
+                  "strokeWidth": 1,
+                  "gap": 10,
+                  "padding": [
+                    10,
+                    12
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "SHuRI",
+                      "name": "i",
+                      "width": 17,
+                      "height": 17,
+                      "icon": "folder-open",
+                      "library": "lucide",
+                      "fill": "#E8590C"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Sb7Wl",
+                      "name": "Meta",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "JXH0j",
+                          "name": "n",
+                          "fill": "#1A1D21",
+                          "content": "2023年度专项审计 · 海源实业",
+                          "fontFamily": "'Noto Sans SC', 'Segoe UI', system-ui, sans-serif",
+                          "fontSize": 13,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "jK2mI",
+                          "name": "p",
+                          "fill": "#8A9099",
+                          "content": "D:\\审计项目\\2023\\海源实业",
+                          "fontFamily": "'Noto Sans SC', 'Segoe UI', system-ui, sans-serif",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "CTff9",
+                      "name": "c",
+                      "fill": "#5A6069",
+                      "content": "疑点 12",
+                      "fontFamily": "'Noto Sans SC', 'Segoe UI', system-ui, sans-serif",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "R3Qv8",
+                      "name": "t",
+                      "fill": "#8A9099",
+                      "content": "3 小时前",
+                      "fontFamily": "'Noto Sans SC', 'Segoe UI', system-ui, sans-serif",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "icon",
+                      "id": "T5bRzW",
+                      "name": "i",
+                      "width": 14,
+                      "height": 14,
+                      "icon": "chevron-right",
+                      "library": "lucide",
+                      "fill": "#8A9099"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "KTq0q",
+                  "name": "R IPO 尽职调查",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 8,
+                  "stroke": "#E3E6EA",
+                  "strokeWidth": 1,
+                  "gap": 10,
+                  "padding": [
+                    10,
+                    12
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "ocCnf",
+                      "name": "i",
+                      "width": 17,
+                      "height": 17,
+                      "icon": "folder-open",
+                      "library": "lucide",
+                      "fill": "#E8590C"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "eww88",
+                      "name": "Meta",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "MUhJX",
+                          "name": "n",
+                          "fill": "#1A1D21",
+                          "content": "IPO 尽职调查 · 恒芯科技",
+                          "fontFamily": "'Noto Sans SC', 'Segoe UI', system-ui, sans-serif",
+                          "fontSize": 13,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "zXPRP",
+                          "name": "p",
+                          "fill": "#8A9099",
+                          "content": "D:\\审计项目\\2024\\恒芯科技",
+                          "fontFamily": "'Noto Sans SC', 'Segoe UI', system-ui, sans-serif",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "fH64x",
+                      "name": "c",
+                      "fill": "#5A6069",
+                      "content": "疑点 0",
+                      "fontFamily": "'Noto Sans SC', 'Segoe UI', system-ui, sans-serif",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "X9eVt",
+                      "name": "t",
+                      "fill": "#8A9099",
+                      "content": "昨天",
+                      "fontFamily": "'Noto Sans SC', 'Segoe UI', system-ui, sans-serif",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "icon",
+                      "id": "uzpRS",
+                      "name": "i",
+                      "width": 14,
+                      "height": 14,
+                      "icon": "chevron-right",
+                      "library": "lucide",
+                      "fill": "#8A9099"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "GE0tl",
+              "name": "privacy",
+              "fill": "#8A9099",
+              "content": "全部数据与索引保存在工作区内的 .fireeye 目录，默认不联网。",
+              "textAlign": "center",
+              "fontFamily": "'Noto Sans SC', 'Segoe UI', system-ui, sans-serif",
+              "fontSize": 11,
+              "fontWeight": "normal"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "themes": {
+    "mode": [
+      "light",
+      "dark"
+    ]
+  },
+  "variables": {
+    "app-bg": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#F5F6F8",
+          "theme": {
+            "mode": "light"
+          }
+        },
+        {
+          "value": "#1E1F22",
+          "theme": {
+            "mode": "dark"
+          }
+        }
+      ]
+    },
+    "titlebar": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#F8F9FB",
+          "theme": {
+            "mode": "light"
+          }
+        },
+        {
+          "value": "#232427",
+          "theme": {
+            "mode": "dark"
+          }
+        }
+      ]
+    },
+    "activitybar": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#EDEFF2",
+          "theme": {
+            "mode": "light"
+          }
+        },
+        {
+          "value": "#1A1B1E",
+          "theme": {
+            "mode": "dark"
+          }
+        }
+      ]
+    },
+    "sidebar": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#F7F8FA",
+          "theme": {
+            "mode": "light"
+          }
+        },
+        {
+          "value": "#202124",
+          "theme": {
+            "mode": "dark"
+          }
+        }
+      ]
+    },
+    "editor-bg": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#FFFFFF",
+          "theme": {
+            "mode": "light"
+          }
+        },
+        {
+          "value": "#26272B",
+          "theme": {
+            "mode": "dark"
+          }
+        }
+      ]
+    },
+    "panel-bg": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#FAFBFC",
+          "theme": {
+            "mode": "light"
+          }
+        },
+        {
+          "value": "#202124",
+          "theme": {
+            "mode": "dark"
+          }
+        }
+      ]
+    },
+    "border": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#E3E6EA",
+          "theme": {
+            "mode": "light"
+          }
+        },
+        {
+          "value": "#33353A",
+          "theme": {
+            "mode": "dark"
+          }
+        }
+      ]
+    },
+    "border-strong": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#D5D9DE",
+          "theme": {
+            "mode": "light"
+          }
+        },
+        {
+          "value": "#3E4046",
+          "theme": {
+            "mode": "dark"
+          }
+        }
+      ]
+    },
+    "text-1": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#1A1D21",
+          "theme": {
+            "mode": "light"
+          }
+        },
+        {
+          "value": "#E8EAED",
+          "theme": {
+            "mode": "dark"
+          }
+        }
+      ]
+    },
+    "text-2": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#5A6069",
+          "theme": {
+            "mode": "light"
+          }
+        },
+        {
+          "value": "#A6ABB3",
+          "theme": {
+            "mode": "dark"
+          }
+        }
+      ]
+    },
+    "text-3": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#8A9099",
+          "theme": {
+            "mode": "light"
+          }
+        },
+        {
+          "value": "#71767E",
+          "theme": {
+            "mode": "dark"
+          }
+        }
+      ]
+    },
+    "accent": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#E8590C",
+          "theme": {
+            "mode": "light"
+          }
+        },
+        {
+          "value": "#FF8A3D",
+          "theme": {
+            "mode": "dark"
+          }
+        }
+      ]
+    },
+    "accent-weak": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#FDEDE4",
+          "theme": {
+            "mode": "light"
+          }
+        },
+        {
+          "value": "#3A2A1E",
+          "theme": {
+            "mode": "dark"
+          }
+        }
+      ]
+    },
+    "accent-contrast": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#FFFFFF",
+          "theme": {
+            "mode": "light"
+          }
+        },
+        {
+          "value": "#1A1B1E",
+          "theme": {
+            "mode": "dark"
+          }
+        }
+      ]
+    },
+    "danger": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#D92D20",
+          "theme": {
+            "mode": "light"
+          }
+        },
+        {
+          "value": "#FF6B6B",
+          "theme": {
+            "mode": "dark"
+          }
+        }
+      ]
+    },
+    "danger-weak": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#FEECEB",
+          "theme": {
+            "mode": "light"
+          }
+        },
+        {
+          "value": "#3A2222",
+          "theme": {
+            "mode": "dark"
+          }
+        }
+      ]
+    },
+    "warning": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#B7791F",
+          "theme": {
+            "mode": "light"
+          }
+        },
+        {
+          "value": "#F5B544",
+          "theme": {
+            "mode": "dark"
+          }
+        }
+      ]
+    },
+    "warning-weak": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#FBF3E2",
+          "theme": {
+            "mode": "light"
+          }
+        },
+        {
+          "value": "#3A2F1A",
+          "theme": {
+            "mode": "dark"
+          }
+        }
+      ]
+    },
+    "success": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#12805C",
+          "theme": {
+            "mode": "light"
+          }
+        },
+        {
+          "value": "#4CC38A",
+          "theme": {
+            "mode": "dark"
+          }
+        }
+      ]
+    },
+    "success-weak": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#E7F6EF",
+          "theme": {
+            "mode": "light"
+          }
+        },
+        {
+          "value": "#1E3329",
+          "theme": {
+            "mode": "dark"
+          }
+        }
+      ]
+    },
+    "info": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#1570EF",
+          "theme": {
+            "mode": "light"
+          }
+        },
+        {
+          "value": "#60A5FA",
+          "theme": {
+            "mode": "dark"
+          }
+        }
+      ]
+    },
+    "info-weak": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#E8F1FE",
+          "theme": {
+            "mode": "light"
+          }
+        },
+        {
+          "value": "#1E2A3A",
+          "theme": {
+            "mode": "dark"
+          }
+        }
+      ]
+    },
+    "hover": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#EEF0F3",
+          "theme": {
+            "mode": "light"
+          }
+        },
+        {
+          "value": "#2A2C30",
+          "theme": {
+            "mode": "dark"
+          }
+        }
+      ]
+    },
+    "font-ui": {
+      "type": "string",
+      "value": "Noto Sans SC"
+    },
+    "font-mono": {
+      "type": "string",
+      "value": "JetBrains Mono"
+    }
+  },
+  "fileToken": "5c30c3d1-98ca-4d28-b73a-8e48e67171c2"
+}
