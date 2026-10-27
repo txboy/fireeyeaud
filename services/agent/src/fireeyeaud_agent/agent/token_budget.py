@@ -59,7 +59,7 @@ def estimate_tokens(text: str) -> int:
 
                 _encoder = tiktoken.get_encoding("cl100k_base")
             return len(_encoder.encode(text))
-        except Exception:  # noqa: BLE001 - 未安装/无网络/编码缺失一律回退
+        except Exception:  # 未安装/无网络/编码缺失一律回退
             _encoder_failed = True
     return heuristic_tokens(text)
 

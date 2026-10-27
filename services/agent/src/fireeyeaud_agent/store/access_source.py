@@ -173,7 +173,7 @@ def _transpile(sql: str) -> str:
         out = sqlglot.transpile(sql, read="tsql", write="sqlite")
         if out:
             return out[0]
-    except Exception:  # noqa: BLE001
+    except Exception:
         pass
     return sql
 
@@ -273,5 +273,5 @@ def count(path, sql: str) -> int | None:
         with open_db(path) as con:
             cur = con.execute(f"SELECT COUNT(*) FROM ({_transpile(sql)}) AS _sub")
             return int(cur.fetchone()[0])
-    except Exception:  # noqa: BLE001
+    except Exception:
         return None

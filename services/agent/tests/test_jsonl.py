@@ -1,4 +1,3 @@
-import json
 
 from fireeyeaud_agent.store.jsonl import append_event, next_seq, read_events
 

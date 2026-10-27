@@ -92,7 +92,7 @@ def _pdf_text(path: Path) -> str:
     for page in reader.pages[:MAX_PDF_PAGES]:
         try:
             parts.append(page.extract_text() or "")
-        except Exception:  # noqa: BLE001 - 单页失败不致命
+        except Exception:  # 单页失败不致命
             continue
     return "\n".join(parts)
 
@@ -115,7 +115,7 @@ def extract_one(path: Path) -> AttachmentText:
             text = _read_text_file(path)
         else:
             return AttachmentText(name, "", error="unsupported")
-    except Exception:  # noqa: BLE001 - 统一转错误标记
+    except Exception:  # 统一转错误标记
         return AttachmentText(name, "", error="readFailed")
 
     truncated = len(text) > MAX_FILE_CHARS
@@ -201,7 +201,7 @@ def _encode_image_bytes(raw: bytes) -> tuple[str, str] | None:
                 image.save(buffer, format="JPEG", quality=85)
                 data = buffer.getvalue()
                 mime = "image/jpeg"
-    except Exception:  # noqa: BLE001 - 统一视为不可编码
+    except Exception:  # 统一视为不可编码
         return None
     return mime, base64.b64encode(data).decode("ascii")
 
@@ -213,7 +213,7 @@ def _encode_image_file(path: Path) -> tuple[str, str] | None:
         if path.stat().st_size > MAX_BYTES:
             return None
         return _encode_image_bytes(path.read_bytes())
-    except Exception:  # noqa: BLE001
+    except Exception:
         return None
 
 
@@ -234,7 +234,7 @@ def _pdf_page_images(path: Path) -> list[bytes]:
             ]
         finally:
             document.close()
-    except Exception:  # noqa: BLE001
+    except Exception:
         return []
 
 

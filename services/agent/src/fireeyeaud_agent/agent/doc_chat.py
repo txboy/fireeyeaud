@@ -77,7 +77,7 @@ async def run_tool_loop(
                         "code": exc.code,
                         "messageKey": exc.message_key,
                     }
-                except Exception as exc:  # noqa: BLE001 - 工具失败回给模型修正
+                except Exception as exc:  # 工具失败回给模型修正
                     result = {"ok": False, "error": str(exc)[:500]}
             if not isinstance(result, str):
                 result = dump(result)

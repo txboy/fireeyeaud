@@ -195,7 +195,7 @@ def render_docx(template: Path, out: Path, context: dict[str, Any]) -> None:
         tpl.save(str(out))
     except ApiError:
         raise
-    except Exception as exc:  # noqa: BLE001 - 模板语法/渲染错误统一报模板错误
+    except Exception as exc:  # 模板语法/渲染错误统一报模板错误
         raise ApiError(
             "E_TEMPLATE_RENDER", 400, "error.templateRender", {"reason": str(exc)}
         ) from exc

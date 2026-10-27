@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from typing import Any
 
 from langchain_core.messages import AIMessage, AIMessageChunk
 
@@ -308,7 +307,6 @@ async def test_fallback_call_ids_are_unique_within_a_round() -> None:
 
 async def test_tool_messages_stay_within_budget() -> None:
     """样本内容进入模型前被裁剪，ToolMessage 不会把请求撑爆。"""
-    model = _Scripted([_tool_call("ledger"), AIMessage(content="ok")])
     seen: list[list] = []
 
     class _Capturing(_Scripted):

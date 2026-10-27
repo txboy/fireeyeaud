@@ -12,8 +12,6 @@ from pathlib import Path
 from typing import Any
 
 from ..errors import ApiError
-from .fsutil import write_json_atomic
-from .lock import WORKSPACE_MUTATION_LOCK
 
 KIND = "report"
 ARTIFACT_DIR = "reports"

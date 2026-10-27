@@ -125,7 +125,7 @@ async def read_attachments(
 
     try:
         vision = bool((select_profile(root, model_id) or {}).get("vision"))
-    except Exception:  # noqa: BLE001 - 配置不可读时按不支持视觉处理
+    except Exception:  # 配置不可读时按不支持视觉处理
         vision = False
 
     per_file = settings.attachment_max_chars
@@ -138,7 +138,7 @@ async def read_attachments(
         path = Path(raw_path)
         try:
             kind, local = _classify(path)
-        except Exception:  # noqa: BLE001
+        except Exception:
             result.notes.append(f"### {label}\n（无法读取附件）")
             continue
 
@@ -183,13 +183,13 @@ async def read_attachments(
         if model is None:
             try:
                 model = build_model()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 model = None
         text = ""
         if model is not None:
             try:
                 text = await _transcribe(model, kept)
-            except Exception as exc:  # noqa: BLE001 - 超时/服务异常都退化为无法读取
+            except Exception:  # 超时/服务异常都退化为无法读取
                 result.notes.append(f"### {label}\n（读取失败）")
                 text = ""
         if text.strip():

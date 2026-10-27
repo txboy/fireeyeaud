@@ -57,7 +57,7 @@ def kb_search(root: Path, params: dict[str, Any]) -> dict[str, Any]:
                     score_threshold=threshold,
                     search_method=defaults.get("searchMethod", "hybrid_search"),
                 )
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 raise ApiError(
                     "E_KB_CONN", 502, "error.kbConn", {"reason": str(exc)}
                 ) from exc

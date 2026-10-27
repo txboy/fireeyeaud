@@ -34,7 +34,7 @@ def web_search(root: Path, params: dict[str, Any]) -> dict[str, Any]:
             results = adapter.search(api_key, query, max_results=max_results)
     except ApiError:
         raise
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise ApiError(
             "E_WEB_CONN", 502, "error.webConn", {"reason": str(exc)}
         ) from exc

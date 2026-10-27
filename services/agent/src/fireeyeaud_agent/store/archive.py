@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import getpass
 import io
-import os
 import re
 import shutil
 from datetime import datetime, timezone
@@ -571,7 +570,7 @@ def push_archive(
         branch_ref = f"refs/heads/{BRANCH}:refs/heads/{BRANCH}"
         try:
             status = _push_refs(repo, auth_url, [branch_ref])
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise ApiError(
                 "E_PUSH_FAILED", 409, "error.pushFailed", {"reason": type(exc).__name__}
             ) from exc
@@ -584,7 +583,7 @@ def push_archive(
             refspec = f"refs/tags/{TAG_PREFIX}{name}:refs/tags/{TAG_PREFIX}{name}"
             try:
                 status = _push_refs(repo, auth_url, [refspec])
-            except Exception:  # noqa: BLE001 - 单个标签失败不影响其他
+            except Exception:  # 单个标签失败不影响其他
                 skipped.append(name)
                 continue
             if any(status.values()):
@@ -623,7 +622,7 @@ def _rebuild_sources(target: Path) -> list[str]:
     before = list((load_project(fe) or {}).get("dataSources", []))
     try:
         sync_sources(Path(target), full=True)
-    except Exception as exc:  # noqa: BLE001 - 重建失败不阻塞还原
+    except Exception as exc:  # 重建失败不阻塞还原
         warnings.append(f"sync: {exc}")
 
     current = {
@@ -640,7 +639,7 @@ def _rebuild_sources(target: Path) -> list[str]:
             continue
         try:
             import_source(Path(target), path)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             warnings.append(f"{path.name}: {exc}")
     return warnings
 
@@ -671,7 +670,7 @@ def clone_from_remote(
             outstream=io.BytesIO(),
             errstream=io.BytesIO(),
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         shutil.rmtree(target, ignore_errors=True)
         raise ApiError(
             "E_CLONE_FAILED", 502, "error.cloneFailed", {"reason": type(exc).__name__}
@@ -682,7 +681,7 @@ def clone_from_remote(
         config = new_repo.get_config()
         config.set((b"remote", b"origin"), b"url", url.encode("utf-8"))
         config.write_to_path(str(target / ".git" / "config"))
-    except Exception:  # noqa: BLE001 - 配置重写失败不应让 clone 失败
+    except Exception:  # 配置重写失败不应让 clone 失败
         pass
     finally:
         new_repo.close()
@@ -719,7 +718,7 @@ def restore_archive(root: Path, *, archive_id: str, target: Path) -> dict[str, A
             outstream=io.BytesIO(),
             errstream=io.BytesIO(),
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         shutil.rmtree(target, ignore_errors=True)
         raise ApiError(
             "E_RESTORE_FAILED", 502, "error.restoreFailed", {"reason": type(exc).__name__}
@@ -733,7 +732,7 @@ def restore_archive(root: Path, *, archive_id: str, target: Path) -> dict[str, A
             config = new_repo.get_config()
             config.remove_section((b"remote", b"origin"))
             config.write_to_path(str(target / ".git" / "config"))
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
     finally:
         new_repo.close()

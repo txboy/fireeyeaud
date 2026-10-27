@@ -94,7 +94,7 @@ async def test_server(server_id: str) -> dict:
         specs = await mcp_manager.server_tools(
             workspace_manager.root, server, ttl_seconds=0
         )
-    except Exception as exc:  # noqa: BLE001 - 连通性失败以结构化结果返回
+    except Exception as exc:  # 连通性失败以结构化结果返回
         return {"ok": False, "tools": [], "error": str(exc)}
     return {"ok": True, "tools": _tool_items(specs)}
 
@@ -105,6 +105,6 @@ async def server_tools(server_id: str) -> dict:
     server = _require_server(server_id)
     try:
         specs = await mcp_manager.server_tools(workspace_manager.root, server)
-    except Exception as exc:  # noqa: BLE001 - 失败以空列表 + error 返回
+    except Exception as exc:  # 失败以空列表 + error 返回
         return {"tools": [], "error": str(exc)}
     return {"tools": _tool_items(specs)}

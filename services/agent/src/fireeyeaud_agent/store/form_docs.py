@@ -336,7 +336,7 @@ def export_form(
 
         try:
             document = Document(str(template_path))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise ApiError(
                 "E_FILE_TYPE", 400, "error.fileType", {"name": "template.docx"}
             ) from exc

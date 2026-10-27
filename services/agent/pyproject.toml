@@ -44,6 +44,7 @@ dev = [
   "pytest-asyncio",
   "httpx",
   "pyinstaller>=6.22.3",
+  "ruff>=0.15",
 ]
 
 [build-system]
@@ -57,3 +58,28 @@ packages = ["src/fireeyeaud_agent"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# 只开「真问题」规则：pyflakes + 语法级错误 + bugbear 里高置信度的几条。
+# 刻意不含：
+#   I001（import 排序）——纯格式，动 100+ 文件会淹没真实 diff；
+#   SIM  ——部分规则（如 try/except/pass → suppress）会把刻意的兜底改写得更难读；
+#   UP   ——版本现代化，与本次「清理」无关，单独排期。
+select = [
+  "F",        # pyflakes：未使用导入 / 未定义名字 / 未使用变量 / f-string 问题
+  "E9",       # 语法级错误
+  "B017",     # assertRaises(Exception) 掩盖真实失败
+  "B018",     # 无意义的表达式语句
+  "B023",     # 循环内闭包捕获循环变量
+  "B904",     # except 里 raise 没 from
+  "RUF100",   # 失效的 noqa（避免误导后来人）
+]
+
+[tool.ruff.lint.per-file-ignores]
+# 测试里断言异常本身就需要 broad except。
+"tests/**" = ["B017"]

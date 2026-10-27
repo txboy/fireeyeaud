@@ -148,7 +148,7 @@ def _maybe_bind(model: Any, tools: list[StructuredTool]) -> Any:
         return model.bind_tools(tools)
     except NotImplementedError:
         return model
-    except Exception:  # noqa: BLE001 - 绑定失败则退回未绑定模型
+    except Exception:  # 绑定失败则退回未绑定模型
         return model
 
 
@@ -252,7 +252,7 @@ async def run_agent(
 
     active_model = model or build_chat_model(root, model_id)
     registry_ctx = _registry_context(root, context)
-    build_file_model = lambda: build_chat_model(root, model_id)  # noqa: E731
+    build_file_model = lambda: build_chat_model(root, model_id)
     tools = [
         *build_langchain_tools(
             root,
@@ -359,7 +359,7 @@ async def run_agent(
                     locale=locale,
                     app_compaction=app_compact,
                 )
-            except Exception as exc:  # noqa: BLE001 - 摘要失败不应中断整轮
+            except Exception as exc:  # 摘要失败不应中断整轮
                 print(f"===== compaction failed =====\n{exc!r}", flush=True)
                 result = None
             if result is not None and result.compacted:
@@ -446,7 +446,7 @@ async def run_agent(
                 )
                 yield event("done", {"usage": _usage()})
                 return
-            except Exception as exc:  # noqa: BLE001 - 模型不可达/鉴权失败/超时
+            except Exception as exc:  # 模型不可达/鉴权失败/超时
                 # 溢出兜底：provider 报上下文超限 → 强制压缩一次并重试一次（§4.4/§6.2）。
                 if (
                     is_context_overflow(exc)
@@ -475,7 +475,7 @@ async def run_agent(
                             app_compaction=app_compact,
                             force=True,
                         )
-                    except Exception as force_exc:  # noqa: BLE001 - 压缩失败则走常规报错
+                    except Exception as force_exc:  # 压缩失败则走常规报错
                         print(
                             f"===== forced compaction failed =====\n{force_exc!r}",
                             flush=True,
@@ -578,7 +578,7 @@ async def run_agent(
                     summary = _summarize(result)
                     if name == "report_finding":
                         yield event("finding", {"id": result["id"], "event": "created"})
-                except Exception as exc:  # noqa: BLE001 - 工具失败回传摘要
+                except Exception as exc:  # 工具失败回传摘要
                     ok = False
                     result = {"error": str(exc)}
                     summary = str(exc)
@@ -612,7 +612,7 @@ async def run_agent(
         if mcp_tools is not None:
             try:
                 await mcp_tools.aclose()
-            except Exception as exc:  # noqa: BLE001 - 清理失败不应污染本轮结果
+            except Exception as exc:  # 清理失败不应污染本轮结果
                 print(f"===== MCP cleanup failed =====\n{exc!r}", flush=True)
 
 

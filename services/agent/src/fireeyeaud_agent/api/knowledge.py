@@ -100,7 +100,7 @@ def test_provider(provider_id: str, scope: str = Query(default="global")) -> dic
         )
     except ApiError:
         raise
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise ApiError("E_KB_CONN", 502, "error.kbConn", {"reason": _reason(exc)}) from exc
     return {"ok": True, "knowledgeCount": len(items)}
 
@@ -126,7 +126,7 @@ def test_provider_params(body: KbTestBody) -> dict:
         items = kb.adapter_for(body.type).list_knowledge(body.baseUrl, api_key or "")
     except ApiError:
         raise
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise ApiError("E_KB_CONN", 502, "error.kbConn", {"reason": _reason(exc)}) from exc
     return {"ok": True, "knowledgeCount": len(items)}
 
@@ -145,7 +145,7 @@ def list_remote_knowledge(
         )
     except ApiError:
         raise
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise ApiError("E_KB_CONN", 502, "error.kbConn", {"reason": _reason(exc)}) from exc
     return {"items": items, "nextCursor": None}
 
@@ -196,7 +196,7 @@ def query_provider(provider_id: str, body: KbQueryBody) -> dict:
                     names[kids] = str(item.get("name") or "")
         except ApiError:
             raise
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise ApiError("E_KB_CONN", 502, "error.kbConn", {"reason": _reason(exc)}) from exc
 
     defaults = provider.get("defaults") or {}
@@ -218,7 +218,7 @@ def query_provider(provider_id: str, body: KbQueryBody) -> dict:
             )
         except ApiError:
             raise
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise ApiError("E_KB_CONN", 502, "error.kbConn", {"reason": _reason(exc)}) from exc
         for h in found:
             hits.append(

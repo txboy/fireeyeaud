@@ -404,7 +404,7 @@ async def stream_form_chat(
             "event": "error",
             "data": {"messageKey": exc.message_key, "params": exc.params},
         }
-    except Exception as exc:  # noqa: BLE001 - 模型/网络错误统一展示
+    except Exception as exc:  # 模型/网络错误统一展示
         yield {
             "event": "error",
             "data": {"messageKey": "error.opFailed", "detail": str(exc)[:300]},

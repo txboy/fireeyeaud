@@ -65,7 +65,7 @@ def _engine(conn: dict[str, Any], password: str | None):
         kwargs["exclude_tablespaces"] = []
     try:
         return create_engine(url, **kwargs)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise ApiError("E_DB_CONN", 502, "error.dbConn", {"reason": str(exc)}) from exc
 
 
@@ -87,7 +87,7 @@ def test_connection(conn: dict[str, Any], password: str | None) -> bool:
         if driver == "access":
             return _access_probe(conn)
         raise
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         if driver == "access":
             return _access_probe(conn)
         raise ApiError("E_DB_CONN", 502, "error.dbConn", {"reason": str(exc)}) from exc
@@ -123,7 +123,7 @@ def reflect(conn: dict[str, Any], password: str | None) -> list[dict[str, Any]]:
             for table in insp.get_table_names():
                 try:
                     table_comment = (insp.get_table_comment(table) or {}).get("text")
-                except Exception:  # noqa: BLE001 - 部分驱动不支持表注释
+                except Exception:  # 部分驱动不支持表注释
                     table_comment = None
                 try:
                     pk_cols = set(
@@ -132,7 +132,7 @@ def reflect(conn: dict[str, Any], password: str | None) -> list[dict[str, Any]]:
                         )
                         or []
                     )
-                except Exception:  # noqa: BLE001
+                except Exception:
                     pk_cols = set()
                 columns = [
                     _column_meta(c, is_pk=c["name"] in pk_cols)
@@ -153,7 +153,7 @@ def reflect(conn: dict[str, Any], password: str | None) -> list[dict[str, Any]]:
         if driver == "access":
             return _access_reflect(conn)
         raise
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         if driver == "access":
             return _access_reflect(conn)
         raise ApiError("E_DB_CONN", 502, "error.dbConn", {"reason": str(exc)}) from exc
@@ -166,7 +166,7 @@ def _has_top_level_limit(sql: str, dialect: str) -> bool:
 
         tree = sqlglot.parse_one(sql, read=dialect)
         return tree.args.get("limit") is not None
-    except Exception:  # noqa: BLE001 - 解析失败则按“无 LIMIT”处理（照常包装）
+    except Exception:  # 解析失败则按“无 LIMIT”处理（照常包装）
         return False
 
 
@@ -177,7 +177,7 @@ def _has_top_level_order(sql: str, dialect: str) -> bool:
 
         tree = sqlglot.parse_one(sql, read=dialect)
         return tree.args.get("order") is not None
-    except Exception:  # noqa: BLE001 - 解析失败则按“无 ORDER BY”处理
+    except Exception:  # 解析失败则按“无 ORDER BY”处理
         return False
 
 
@@ -192,7 +192,7 @@ def _strip_top_level_order(sql: str, dialect: str) -> str:
         tree = sqlglot.parse_one(sql, read=dialect)
         tree.set("order", None)
         return tree.sql(dialect=dialect)
-    except Exception:  # noqa: BLE001 - 解析失败则原样返回
+    except Exception:  # 解析失败则原样返回
         return sql
 
 
@@ -313,7 +313,7 @@ def run_query(
         if driver == "access":
             return _access_query(conn, text_sql, limit, offset)
         raise
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         if driver == "access":
             return _access_query(conn, text_sql, limit, offset)
         raise ApiError("E_DB_CONN", 502, "error.dbConn", {"reason": str(exc)}) from exc
@@ -357,7 +357,7 @@ def count_query(
             value = con.execute(
                 text(f"SELECT COUNT(*) FROM {_wrap_subquery(driver, count_inner)}")
             ).scalar()
-    except Exception:  # noqa: BLE001 - 计数失败不阻断预览
+    except Exception:  # 计数失败不阻断预览
         if driver == "access":
             return _access_count(conn, text_sql)
         return None
@@ -372,7 +372,7 @@ def _access_probe(conn: dict[str, Any]) -> bool:
         return access_source.probe(conn.get("path"))
     except ApiError:
         raise
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise ApiError("E_DB_CONN", 502, "error.dbConn", {"reason": str(exc)}) from exc
 
 
@@ -381,7 +381,7 @@ def _access_reflect(conn: dict[str, Any]) -> list[dict[str, Any]]:
         return access_source.list_tables(conn.get("path"))
     except ApiError:
         raise
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise ApiError("E_DB_CONN", 502, "error.dbConn", {"reason": str(exc)}) from exc
 
 
@@ -392,14 +392,14 @@ def _access_query(
         return access_source.query(conn.get("path"), sql, limit, offset)
     except ApiError:
         raise
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise ApiError("E_DB_CONN", 502, "error.dbConn", {"reason": str(exc)}) from exc
 
 
 def _access_count(conn: dict[str, Any], sql: str) -> int | None:
     try:
         return access_source.count(conn.get("path"), sql)
-    except Exception:  # noqa: BLE001
+    except Exception:
         return None
 
 
@@ -473,7 +473,7 @@ def _duckdb_run_query(
             rows = [list(r) for r in fetched[:limit]]
     except ApiError:
         raise
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise ApiError("E_DB_CONN", 502, "error.dbConn", {"reason": str(exc)}) from exc
 
     return {
@@ -496,7 +496,7 @@ def _duckdb_count_query(conn: dict[str, Any], text_sql: str) -> int | None:
             conn, f"SELECT COUNT(*) FROM ({text_sql}) AS _sub"
         )
         return int(fetched[0][0])
-    except Exception:  # noqa: BLE001 - 计数失败不阻断预览
+    except Exception:  # 计数失败不阻断预览
         return None
 
 
@@ -511,7 +511,7 @@ def duckdb_inspect_table(conn: dict[str, Any], table: str) -> dict[str, Any] | N
         )
     except ApiError:
         raise
-    except Exception:  # noqa: BLE001
+    except Exception:
         return None
     if not fetched:
         return None
@@ -698,7 +698,7 @@ def validate_sql_syntax(sql: str, driver: str) -> dict[str, Any]:
                 )
             ],
         }
-    except Exception as exc:  # noqa: BLE001 - 解析器异常统一转为诊断
+    except Exception as exc:  # 解析器异常统一转为诊断
         return {
             "ok": False,
             "errors": [
@@ -719,7 +719,7 @@ def check_authorization(root, connection_id: str, sql: str, dialect: str) -> Non
     allowed = authorization.get(root, connection_id)
     try:
         tree = sqlglot.parse_one(sql, read=dialect)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise ApiError(
             "E_DB_UNAUTHORIZED", 403, "error.dbUnauthorized", {"reason": "parse"}
         ) from exc

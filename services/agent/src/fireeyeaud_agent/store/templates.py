@@ -13,7 +13,6 @@
 from __future__ import annotations
 
 import logging
-import re
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -101,7 +100,7 @@ def scan_docx(path: Path, kind: str) -> None:
         raise ApiError("E_FILE_TYPE", 400, "error.fileType", {"name": path.name})
     try:
         Document(str(path))
-    except Exception as exc:  # noqa: BLE001 - 损坏的 docx 统一报类型错误
+    except Exception as exc:  # 损坏的 docx 统一报类型错误
         raise ApiError(
             "E_FILE_TYPE", 400, "error.fileType", {"name": path.name}
         ) from exc
