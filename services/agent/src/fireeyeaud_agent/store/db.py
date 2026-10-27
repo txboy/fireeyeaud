@@ -16,6 +16,27 @@ from . import secrets
 KIND = "db"
 _DRIVERS = {"sqlite", "postgresql", "mysql", "mssql", "access", "oracle"}
 
+# 工作区 DuckDB 的「内置只读连接」：文件型数据源的 SQL 预览走它。
+# 它不进 project.json / 全局配置，也不会出现在数据库连接面板里。
+WORKSPACE_DUCKDB_ID = "workspace-duckdb"
+WORKSPACE_DUCKDB_NAME = "项目数据（DuckDB）"
+
+
+def workspace_duckdb_connection(root: Path) -> dict[str, Any]:
+    """把工作区 DuckDB 包装成与普通连接同形的只读连接描述。"""
+    return {
+        "id": WORKSPACE_DUCKDB_ID,
+        "name": WORKSPACE_DUCKDB_NAME,
+        "driver": "duckdb",
+        "scope": "project",
+        "path": str(Path(root) / ".fireeye" / "workspace.duckdb"),
+        "builtin": True,
+    }
+
+
+def is_builtin(connection_id: str) -> bool:
+    return connection_id == WORKSPACE_DUCKDB_ID
+
 
 def set_secret(ref: str, password: str | None) -> None:
     if password:

@@ -762,6 +762,21 @@ export function runDbQuery(
   });
 }
 
+/** 工作区 DuckDB（文件型数据源）里的表结构：默认 SQL 与字段补全用。 */
+export function getWorkspaceTableSchema(table: string): Promise<DbTableSchema> {
+  return request<DbTableSchema>(
+    `/datasources/workspace-duckdb/tables/${encodeURIComponent(table)}`,
+  );
+}
+
+/** 在工作区 DuckDB 上执行只读 SQL 并分页返回。 */
+export function runWorkspaceQuery(input: DbQueryInput): Promise<DbQueryResult> {
+  return request<DbQueryResult>('/datasources/workspace-duckdb/query', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
 export interface DbSqlDiagnostic {
   message: string;
   reason: string;

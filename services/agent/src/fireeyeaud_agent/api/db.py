@@ -111,12 +111,17 @@ def list_connections(scope: str | None = Query(default=None)) -> dict:
 def create_connection(body: ConnectionBody) -> dict:
     root = workspace_manager.root
     data = body.model_dump()
+    if db.is_builtin(str(data.get("id") or "")) or data.get("driver") == "duckdb":
+        # 内置的「项目数据（DuckDB）」连接不可创建/覆盖。
+        raise ApiError("E_DB_DRIVER", 400, "error.dbDriver", {"driver": "duckdb"})
     cred_ref = data.pop("credRef", None)
     return db.create_connection(data, cred_ref=cred_ref, root=root)
 
 
 @router.delete("/db/connections/{connection_id}")
 def delete_connection(connection_id: str, scope: str = Query(default="global")) -> dict:
+    if db.is_builtin(connection_id):
+        raise ApiError("E_PROTECTED", 400, "error.protected")
     db.delete_connection(connection_id, scope, workspace_manager.root)
     return {"ok": True}
 
@@ -192,6 +197,65 @@ def reflect_connection(
 def validate_sql_syntax(body: ValidateSqlBody) -> dict:
     """编辑器实时语法检查：只解析，不访问数据库。"""
     return db_engine.validate_sql_syntax(body.sql, body.driver)
+
+
+# ---- 工作区 DuckDB：文件型数据源的 SQL 预览 ----
+# 内置连接不进连接列表，也不允许被创建/删除/修改；这里只暴露「看表结构 + 只读查询」。
+
+
+def _workspace_duckdb():
+    root = workspace_manager.root
+    if root is None:
+        raise ApiError("E_NO_WORKSPACE", 409, "error.noWorkspace")
+    return db.workspace_duckdb_connection(root)
+
+
+def _require_source_table(table: str) -> None:
+    """只允许查已导入的 src_* 原始表，避免把 workspace.duckdb 里的内部表暴露出去。"""
+    if not table.startswith("src_"):
+        raise ApiError("E_NOT_FOUND", 404, "error.notFound", {"id": table})
+
+
+@router.get("/datasources/workspace-duckdb/tables/{table}")
+def workspace_table_schema(table: str) -> dict:
+    """预览页需要的最小表结构（默认 SQL、字段补全与表头）。"""
+    _require_source_table(table)
+    schema = db_engine.duckdb_inspect_table(_workspace_duckdb(), table)
+    if schema is None:
+        raise ApiError("E_NOT_FOUND", 404, "error.notFound", {"id": table})
+    return schema
+
+
+@router.post("/datasources/workspace-duckdb/query")
+def workspace_duckdb_query(body: QueryBody) -> dict:
+    """在工作区 DuckDB 上执行只读 SQL 并分页返回（表数据预览）。"""
+    conn = _workspace_duckdb()
+    try:
+        limit = int(body.limit or db_engine.DEFAULT_LIMIT)
+    except (TypeError, ValueError):
+        limit = db_engine.DEFAULT_LIMIT
+    limit = max(1, min(limit, db_engine.MAX_LIMIT))
+    try:
+        offset = int(body.offset or 0)
+    except (TypeError, ValueError):
+        offset = 0
+    offset = max(0, offset)
+
+    result = db_engine.run_query(conn, body.sql, None, limit=limit, offset=offset)
+    total = (
+        db_engine.count_query(conn, body.sql, None) if body.includeTotal else None
+    )
+    return {
+        "columns": result["columns"],
+        "rows": result["rows"],
+        "rowCount": result["rowCount"],
+        "hasMore": result["hasMore"],
+        "paginated": result["paginated"],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "sql": result["sql"],
+    }
 
 
 def _known_model_id(root, model_id: str | None) -> str | None:

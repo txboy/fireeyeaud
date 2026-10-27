@@ -42,6 +42,9 @@ function dialectFor(driver: DbDriver): SQLDialect {
       return MSSQL;
     case 'oracle':
       return PLSQL;
+    // 工作区 DuckDB 的方言与 PostgreSQL 接近（尽量获得准确的补全与语法高亮）。
+    case 'duckdb':
+      return PostgreSQL;
     default:
       return StandardSQL;
   }

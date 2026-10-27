@@ -126,6 +126,9 @@ export default {
     expandDataSources: '展开数据源',
     collapseDataSources: '收起数据源',
     previewDatasource: '在右侧预览',
+    /** 文件型数据源点击后进入 SQL 预览（查工作区 DuckDB 里导入后的表）。 */
+    previewSql: 'SQL 预览',
+    openOriginalFile: '打开原始文件',
     newSession: '新建会话',
     deleteSession: '删除会话',
     delete: '删除',

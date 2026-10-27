@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ChevronRight,
   Database,
+  FileText,
   FolderOpen,
   MessageSquare,
   Plus,
@@ -20,6 +21,10 @@ import { useUiStore, type SessionTab } from '../../store/ui';
 import { useConfirmStore } from '../../store/confirm';
 import { useAttachDbStore } from '../../store/attachDb';
 import { dbDriverFor, normalizePath } from '../../lib/db-file';
+import { getWorkspaceTableSchema } from '../../lib/api';
+
+/** 工作区 DuckDB 的内置只读连接 id（与后端 store/db.py 的 WORKSPACE_DUCKDB_ID 一致）。 */
+const WORKSPACE_DUCKDB_ID = 'workspace-duckdb';
 import { confirmStopSession } from '../../lib/stop-guard';
 import { FileTree } from '../FileTree';
 
@@ -73,6 +78,7 @@ export function ExplorerPanel() {
   const confirm = useConfirmStore((s) => s.confirm);
   const openPreview = useUiStore((s) => s.openPreview);
   const openDbSchema = useUiStore((s) => s.openDbSchema);
+  const openDbData = useUiStore((s) => s.openDbData);
   const createReturning = useDatabaseStore((s) => s.createReturning);
   const promptAttach = useAttachDbStore((s) => s.promptAttach);
   const [attaching, setAttaching] = useState(false);
@@ -186,7 +192,8 @@ export function ExplorerPanel() {
     [openDbSchema, promptAttach, createReturning, t, tc],
   );
 
-  // 点击数据源：文件型在右侧打开原始文件预览；数据库型打开其表结构 / 授权 tab。
+  // 点击数据源：文件型进入「工作区 DuckDB」SQL 预览（与数据库表预览一致）；
+  // 数据库型打开其表结构 / 授权 tab。原始文件仍可从条目右侧的文件图标打开。
   const handleOpenDatasource = async (ds: DataSourceInfo) => {
     if (!path) return;
     if (ds.type === 'db') {
@@ -204,10 +211,30 @@ export function ExplorerPanel() {
       }
       return;
     }
-    if (ds.path) {
-      const name = ds.path.split(/[\\/]/).pop() ?? ds.id;
-      await openPreview(path, ds.path, name);
+    // 文件型：查工作区 DuckDB 里导入后的表。
+    const table = ds.tables[0];
+    if (!table) {
+      await openDatasourceFile(ds);
+      return;
     }
+    const schema = await getWorkspaceTableSchema(table).catch(() => null);
+    await openDbData({
+      id: WORKSPACE_DUCKDB_ID,
+      scope: 'project',
+      name: ds.path ? ds.path.split(/[\\/]/).pop() ?? ds.id : ds.id,
+      driver: 'duckdb',
+      table: schema ?? { table, columns: [] },
+      source: 'workspace-duckdb',
+      // 不同文件可能都有 sheet1，用数据源 id 区分 tab。
+      tabKey: `workspace:${ds.id}`,
+    });
+  };
+
+  /** 打开数据源的原始文件（Excel/CSV 原样预览），用于核对源文件排版。 */
+  const openDatasourceFile = async (ds: DataSourceInfo) => {
+    if (!path || !ds.path) return;
+    const name = ds.path.split(/[\\/]/).pop() ?? ds.id;
+    await openPreview(path, ds.path, name);
   };
 
   const handleDeleteDatasource = async (id: string, name: string) => {
@@ -445,7 +472,7 @@ export function ExplorerPanel() {
                       title={ds.path ?? ds.id}
                       role="button"
                       tabIndex={0}
-                      aria-label={`${t('previewDatasource')}: ${
+                      aria-label={`${t('previewSql')}: ${
                         ds.path ? ds.path.split(/[\\/]/).pop() : ds.id
                       }`}
                       onClick={() => void handleOpenDatasource(ds)}
@@ -464,6 +491,20 @@ export function ExplorerPanel() {
                       <span className="datasource-chip__meta">
                         {ti('tables', { count: ds.tables.length })}
                       </span>
+                      {ds.type !== 'db' && ds.path && (
+                        <button
+                          type="button"
+                          className="datasource-chip__del"
+                          title={t('openOriginalFile')}
+                          aria-label={t('openOriginalFile')}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void openDatasourceFile(ds);
+                          }}
+                        >
+                          <FileText size={12} strokeWidth={1.75} />
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="datasource-chip__del"

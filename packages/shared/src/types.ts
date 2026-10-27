@@ -366,13 +366,15 @@ export interface WorkingPaperManifest {
   files: string[];
 }
 
+/** 数据库驱动；`duckdb` 仅用于工作区内置的只读连接（文件型数据源的 SQL 预览）。 */
 export type DbDriver =
   | 'sqlite'
   | 'postgresql'
   | 'mysql'
   | 'mssql'
   | 'access'
-  | 'oracle';
+  | 'oracle'
+  | 'duckdb';
 
 export interface DbConnection {
   id: string;

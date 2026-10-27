@@ -125,6 +125,8 @@ export default {
     expandDataSources: 'Expand data sources',
     collapseDataSources: 'Collapse data sources',
     previewDatasource: 'Preview in side panel',
+    previewSql: 'SQL preview',
+    openOriginalFile: 'Open original file',
     newSession: 'New session',
     deleteSession: 'Delete session',
     delete: 'Delete',
