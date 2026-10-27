@@ -71,7 +71,7 @@ def sql_query(root: Path, params: dict[str, Any]) -> dict[str, Any]:
             rows = fetched[:limit]
     except ApiError:
         raise
-    except Exception as exc:  # noqa: BLE001 - 统一转错误码
+    except Exception as exc:  # 统一转错误码
         message = str(exc).lower()
         if "timeout" in message or "interrupt" in message:
             raise ApiError("E_SQL_TIMEOUT", 504, "error.sqlTimeout") from exc

@@ -195,7 +195,7 @@ def analyze_template(path: Path) -> dict[str, Any]:
         raise ApiError("E_FILE_TYPE", 400, "error.fileType", {"name": path.name})
     try:
         document = Document(str(path))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise ApiError(
             "E_FILE_TYPE", 400, "error.fileType", {"name": path.name}
         ) from exc

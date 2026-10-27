@@ -1,6 +1,5 @@
 """Phase 9 · 上下文压缩接入 run_agent 的行为（T5）。"""
 
-from pathlib import Path
 
 import pytest
 from langchain_core.messages import AIMessage, AIMessageChunk, SystemMessage, ToolMessage

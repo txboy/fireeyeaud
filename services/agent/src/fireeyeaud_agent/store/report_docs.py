@@ -348,7 +348,7 @@ def export_report(root: Path, report_id: str, *, title: str | None = None) -> di
 
         try:
             document = Document(str(template_path))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise ApiError("E_FILE_TYPE", 400, "error.fileType", {"name": "template.docx"}) from exc
 
         final_title = (title or body.get("title") or manifest.get("title") or report_id).strip()[:200]

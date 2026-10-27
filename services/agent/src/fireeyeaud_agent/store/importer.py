@@ -59,7 +59,7 @@ def _emit(progress: Progress | None, phase: str, done: int, total: int) -> None:
 def _read_table(path: Path) -> tuple[list[str], list[list[str]]]:
     try:
         return read_table(path)
-    except Exception as exc:  # noqa: BLE001 - 解析失败统一转错误码
+    except Exception as exc:  # 解析失败统一转错误码
         raise ApiError(
             "E_IMPORT_PARSE",
             422,

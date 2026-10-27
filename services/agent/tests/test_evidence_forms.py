@@ -105,7 +105,7 @@ def test_receipt_write_does_not_clobber_concurrent_section_save(tmp_path):
     def attach():
         try:
             evidence_forms.attach_receipt(root, "QZ-0001", receipt)
-        except BaseException as exc:  # noqa: BLE001
+        except BaseException as exc:
             errors.append(exc)
 
     def save():
@@ -117,7 +117,7 @@ def test_receipt_write_does_not_clobber_concurrent_section_save(tmp_path):
                 "S1",
                 [{"type": "paragraph", "text": "正文。", "sourceRefs": [finding_id]}],
             )
-        except BaseException as exc:  # noqa: BLE001
+        except BaseException as exc:
             errors.append(exc)
 
     threads = [threading.Thread(target=attach) for _ in range(5)]

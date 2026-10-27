@@ -186,7 +186,7 @@ async def build_mcp_tools(
                     opener(server, workspace=root)
                 )
                 specs = await session.list_tools()
-            except Exception as exc:  # noqa: BLE001 - 失败隔离到单 server
+            except Exception as exc:  # 失败隔离到单 server
                 errors.append(
                     {"serverId": sid, "code": "E_MCP_CONNECT", "message": str(exc)}
                 )
@@ -213,7 +213,7 @@ async def build_mcp_tools(
                     schema = adapters.schema_to_model(
                         f"MCPArgs_{sid}_{spec.name}", spec.input_schema
                     )
-                except Exception as exc:  # noqa: BLE001 - schema 转换失败则跳过该工具
+                except Exception as exc:  # schema 转换失败则跳过该工具
                     errors.append(
                         {
                             "serverId": sid,

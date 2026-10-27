@@ -11,7 +11,7 @@ import sys
 
 LAZY_CHECK = """
 import sys
-import fireeyeaud_agent.main  # noqa: F401
+import fireeyeaud_agent.main
 
 heavy = sorted(
     name

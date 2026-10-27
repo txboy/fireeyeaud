@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 from pathlib import Path
 from typing import Any, AsyncIterator
@@ -16,7 +15,6 @@ from langchain_core.messages import (
     BaseMessage,
     HumanMessage,
     SystemMessage,
-    ToolMessage,
 )
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
@@ -24,7 +22,6 @@ from pydantic import BaseModel, Field
 from . import doc_chat
 from ..errors import ApiError
 from ..store import report_docs
-from ..store import reports as reports_store
 from ..store.report_verify import verify_report
 
 MAX_STEPS = doc_chat.MAX_STEPS
@@ -395,7 +392,7 @@ async def stream_report_chat(
             "event": "error",
             "data": {"messageKey": exc.message_key, "params": exc.params},
         }
-    except Exception as exc:  # noqa: BLE001 - 模型/网络错误统一展示
+    except Exception as exc:  # 模型/网络错误统一展示
         yield {"event": "error", "data": {"messageKey": "error.opFailed", "detail": str(exc)[:300]}}
 
 

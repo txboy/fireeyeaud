@@ -2,7 +2,6 @@ import httpx
 from fake_model import FakeChatModel
 from langchain_core.messages import AIMessage
 
-from fireeyeaud_agent.agent import graph as graph_mod
 from fireeyeaud_agent.config import models as models_mod
 from fireeyeaud_agent.main import app
 from fireeyeaud_agent.store import sessions as sessions_store

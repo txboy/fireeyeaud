@@ -5,7 +5,6 @@ from langchain_core.messages import AIMessage, AIMessageChunk
 
 from fake_model import FakeChatModel
 
-from fireeyeaud_agent.agent import graph as graph_mod
 from fireeyeaud_agent.config import models as models_mod
 from fireeyeaud_agent.main import app
 

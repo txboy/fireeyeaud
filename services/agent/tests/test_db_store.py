@@ -1,4 +1,3 @@
-from pathlib import Path
 
 from fireeyeaud_agent.store import db, secrets
 

@@ -34,6 +34,7 @@ cd services/agent && uv sync      # Agent sidecar（.venv + 依赖）
 
 # 2) 从仓库根运行
 npm run agent:test                # sidecar 冒烟测试（pytest）
+npm run agent:lint                # sidecar 静态检查（ruff；配置在 services/agent/pyproject.toml）
 npm run agent:dev                 # 单独启动 sidecar（固定 8765，热重载）
 npm run desktop:dev               # 启动 Vite dev server + Electron（自动 spawn sidecar：随机端口 + 健康检查 + 退出回收）
 npm run desktop:test              # Electron 壳的 sidecar 生命周期测试（node --test）

@@ -24,7 +24,6 @@ def test_read_text_file(tmp_path):
 
 
 def test_read_xlsx_as_table(tmp_path):
-    from fireeyeaud_agent.store.duckdb import Database  # noqa: F401  (仅为采集依赖)
 
     import pandas as pd
 

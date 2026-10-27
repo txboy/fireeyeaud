@@ -129,10 +129,10 @@ class _FakeModel:
         self.calls = 0
         self.seen: list[list] = []
 
-    def bind_tools(self, tools):  # noqa: ANN001
+    def bind_tools(self, tools):
         return self
 
-    async def astream(self, messages):  # noqa: ANN001
+    async def astream(self, messages):
         self.seen.append(list(messages))
         self.calls += 1
         if self.calls == 1:

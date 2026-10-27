@@ -4,9 +4,6 @@ from __future__ import annotations
 
 import io
 import json
-import shutil
-import stat
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -122,7 +119,7 @@ def _remote_sha(root: Path, password: str | None) -> tuple[bytes | None, dict[st
         return refs.get(REMOTE_BRANCH), config
     except ApiError:
         raise
-    except Exception as exc:  # noqa: BLE001 - 网络错误统一报 fetch 失败
+    except Exception as exc:  # 网络错误统一报 fetch 失败
         raise ApiError(
             "E_FETCH_FAILED", 502, "error.fetchFailed", {"reason": type(exc).__name__}
         ) from exc

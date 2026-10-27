@@ -8,7 +8,7 @@ import pytest
 
 from fireeyeaud_agent.store import form_docs, form_verify
 
-from test_form_docs import _finding, _setup
+from test_form_docs import _setup
 
 
 @pytest.fixture(autouse=True)

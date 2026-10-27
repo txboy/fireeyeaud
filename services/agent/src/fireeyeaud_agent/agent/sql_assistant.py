@@ -740,11 +740,6 @@ async def stream_sql_assistant(
         chat = model if model is not None else build_chat_model(root, body.modelId)
         bound = _bind_tools(chat, [_preview_tool()]) if preview is not None else chat
         allowed = _allowed_tables(body.context if isinstance(body.context, dict) else {})
-        driver = str(
-            (body.context.get("connection") or {}).get("driver")
-            if isinstance(body.context, dict)
-            else ""
-        ) or str(body.driver or "")
 
         for round_index in range(MAX_TOOL_ROUNDS + 1):
             ai: Any = None
@@ -816,7 +811,7 @@ async def stream_sql_assistant(
                             "summary": f"{table}：查询失败",
                         }
                         content = json.dumps({"error": exc.code}, ensure_ascii=False)
-                    except Exception:  # noqa: BLE001 - 查询失败不应中断整轮
+                    except Exception:  # 查询失败不应中断整轮
                         logger.exception("sql assistant preview failed")
                         data = {
                             "callId": call_id,
@@ -855,7 +850,7 @@ async def stream_sql_assistant(
             },
         )
         return
-    except Exception:  # noqa: BLE001 - 模型侧异常统一转 error 事件
+    except Exception:  # 模型侧异常统一转 error 事件
         logger.exception("sql assistant stream failed")
         yield emit("error", {"messageKey": "error.internal"})
         return

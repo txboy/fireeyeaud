@@ -20,7 +20,7 @@ def _effective_profile(root: Path | None) -> dict[str, Any] | None:
 
     try:
         items = cfg_store.load_effective("models", root)
-    except Exception:  # noqa: BLE001 - 配置不可读时回退 settings
+    except Exception:  # 配置不可读时回退 settings
         return None
     if not items:
         return None
@@ -32,7 +32,7 @@ def _profile_by_id(root: Path | None, model_id: str) -> dict[str, Any] | None:
 
     try:
         items = cfg_store.load_effective("models", root)
-    except Exception:  # noqa: BLE001
+    except Exception:
         return None
     return next((m for m in items if m.get("id") == model_id), None)
 
