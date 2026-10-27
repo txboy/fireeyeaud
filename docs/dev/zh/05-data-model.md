@@ -1,5 +1,7 @@
 # 数据模型
 
+> English: [../en/05-data-model.md](../en/05-data-model.md)
+
 ## 一、工作区落盘
 
 打开一个文件夹后，后端在其中创建 `.fireeye/`：

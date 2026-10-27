@@ -1,5 +1,7 @@
 # 架构总览
 
+> English: [../en/01-architecture.md](../en/01-architecture.md)
+
 ## 三个进程
 
 ```
