@@ -270,6 +270,7 @@ fireeyeaud/
 
 Further reading:
 
+- Developer docs: [`docs/dev/`](docs/dev/) (architecture, layering, API protocol, data formats, common tasks)
 - Design and implementation record: [`docs/plans/fireeyeaud-design.md`](docs/plans/fireeyeaud-design.md)
 - UI design notes: [`docs/design/设计说明.md`](docs/design/设计说明.md)
 - Historical progress and known deviations: [`docs/plans/`](docs/plans/)

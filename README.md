@@ -270,6 +270,7 @@ fireeyeaud/
 
 进一步阅读：
 
+- 开发者文档：[`docs/dev/`](docs/dev/)（架构、分层约定、API 协议、数据格式、常见任务）
 - 功能设计与实施记录：[`docs/plans/fireeyeaud-design.md`](docs/plans/fireeyeaud-design.md)
 - 界面设计说明：[`docs/design/设计说明.md`](docs/design/设计说明.md)
 - 历史进度与已知偏差：[`docs/plans/`](docs/plans/)
