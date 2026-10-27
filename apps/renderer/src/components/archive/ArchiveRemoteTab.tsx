@@ -5,6 +5,7 @@ import { patchSettings } from '../../lib/api';
 import { useArchiveStore } from '../../store/archive';
 import { useUiStore } from '../../store/ui';
 import { useWorkspaceStore } from '../../store/workspace';
+import { errorKeyOf } from '../../lib/errorKey';
 
 /**
  * 右侧「远程设置」tab：归档远程仓库与操作人配置。
@@ -63,7 +64,7 @@ export function ArchiveRemoteTab() {
       setToken('');
       void message.success(t('remoteSaved'));
     } catch (err) {
-      setErrorKey((err as { messageKey?: string }).messageKey ?? 'error.internal');
+      setErrorKey(errorKeyOf(err));
     } finally {
       setBusy(false);
     }

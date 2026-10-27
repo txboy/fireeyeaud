@@ -7,6 +7,7 @@ import { describeConflict, isSameCheck } from '../../lib/archiveDiff';
 import { useArchiveStore } from '../../store/archive';
 import { useUiStore } from '../../store/ui';
 import { useWorkspaceStore } from '../../store/workspace';
+import { errorKeyOf } from '../../lib/errorKey';
 
 type Choice = 'local' | 'remote' | 'both' | 'auto';
 
@@ -47,7 +48,7 @@ export function ArchiveDiffTab() {
       );
       return result;
     } catch (err) {
-      setErrorKey((err as { messageKey?: string }).messageKey ?? 'error.internal');
+      setErrorKey(errorKeyOf(err));
       // 检查失败：退回「未检查」并保留错误提示，不冒认成「没配远程」
       setCheck(undefined);
       throw err;

@@ -6,6 +6,7 @@ import { useFormsStore } from '../../store/forms';
 import { useWorkspaceStore } from '../../store/workspace';
 import { useUiStore } from '../../store/ui';
 import { useConfirmStore } from '../../store/confirm';
+import { errorKeyOf } from '../../lib/errorKey';
 
 /** 回执单：上传 / 替换 / 查看 / 删除（每个取证单最多一份）。 */
 export function ReceiptDialog({
@@ -49,7 +50,7 @@ export function ReceiptDialog({
     } catch (err) {
       // store 已记录 errorKey（面板下方展示），这里再提示一次避免静默失败
       void message.error(
-        terr(((err as { messageKey?: string }).messageKey ?? 'error.internal').replace(/^error\./, '')),
+        terr((errorKeyOf(err)).replace(/^error\./, '')),
       );
     } finally {
       setBusy(false);
@@ -76,7 +77,7 @@ export function ReceiptDialog({
       await clear(form.id);
     } catch (err) {
       void message.error(
-        terr(((err as { messageKey?: string }).messageKey ?? 'error.internal').replace(/^error\./, '')),
+        terr((errorKeyOf(err)).replace(/^error\./, '')),
       );
     } finally {
       setBusy(false);

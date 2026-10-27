@@ -18,6 +18,7 @@ import { useWorkspaceStore } from '../../store/workspace';
 import { FormActions } from './FormActions';
 import { FormError } from './FormError';
 import { useUnsavedGuard } from './UnsavedGuard';
+import { errorKeyOf } from '../../lib/errorKey';
 
 const DocxPreview = lazy(() =>
   import('../preview/DocxPreview').then((module) => ({ default: module.DocxPreview })),
@@ -138,7 +139,7 @@ export function TemplateForm({
         name: prev.name.trim() || info.name,
       }));
     } catch (err) {
-      setErrorKey((err as { messageKey?: string }).messageKey ?? 'error.internal');
+      setErrorKey(errorKeyOf(err));
     }
   };
 
@@ -168,7 +169,7 @@ export function TemplateForm({
       setBusy(false);
       return true;
     } catch (err) {
-      setErrorKey((err as { messageKey?: string }).messageKey ?? 'error.internal');
+      setErrorKey(errorKeyOf(err));
       setBusy(false);
       return false;
     }

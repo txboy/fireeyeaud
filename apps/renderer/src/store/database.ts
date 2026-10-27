@@ -12,6 +12,7 @@ import {
   type DbConnectionInput,
   type DbTestInput,
 } from '../lib/api';
+import { errorKeyOf } from '../lib/errorKey';
 
 interface DatabaseState {
   items: DbConnection[];
@@ -51,7 +52,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
     } catch (err) {
       set({
         loading: false,
-        errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal',
+        errorKey: errorKeyOf(err),
       });
     }
   },
@@ -63,7 +64,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
       await get().load();
       return true;
     } catch (err) {
-      set({ errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal' });
+      set({ errorKey: errorKeyOf(err) });
       return false;
     }
   },
@@ -75,7 +76,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
       await get().load();
       return created;
     } catch (err) {
-      set({ errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal' });
+      set({ errorKey: errorKeyOf(err) });
       return null;
     }
   },
@@ -92,7 +93,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
       await get().load();
       return true;
     } catch (err) {
-      set({ errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal' });
+      set({ errorKey: errorKeyOf(err) });
       return false;
     }
   },
@@ -103,7 +104,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
       const res = await testDbConnection(id, scope);
       return res.ok;
     } catch (err) {
-      set({ errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal' });
+      set({ errorKey: errorKeyOf(err) });
       return false;
     }
   },
@@ -114,7 +115,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
       const res = await testDbParams(input);
       return res.ok;
     } catch (err) {
-      set({ errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal' });
+      set({ errorKey: errorKeyOf(err) });
       return false;
     }
   },
@@ -129,7 +130,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => ({
       }));
       return true;
     } catch (err) {
-      set({ errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal' });
+      set({ errorKey: errorKeyOf(err) });
       return false;
     }
   },

@@ -7,6 +7,7 @@ import {
   patchTemplate,
   uploadTemplates,
 } from '../lib/api';
+import { errorKeyOf } from '../lib/errorKey';
 
 interface TemplatesState {
   items: TemplateInfo[];
@@ -51,7 +52,7 @@ export const useTemplatesStore = create<TemplatesState>((set, get) => ({
     } catch (err) {
       set({
         loading: false,
-        errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal',
+        errorKey: errorKeyOf(err),
       });
     }
   },
@@ -106,7 +107,7 @@ async function withError(
   try {
     await action();
   } catch (err) {
-    set({ errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal' });
+    set({ errorKey: errorKeyOf(err) });
     throw err;
   }
 }

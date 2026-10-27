@@ -39,6 +39,7 @@ import { useConfirmStore } from '../../store/confirm';
 import { ReportEditorToolbar } from '../reports/ReportEditorToolbar';
 import { ReportSectionEditor } from '../reports/ReportSectionEditor';
 import { sectionFromTiptap } from '../reports/editor/reportEditorModel';
+import { errorKeyOf } from '../../lib/errorKey';
 
 /**
  * 右侧写作台预览：大纲确认、结构化正文、校验与导出；支持章节富文本编辑。
@@ -105,7 +106,7 @@ export function WorkspacePreview({
           : await verifyFormDocument(doc.manifest.id);
       setCheck(result);
     } catch (err) {
-      setErrorKey((err as { messageKey?: string }).messageKey ?? 'error.internal');
+      setErrorKey(errorKeyOf(err));
     } finally {
       setBusy(false);
     }
@@ -126,7 +127,7 @@ export function WorkspacePreview({
       }
       onRefresh();
     } catch (err) {
-      const key = (err as { messageKey?: string }).messageKey ?? 'error.internal';
+      const key = errorKeyOf(err);
       setErrorKey(key);
       if (key === 'error.reportVerifyFailed') await runVerify();
     } finally {
@@ -230,7 +231,7 @@ export function WorkspacePreview({
       void message.success(t('savedChanges'));
       onRefresh();
     } catch (err) {
-      const key = (err as { messageKey?: string }).messageKey ?? 'error.internal';
+      const key = errorKeyOf(err);
       setErrorKey(key);
       void message.error(terr(key.replace(/^error\./, '')));
     } finally {

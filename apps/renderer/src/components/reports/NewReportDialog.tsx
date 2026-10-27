@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { EvidenceFormManifest, TemplateInfo } from '@fireeyeaud/shared';
 import { createReportDraft, listTemplates } from '../../lib/api';
 import { useReportsStore } from '../../store/reports';
+import { errorKeyOf } from '../../lib/errorKey';
 
 /** 新建报告：选模板、勾选取证单、定标题，创建后直接进入写作台。 */
 export function NewReportDialog({
@@ -48,7 +49,7 @@ export function NewReportDialog({
         setTemplateId(preferred?.id ?? '');
       })
       .catch((err) => {
-        setErrorKey((err as { messageKey?: string }).messageKey ?? 'error.internal');
+        setErrorKey(errorKeyOf(err));
       });
   }, [open, forms]);
 
@@ -78,7 +79,7 @@ export function NewReportDialog({
       void message.success(t('created'));
       onClose();
     } catch (err) {
-      setErrorKey((err as { messageKey?: string }).messageKey ?? 'error.internal');
+      setErrorKey(errorKeyOf(err));
     } finally {
       setBusy(false);
     }

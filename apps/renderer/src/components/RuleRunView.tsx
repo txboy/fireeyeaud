@@ -6,6 +6,7 @@ import type { RuleRunTab } from '../store/ui';
 import { useRulesStore } from '../store/rules';
 import { useDatabaseStore } from '../store/database';
 import { runRuleApi } from '../lib/api';
+import { errorKeyOf } from '../lib/errorKey';
 
 /** 工作区 DuckDB 对应空 sourceId。 */
 const WORKSPACE = '';
@@ -48,7 +49,7 @@ export function RuleRunView({ tab }: { tab: RuleRunTab }) {
       const res = await runRuleApi(tab.ruleId, { sql, sourceId });
       setResult(res);
     } catch (err) {
-      setErrorKey((err as { messageKey?: string }).messageKey ?? 'error.internal');
+      setErrorKey(errorKeyOf(err));
       setResult(null);
     } finally {
       setBusy(false);

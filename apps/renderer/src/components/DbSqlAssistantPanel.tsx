@@ -16,6 +16,7 @@ import { useConfirmStore } from '../store/confirm';
 import type { DbDataTab } from '../store/ui';
 import { Markdown } from './Markdown';
 import { ModelSelect } from './ModelSelect';
+import { errorKeyOf } from '../lib/errorKey';
 
 /** 用户停在底部附近时才自动跟随流式输出。 */
 const STICK_THRESHOLD = 48;
@@ -157,7 +158,7 @@ export function DbSqlAssistantPanel(props: DbSqlAssistantPanelProps) {
             } else if (event.type === 'error') {
               store
                 .getState()
-                .fail(tab.id, assistant.id, event.data.messageKey ?? 'error.internal');
+                .fail(tab.id, assistant.id, errorKeyOf(event.data));
             }
           },
         },
@@ -172,7 +173,7 @@ export function DbSqlAssistantPanel(props: DbSqlAssistantPanelProps) {
           .fail(
             tab.id,
             assistant.id,
-            (err as { messageKey?: string }).messageKey ?? 'error.internal',
+            errorKeyOf(err),
           );
       }
     } finally {

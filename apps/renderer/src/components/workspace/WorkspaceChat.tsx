@@ -15,6 +15,7 @@ import { useFormsStore } from '../../store/forms';
 import { useFindingsStore } from '../../store/findings';
 import type { WorkspaceKind } from '../../store/workspaceKind';
 import { ModelSelect } from '../ModelSelect';
+import { errorKeyOf } from '../../lib/errorKey';
 
 interface ChatItem {
   role: 'user' | 'assistant';
@@ -172,7 +173,7 @@ export function WorkspaceChat({
         if (kind === 'report') await setReportForms(id, selected);
         else await setFormFindings(id, selected);
       } catch (err) {
-        const key = (err as { messageKey?: string }).messageKey ?? 'error.internal';
+        const key = errorKeyOf(err);
         setError(terr(key.replace(/^error\./, '')));
         return;
       }
@@ -195,7 +196,7 @@ export function WorkspaceChat({
       }
     } catch (err) {
       if (!(err instanceof DOMException && err.name === 'AbortError')) {
-        const key = (err as { messageKey?: string }).messageKey ?? 'error.internal';
+        const key = errorKeyOf(err);
         setError(terr(key.replace(/^error\./, '')));
       }
     } finally {

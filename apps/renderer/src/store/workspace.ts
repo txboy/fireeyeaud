@@ -3,6 +3,7 @@ import type { WorkspaceInfo } from '@fireeyeaud/shared';
 import { ApiError, closeWorkspaceApi, openWorkspaceApi } from '../lib/api';
 import { isTransientOpenError, retryDelayMs } from '../lib/openRetry';
 import { confirmStopAll } from '../lib/stop-guard';
+import { errorKeyOf } from '../lib/errorKey';
 
 /** 「最近打开的工作区」条目（仅客户端持久化，落 localStorage）。 */
 export interface RecentWorkspace {
@@ -125,7 +126,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => {
         loading: false,
         error: err as ApiError,
         errorKey:
-          (err as { messageKey?: string }).messageKey ?? 'error.internal',
+          errorKeyOf(err),
       });
     } finally {
       if (openingPath === path) openingPath = null;

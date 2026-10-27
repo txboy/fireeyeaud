@@ -8,6 +8,7 @@ import {
   type CreateFindingInput,
   type ReviewInput,
 } from '../lib/api';
+import { errorKeyOf } from '../lib/errorKey';
 
 interface FindingsState {
   items: Finding[];
@@ -22,10 +23,6 @@ interface FindingsState {
   toggleSelected: (id: string) => void;
   clearSelected: () => void;
   reset: () => void;
-}
-
-function messageKey(err: unknown): string {
-  return (err as { messageKey?: string }).messageKey ?? 'error.internal';
 }
 
 export const useFindingsStore = create<FindingsState>((set, get) => ({
@@ -47,7 +44,7 @@ export const useFindingsStore = create<FindingsState>((set, get) => ({
         ),
       }));
     } catch (err) {
-      set({ loading: false, errorKey: messageKey(err) });
+      set({ loading: false, errorKey: errorKeyOf(err) });
     }
   },
 

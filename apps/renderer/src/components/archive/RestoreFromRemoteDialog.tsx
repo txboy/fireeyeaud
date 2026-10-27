@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { cloneArchive } from '../../lib/api';
 import { useConfirmStore } from '../../store/confirm';
 import { useWorkspaceStore } from '../../store/workspace';
+import { errorKeyOf } from '../../lib/errorKey';
 
 /** 欢迎页：从远程 clone 一个审计项目到本地。 */
 export function RestoreFromRemoteDialog({
@@ -71,7 +72,7 @@ export function RestoreFromRemoteDialog({
       });
       if (ok) await openPath(result.target);
     } catch (err) {
-      setErrorKey((err as { messageKey?: string }).messageKey ?? 'error.internal');
+      setErrorKey(errorKeyOf(err));
     } finally {
       setBusy(false);
     }

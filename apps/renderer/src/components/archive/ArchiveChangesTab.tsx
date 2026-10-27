@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FileDiff } from 'lucide-react';
 import { useArchiveStore } from '../../store/archive';
+import { errorKeyOf } from '../../lib/errorKey';
 
 /**
  * 右侧「变更文件」tab：某个归档包含的文件清单。
@@ -25,7 +26,7 @@ export function ArchiveChangesTab({ archiveId }: { archiveId: string }) {
     loadChanges(archiveId)
       .catch((err: unknown) => {
         if (alive) {
-          setErrorKey((err as { messageKey?: string }).messageKey ?? 'error.internal');
+          setErrorKey(errorKeyOf(err));
         }
       })
       .finally(() => {

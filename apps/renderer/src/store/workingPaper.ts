@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { WorkingPaperFormat, WorkingPaperManifest } from '@fireeyeaud/shared';
 import { exportWorkingPaper, listWorkingPapers } from '../lib/api';
+import { errorKeyOf } from '../lib/errorKey';
 
 interface WorkingPaperState {
   items: WorkingPaperManifest[];
@@ -24,7 +25,7 @@ export const useWorkingPaperStore = create<WorkingPaperState>((set, get) => ({
     } catch (err) {
       set({
         loading: false,
-        errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal',
+        errorKey: errorKeyOf(err),
       });
     }
   },
@@ -38,7 +39,7 @@ export const useWorkingPaperStore = create<WorkingPaperState>((set, get) => ({
     } catch (err) {
       set({
         busy: false,
-        errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal',
+        errorKey: errorKeyOf(err),
       });
       return false;
     }

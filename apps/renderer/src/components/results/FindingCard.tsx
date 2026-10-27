@@ -7,6 +7,7 @@ import { FindingDetail } from '../FindingDetail';
 import { useUiStore } from '../../store/ui';
 import { useFindingsStore } from '../../store/findings';
 import { useConfirmStore } from '../../store/confirm';
+import { errorKeyOf } from '../../lib/errorKey';
 
 /** 疑点卡片：勾选、展开详情、删除。 */
 export function FindingCard({ finding }: { finding: Finding }) {
@@ -56,7 +57,7 @@ export function FindingCard({ finding }: { finding: Finding }) {
       await remove(finding.id);
     } catch (err) {
       void message.error(
-        terr(((err as { messageKey?: string }).messageKey ?? 'error.internal').replace(/^error\./, '')),
+        terr((errorKeyOf(err)).replace(/^error\./, '')),
       );
     } finally {
       setDeleting(false);

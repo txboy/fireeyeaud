@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { SseEvent } from '@fireeyeaud/shared';
+import { errorKeyOf } from '../lib/errorKey';
 import {
-  ApiError,
   createSessionApi,
   deleteSessionApi,
   deleteSessionMessageApi,
@@ -294,7 +294,7 @@ function applyEvent(message: ChatMessage, event: SseEvent): ChatMessage {
       return {
         ...message,
         streaming: false,
-        errorKey: String(data.messageKey ?? 'error.internal'),
+        errorKey: errorKeyOf(data),
       };
     case 'notice':
       return {
@@ -356,11 +356,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       // 加载完成后回写一次：覆盖「加载前用户已改动」的窗口，且此时 hydrated 值已就位。
       persistSessionContext(sessionId);
     } catch (err) {
-      const e = err as ApiError;
       set((s) => ({
         chats: withChat(s.chats, sessionId, (chat) => ({
           ...chat,
-          messages: [assistantError(e.messageKey ?? 'error.internal')],
+          messages: [assistantError(errorKeyOf(err))],
           loaded: true,
         })),
       }));
@@ -560,9 +559,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
                     ...m,
                     streaming: false,
                     // 用户中止不算错误，保留已生成部分。
-                    errorKey: aborted
-                      ? null
-                      : ((err as ApiError).messageKey ?? 'error.internal'),
+                    errorKey: aborted ? null : errorKeyOf(err),
                   }
                 : m,
             ),

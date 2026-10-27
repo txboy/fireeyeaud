@@ -8,6 +8,7 @@ import {
   listEvidenceForms,
   type CreateFormDraftInput,
 } from '../lib/api';
+import { errorKeyOf } from '../lib/errorKey';
 
 interface FormsState {
   items: EvidenceFormManifest[];
@@ -19,10 +20,6 @@ interface FormsState {
   attach: (id: string, path: string, note?: string) => Promise<void>;
   clear: (id: string) => Promise<void>;
   reset: () => void;
-}
-
-function messageKey(err: unknown): string {
-  return (err as { messageKey?: string }).messageKey ?? 'error.internal';
 }
 
 /** 取证单列表：新建即进入写作台（草稿），导出后才生成 document.docx。 */
@@ -37,7 +34,7 @@ export const useFormsStore = create<FormsState>((set, get) => ({
       const page = await listEvidenceForms();
       set({ items: page.items, loading: false });
     } catch (err) {
-      set({ loading: false, errorKey: messageKey(err) });
+      set({ loading: false, errorKey: errorKeyOf(err) });
     }
   },
 
@@ -52,7 +49,7 @@ export const useFormsStore = create<FormsState>((set, get) => ({
       await deleteEvidenceForm(id);
       await get().load();
     } catch (err) {
-      set({ errorKey: messageKey(err) });
+      set({ errorKey: errorKeyOf(err) });
       throw err;
     }
   },
@@ -82,7 +79,7 @@ async function withError(
   try {
     await action();
   } catch (err) {
-    set({ errorKey: messageKey(err) });
+    set({ errorKey: errorKeyOf(err) });
     throw err;
   }
 }

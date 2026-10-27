@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { GraphData, GraphNode } from '@fireeyeaud/shared';
 import { getGraph } from '../lib/api';
+import { errorKeyOf } from '../lib/errorKey';
 
 interface GraphState {
   data: GraphData;
@@ -24,7 +25,7 @@ export const useGraphStore = create<GraphState>((set) => ({
     } catch (err) {
       set({
         loading: false,
-        errorKey: (err as { messageKey?: string }).messageKey ?? 'error.internal',
+        errorKey: errorKeyOf(err),
       });
     }
   },

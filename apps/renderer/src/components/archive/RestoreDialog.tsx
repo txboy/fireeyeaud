@@ -5,6 +5,7 @@ import type { ArchiveHistoryItem } from '@fireeyeaud/shared';
 import { restoreArchive } from '../../lib/api';
 import { useConfirmStore } from '../../store/confirm';
 import { useWorkspaceStore } from '../../store/workspace';
+import { errorKeyOf } from '../../lib/errorKey';
 
 /** 从本地归档历史还原到新文件夹。 */
 export function RestoreDialog({
@@ -61,7 +62,7 @@ export function RestoreDialog({
       });
       if (ok) await openPath(result.target);
     } catch (err) {
-      setErrorKey((err as { messageKey?: string }).messageKey ?? 'error.internal');
+      setErrorKey(errorKeyOf(err));
     } finally {
       setBusy(false);
     }
