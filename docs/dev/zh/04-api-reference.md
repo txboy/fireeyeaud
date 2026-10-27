@@ -1,5 +1,7 @@
 # API 与协议
 
+> English: [../en/04-api-reference.md](../en/04-api-reference.md)
+
 后端是一个挂在 `http://127.0.0.1:<port>/api/v1` 的 REST 服务，另有若干 SSE 流式端点。
 
 > 端口由 Electron 主进程动态分配（`findFreePort`），开发时单独跑 sidecar 是固定 8765。

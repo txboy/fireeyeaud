@@ -1,5 +1,7 @@
 # 常见任务
 
+> English: [../en/06-workflows.md](../en/06-workflows.md)
+
 每节是一个可以照做的清单。命令都在仓库根执行，除非另注。
 
 ## 第一次跑起来
@@ -33,7 +35,6 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
-
 
 def check_vat(root: Path, params: dict[str, Any]) -> dict[str, Any]:
     table = params.get("table")

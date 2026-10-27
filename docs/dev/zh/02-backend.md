@@ -1,5 +1,7 @@
 # 后端（Python sidecar）
 
+> English: [../en/02-backend.md](../en/02-backend.md)
+
 `services/agent/` 下是一个 FastAPI 应用，只监听 `127.0.0.1`，由 Electron 主进程拉起。
 
 ## 分层

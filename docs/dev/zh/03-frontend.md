@@ -1,5 +1,7 @@
 # 前端（Renderer）
 
+> English: [../en/03-frontend.md](../en/03-frontend.md)
+
 `apps/renderer/` 是 React + TypeScript + Zustand + Ant Design 的界面层，跑在 Electron 渲染进程里。
 
 ## 状态管理：Zustand
