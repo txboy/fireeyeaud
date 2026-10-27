@@ -1,213 +1,273 @@
-# 火眼审计助手 (fireeyeaud)
+# 火眼审计助手
 
-纯本地客户端的财务 / 会计审计助手。以 VS Code 式「打开文件夹」工作区为入口，
-对工作区内的报表 / 凭证等文件进行 AI 辅助审计，产出疑点清单、证据图谱与审计工作底稿。
+**一个装在你自己电脑上的 AI 审计工作台。**
 
-- **产品定位**：一个安装包双击即用；默认不联网；产物落盘在工作区 `.fireeye/`。
-- **目标平台**：Windows 优先，其后 macOS / Linux。
+打开装数据的工作文件夹，用对话的方式让 AI 帮你查账、找疑点、整理证据，最后导出成可以直接交付的审计底稿、取证单和审计报告。
 
-## 架构
+文件和成果都留在这个文件夹里，不经过我们或任何第三方的中转服务器；默认搭配本机模型，可以完全离线使用。
 
-- **Electron 壳**：spawn / 守护 Python sidecar（随机空闲端口 + 健康检查）。
-- **渲染进程**：Vite + React + TypeScript + Ant Design + Zustand。
-- **Agent 服务**：FastAPI + LangGraph（仅绑 `127.0.0.1`），PyInstaller 打包为 sidecar。
-- **数据**：DuckDB（分析）+ SQLite（状态 / checkpointer）。
+---
 
-## 目录结构
+## 为什么用它
+
+传统做法是：在 Excel 里翻凭证 → 手工筛异常 → 截图存证据 → 再拼一份 Word 底稿。中间任何一步返工，前面的记录就散落一地。
+
+火眼审计助手把这条链路收成一个闭环：
+
+**打开文件夹 → 对话提问 → 疑点留痕 → 证据成链 → 导出交付**
+
+关键是**每一步都有东西留下来**：AI 查过哪些表、跑过什么 SQL、依据哪一行数据得出的结论，都能回溯。
+
+---
+
+## 特色
+
+### 1. 直接打开文件夹，不用导入导出
+
+不搞“先建项目、再上传文件”那一套。直接把存放账套的文件夹拖进来打开就开工，工作区里有什么就能查什么。
+
+打开后所有成果落在该文件夹的 `.fireeye/` 子目录里——拷走这个文件夹，换台电脑打开，疑点、证据、会话、报告都还在。
+
+### 2. AI 会说人话，但结论必须有据
+
+提问像平时说话一样就行：
+
+> 帮我看下今年管理费用有没有异常波动，重点看看有没有大额整数金额的凭证
+
+AI 不会凭空给结论。它会先查看表结构、再写只读 SQL 去查、把查到的行作为证据存下来，最后才告诉你发现了什么。
+
+### 3. 只读沙箱，改不坏你的数据
+
+所有对数据的查询都是只读的——SQL 在解析后只允许 `SELECT` / `WITH` / `EXPLAIN` / `DESCRIBE`，其他语句直接被拦截。
+
+**AI 手上没有写文件的工具**：它能读、能查、能检索，但改不了、删不了你的任何文件。这是工具集层面就没有的能力，不是靠提示词约束。
+
+### 4. 证据链：每条疑点都能追到底
+
+每个疑点都挂着它的证据：跑过哪条 SQL、结果是什么、涉及哪几行、什么时候由谁操作。
+
+证据按哈希串成链，打开工作区时自动校验是否被篡改。复核时不用再问“这个结论哪来的”。
+
+### 5. 疑点可复核、可反驳
+
+疑点支持标为「已确认 / 复核中 / 已驳回 / 误报」，可改级别、写复核意见。
+
+AI 提的疑点不一定对，你的判断才是最终结论——系统会把这个过程完整记下来。
+
+### 6. 三种交付物，格式都对路
+
+| 交付物 | 用途 | 导出格式 |
+|---|---|---|
+| **审计工作底稿** | 汇总所有疑点、证据索引、审计结论 | Word / Excel / PDF |
+| **取证单** | 针对单个疑点的取证文书，按你单位模板出 | Word |
+| **审计报告** | 正式报告正文，结构化编写 | Word |
+
+取证单和报告都支持**按你上传的模板出**——模板里的字体、字号、行距、页边距会被沿用，符合内部格式要求。
+
+### 7. 连接你已有的数据库
+
+除了 Excel / CSV 文件，也可以直接连 SQLite、PostgreSQL、MySQL、SQL Server、Access 只读查询。
+
+连接密码用系统级加密（Electron `safeStorage`）保存在本机，**不会写进项目文件夹**，也不会随文件夹拷走。
+
+可以按表、按字段授权——没授权的表查不了、没授权的列在 SQL 里写了也会被拦（授权 `*` 表示该表全部字段）。
+
+### 8. 能接知识库、能联网、能挂外部工具（都要你主动开）
+
+- **知识库**：可接 Dify / RAGFlow，让 AI 在检索你们已有的准则、制度后作答。
+- **联网检索**：默认关闭。开启后 AI 才能用网络搜索查法规、查公开信息。
+- **MCP**：可挂载外部 MCP Server，把它的工具接进对话（高级用法）。
+
+这些都是**默认不启用**，需要你在设置里主动配置并打开。联网检索和知识库启用时请留意：相关查询文本会发送到你指定的那家服务。
+
+### 9. 装好就能用，不用配环境
+
+一个安装包，双击装完就能用。不需要装 Python，不需要配数据库，内置的分析引擎会随程序启动。
+
+第一次使用只需要在「模型」面板填一个模型地址——可以是本机跑的 Ollama / vLLM（默认，不需要联网），也可以是你自己有账号的云端服务。
+
+---
+
+## 开始使用
+
+### 第一步：安装并配置模型
+
+1. 安装后首次打开，点左侧边栏的 **芯片图标（模型）** 打开模型面板。
+2. 新增一个模型配置，填三项：
+   - **接口地址**：如本机 Ollama 是 `http://127.0.0.1:11434/v1`
+   - **模型名**：如 `qwen2.5`
+   - **API Key**：本机模型留空即可
+3. 点「测试连通」，通过后保存，并勾选为**默认模型**。
+
+> 建议选支持长上下文的模型，处理大表格时更稳。如果需要读扫描版 PDF 或图片里的数据，请选带视觉能力的模型并勾选「视觉」。
+
+### 第二步：打开数据文件夹
+
+- 点击 **打开文件夹**，选择存放账套 / 报表 / 凭证的目录。
+- 或者从 **最近打开** 里直接进入上次的项目。
+
+打开后，左侧会显示该文件夹的文件树。你常用的东西都在左侧活动栏：
+
+| 图标 | 名称 | 用途 |
+|---|---|---|
+| 文件夹 | 资源管理器 | 浏览、预览、打开工作区里的文件 |
+| 放大镜 | 搜索 | 按文件名或内容关键词查找 |
+| 数据库 | 数据库连接 | 配置文件型数据源与数据库连接 |
+| 书本 | 知识库 | 接 Dify / RAGFlow |
+| 插头 | MCP | 挂载外部 MCP Server 的工具 |
+| 星标 | 技能 | 管理可复用的审计技能（AI 按需加载正文） |
+| 盾牌 | 规则 | 管理自定义 SQL 审计规则 |
+| 芯片 | 模型 | 配置 AI 模型 |
+| 模板 | 模板中心 | 上传取证单 / 报告模板 |
+| 报告 | 项目报告 | 编写与导出审计报告 |
+| 文稿 | 取证单 | 针对疑点出具取证单 |
+| 归档 | 归档 | 项目版本管理（可对接 Git 远程） |
+
+### 第三步：让 AI 开始查
+
+在右侧的对话区直接提问。可以点输入框上方的 **@** 引用具体文件，也可以附加临时文件作为参考资料。
+
+几条好用的提问方式：
 
 ```
-fireeyeaud/
-├─ apps/                 # desktop（Electron 主进程）/ renderer（前端）
-├─ services/agent/       # FastAPI + LangGraph sidecar（uv 管理）
-├─ packages/shared/      # 前后端共享 TS 类型 + 多语言资源
-└─ docs/                 # 设计文档与设计稿
+先看看这个文件夹里有什么，哪些是记账凭证表
 ```
 
-## 开发
+```
+这张凭证表的借贷平不平？不平的话是哪几笔
+```
 
-前置：Node ≥ 20、`uv`、Python 3.12（由 uv 自动获取）。
+```
+帮我统计各科目发生额，看看有没有长期挂账的往来款
+```
+
+```
+@序时账.xlsx 这个表里有没有大额整数金额、且对方是陌生供应商的记录
+```
+
+**提问技巧：**
+- 说清楚你要查**哪张表**、**看哪个字段**，比笼统说“看看有没有问题”有效得多。
+- 数字类分析（金额、期间、勾稽）尽量直接说明判定标准。
+- 一个复杂任务拆成几步问，比一次性抛一大段更好。
+
+### 第四步：审阅疑点
+
+AI 发现的疑点会出现在右侧成果区的 **疑点** 列表中，点开可以看到：
+
+- 疑点描述、涉及金额、级别
+- **证据链**：AI 依据了哪些数据
+- **复核记录**：谁在什么时候改了什么状态
+
+在这里做你的判断：确认、驳回、标记误报、调整级别。这个过程本身会留痕，后续出底稿和报告时可以据此筛选。
+
+### 第五步：出交付物
+
+- **工作底稿**：在成果区选好疑点后打开底稿预览，可一键导出 Word / Excel / PDF；也可以只导出当前选中的那一条。
+- **取证单**：左侧「取证单」→ 新建，选择模板并勾选疑点，在写作台逐节编写后导出。
+- **审计报告**：左侧「项目报告」→ 新建，结构化编写正文，可关联取证单后导出。
+
+所有产物都在工作区 `.fireeye/artifacts/` 下，可以直接打开或在文件夹中显示。
+
+---
+
+## 常见问题
+
+**必须联网吗？**
+不。默认使用本机模型，全程离线可用。只有你主动开启联网检索或接入云端模型时才会外发请求。
+
+**数据会被上传吗？**
+文件本身不会被上传。但如果你用的是云端模型，提问内容和 AI 读取到的数据摘要会发送给该模型服务商——这是任何云端 AI 工具的共同特点。对数据保密要求高的场景，请使用本机模型。
+
+**AI 会改我的文件吗？**
+不会。AI 只有只读查询权限，无法修改或删除工作区文件。你在预览里编辑文本文件是另一回事（那是你自己在操作）。
+
+**能处理多大的数据？**
+表格会导入内置分析引擎（DuckDB）处理，几万到上百万行都可以。但送给 AI 看的内容是经过抽样和汇总的，AI 不会通读全部数据。
+
+**支持哪些文件格式？**
+
+| 类型 | 格式 | 能否预览 |
+|---|---|---|
+| 表格 | `.xlsx` `.xlsm` `.csv` | 可以（Excel 逐 sheet） |
+| 文档 | `.docx` | 可以 |
+| PDF | `.pdf` | 可以（扫描版需视觉模型读内容） |
+| 图片 | 常见图片格式 | 可以 |
+| 文本 | `.txt` `.md` `.json` 等 | 可以（可编辑） |
+
+旧版 `.doc` / `.xls` 需先用 Office 另存为新格式。Word / Excel / PDF 仅可预览，不可在应用内编辑。
+
+**换了电脑怎么办？**
+整个工作文件夹连同 `.fireeye/` 一起拷过去即可。模型配置和数据库密码是存在本机的，换了电脑需要重新填一次。
+
+**多人协作？**
+可以用左侧「归档」面板，它基于 Git：初始化后每次归档是一个版本，支持查看变更、对比远程、推送和还原。也可以用系统级共享文件夹。
+
+---
+
+## 安全说明
+
+- 程序只监听本机回环地址（`127.0.0.1`），不对外开端口。
+- 模型密钥、数据库密码、知识库密钥均用系统级加密保存在本机，不写入项目文件夹。
+- 工作区外的文件不可读写（有路径校验）。
+- 数据内容本身被当作**不可信输入**处理：文件里写了“忽略之前的指令”，AI 也不会照做。
+
+---
+
+## 已知限制
+
+- **AI 的结论需要人工复核。** 它可能漏判，也可能误判，请始终以你的专业判断为准。
+- **字段级授权有个盲区**：写 `SELECT *` 或者不限定表名的列，不会被逐列拦截，未授权的列可能被带出来。对敏感库请配合表级授权，只授权确实需要分析的表。
+- **技能**的正文会按需提供给 AI，但技能里声明的工具清单不会自动生效。
+- 安装包暂未签名，Windows 安装时可能出现安全提示，选择「仍要运行」即可。
+
+---
+
+## 给开发者
+
+技术栈：Electron + React / TypeScript + Ant Design + Zustand（界面），FastAPI + LangGraph（Agent 服务，PyInstaller 打包为 sidecar），DuckDB（分析）+ SQLite（状态）。
+
+前置：Node ≥ 20、[`uv`](https://docs.astral.sh/uv/)、Python 3.12（由 uv 自动获取）。
 
 ```bash
-# 1) 安装依赖
-npm install                       # JS 工作区（含 Electron）
-cd services/agent && uv sync      # Agent sidecar（.venv + 依赖）
+# 安装依赖
+npm install
+cd services/agent && uv sync
 
-# 2) 从仓库根运行
-npm run agent:test                # sidecar 冒烟测试（pytest）
-npm run agent:lint                # sidecar 静态检查（ruff；配置在 services/agent/pyproject.toml）
-npm run agent:dev                 # 单独启动 sidecar（固定 8765，热重载）
-npm run desktop:dev               # 启动 Vite dev server + Electron（自动 spawn sidecar：随机端口 + 健康检查 + 退出回收）
-npm run desktop:test              # Electron 壳的 sidecar 生命周期测试（node --test）
-npm run renderer:build            # 构建渲染层（tsc --noEmit && vite build → apps/renderer/dist）
+# 从仓库根运行
+npm run desktop:dev      # 启动界面（自动拉起 sidecar：随机端口 + 健康检查 + 退出回收）
+npm run desktop:test     # Electron 壳测试
+npm run renderer:build   # 构建前端
+npm run agent:dev        # 单独跑 Agent 服务（固定 8765，热重载）
+npm run agent:test       # 后端测试
+npm run agent:lint       # 后端静态检查
 ```
 
-> 若 Electron 二进制下载缓慢 / 失败（GitHub Releases 受限），使用国内镜像：
-> `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ npx electron --version`
-
-## 模型配置（Phase 1）
-
-Phase 1 面向**本地 OpenAI-compatible 服务**（Ollama / vLLM），默认无需 API Key。可用环境变量覆盖：
+模型可用环境变量覆盖：
 
 | 环境变量 | 默认值 | 说明 |
 |---|---|---|
-| `FIREYEAUD_MODEL_BASE_URL` | `http://127.0.0.1:11434/v1` | OpenAI-compatible 端点 |
+| `FIREYEAUD_MODEL_BASE_URL` | `http://127.0.0.1:11434/v1` | OpenAI 兼容端点 |
 | `FIREYEAUD_MODEL_NAME` | `qwen2.5` | 模型名 |
 | `FIREYEAUD_MODEL_API_KEY` | 空（用 `not-needed`） | 云端服务鉴权 |
 | `FIREYEAUD_MODEL_TEMPERATURE` | `0.2` | 采样温度 |
-| `FIREYEAUD_GLOBAL_DIR` | `~/.fireeye` | 全局配置目录（Models 全局作用域） |
+| `FIREYEAUD_GLOBAL_DIR` | `~/.fireeye` | 全局配置目录 |
 
-示例（本地 Ollama）：
+> Electron 二进制下载慢时可用国内镜像：
+> `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ npx electron --version`
 
-```bash
-FIREYEAUD_MODEL_BASE_URL=http://127.0.0.1:11434/v1 FIREYEAUD_MODEL_NAME=qwen2.5 npm run desktop:dev
+目录结构：
+
+```
+fireeyeaud/
+├─ apps/desktop/      # Electron 主进程（窗口、文件 IPC、sidecar 生命周期、safeStorage）
+├─ apps/renderer/     # 前端界面
+├─ services/agent/    # FastAPI + LangGraph sidecar
+├─ packages/shared/   # 前后端共享类型 + 多语言资源
+└─ docs/              # 设计与实施文档
 ```
 
-未配置或模型不可达时，对话会返回 `error.llmUnavailable` 提示而非崩溃。
+进一步阅读：
 
-## 状态
-
-### Phase 1 · MVP 最小闭环（已完成）
-工作区打开、Excel/CSV 导入（SSE 进度）、审计工具（describe_source / sql_query /
-aggregate_subject / parse_ledger / check_tie）、对话 Agent（plan → tool_call → reflect，
-产出疑点）、疑点清单、工作区关键词搜索、Models 面板（global/project 作用域）。
-
-### Phase 2 · 证据与复核（已完成）
-- **证据链**：每次工具调用/结果写 `.fireeye/evidence.jsonl`，SHA-256 哈希链
-  （`hash = sha256(prevHash + canonical)`）；大结果（>16KB）落 `.fireeye/artifacts/ev_<seq>.json`；
-  打开工作区时校验链完整性；`GET /evidence`、`POST /workspaces/{id}/verify-evidence`。
-- **疑点复核**：`POST /findings/{id}/review`（确认/驳回/复核中/误报/备注/改级别），
-  事件追加到 `findings.jsonl`；前端疑点卡片可展开证据链与复核记录。复核人暂为占位「审计员」。
-- **规则库**：内置 `tie_check`（代码检测器）+ `related_party_undisclosed`（prompt 规则）
-  可启停/覆盖 severity；项目自定义规则（`rules.jsonl` 事件流，`R-<n>`）CRUD；
-  `POST /rules/{id}/run` 干跑预览、`POST /rules/run` 批量产出疑点；启用的 prompt 规则注入 Agent 系统提示词。
-
-### Phase 3 · 证据图谱可视化（已完成）
-- **后端派生**：`GET /graph?findingId` 由 `findings` + `evidence` + `schema` **实时派生**
-  `{nodes, edges}`（不落盘）；节点 `finding` / `dataset` / `voucher` / `rule` / `tool`，
-  边 `derived_from` / `references` / `verified_by`；节点 id `<nodeType>:<refId>`。
-- **前端图谱**：成果栏「证据图谱」tab 用 Cytoscape.js 渲染（≤30 节点用 `breadthfirst`，
-  否则 `cose`）；点击节点弹详情卡，点击疑点节点「查看疑点」跳回清单并选中；
-  疑点列表选中某条时图谱聚焦/高亮其子图。
-
-### Phase 4 · 审计底稿导出（已完成）
-- **生成**：`store/working_paper.py` 由疑点 + 证据 + 工作区信息生成
-  **Word（python-docx）/ Excel（openpyxl）/ PDF（reportlab + 内置 CJK 字体 `STSong-Light`）**；
-  结构为封面 / 审计结论 / 疑点汇总 / 证据索引 / 附录；产物落
-  `.fireeye/artifacts/working-paper/wp_<n>/`（文档 + `manifest.json`）。
-- **REST**：`POST /export/working-paper {findingIds?, format, locale, templateId?}`、
-  `GET /export/working-paper`（历史）、`GET /artifacts/{path}`（读取产物，含目录穿越防护）。
-- **前端**：成果栏「底稿预览」tab 导出并列出历史产物，经 Electron `shell` IPC「打开文件」/「在文件夹中显示」。
-
-### Phase 5 · 数据库连接（只读直连）（已完成）
-- **连接管理**：活动栏「数据库连接」面板配置只读连接（SQLite / PostgreSQL / MySQL / SQL Server / Access）；
-  元数据存 `db.json`（global/project 作用域合并），密码由 Electron `safeStorage` 加密存本机、sidecar 仅内存持有（不入项目库）。
-- **反射与授权**：`POST /db/connections/{id}/reflect` 反射表结构 → 写 `index/schema.json` 并注册为数据源；
-  `PATCH /db/connections/{id}/authorization` 保存表 / 字段白名单（`.fireeye/authorization.json`）。
-- **Agent 查询**：`sql_query` 增 `sourceId`，命中 DB 源时经 SQLAlchemy 只读连接执行，
-  用 sqlglot 强制表级 / 显式列级授权（`E_DB_UNAUTHORIZED`）；`describe_source` 对 DB 源按授权过滤列。
-
-### Phase 5.5 · 知识库接入（仅检索）（已完成）
-- **Provider 管理**：活动栏「知识库」面板配置 Dify / RAGFlow 连接（base URL + API Key，作用域 global/project），
-  测试连通、浏览远端知识库并勾选启用；元数据存 `knowledge.json`，API Key 由 `safeStorage` 加密 / sidecar 内存持有（不入项目库）。
-- **启用集**：`GET/PATCH /kb/enabled`（按作用域，global ⊕ project 合并，project 覆盖）。
-- **Agent 检索**：`kb_search({ query, kbIds?, topK?, scoreThreshold? })` 读有效启用集 fan-out（`kb/` 适配器归一化
-  `RetrievedChunk`），按 `score` 合并；命中片段由 Agent 工具循环写入证据链。仅检索，不在应用内创建 / 上传 / 切分知识库。
-
-### Phase 6 · 联网检索 + MCP/Skills 面板 + safeStorage + 打包（已完成）
-- **MCP 面板**：活动栏「MCP」配置 MCP Server（stdio/sse/http、command/args 或 url、启停、权限
-  `fsScope`/`net`/`toolsAllow`），元数据存 `mcp.json`（global/project 作用域）。本期**仅配置**：不真实启动 / 调用 MCP Server。
-- **Skills 面板**：活动栏「Skills」管理审计技能（内置只读 + 自定义 CRUD）；启用技能的 `prompt`
-  注入 Agent 系统提示词；`toolIds` 本期仅存储不联动执行。
-- **联网检索**：设置页「联网检索」默认关闭；开启并配置 provider（`tavily` / 自定义 HTTP）与 API Key 后，
-  Agent 可调用 `web_search`（唯一新增出站点，查询文本会发送至所选服务方）。
-- **safeStorage 全量迁移**：模型 key / DB 密码 / KB key 一律由主进程 `safeStorage` 加密存
-  `<userData>/secrets.json`（密文），sidecar 经 `POST /secrets` 仅内存持有；删除明文 `db_secrets.json` / `kb_secrets.json`。
-- **设置端点**：新增 `GET/PATCH /settings`（仅 global：`locale`/`theme`/`webSearch`/`telemetry=false`），
-  前端设置页以后端为权威（localStorage 仅首屏快照）。
-- **打包**：`services/agent/fireeyeaud-agent.spec`（PyInstaller 单文件 sidecar）、`apps/desktop/package.json`
-  electron-builder 配置、`.github/workflows/release.yml`（windows-latest，不签名）。
-
-### Phase 7 · 文件预览与右侧内容区（已完成）
-- **布局**：对话栏 + 成果栏合并为**右侧区**（顶部为一等 tab 容器）；「会话」tab 常驻，
-  内含 对话 + 成果 一体（成果内部保留 疑点/图谱/底稿/证据 子 tab）；「预览」tab 每个文件一个，
-  可多开、可关闭。
-- **打开方式**：资源管理器点击文件、搜索命中点击文件 → 打开/激活预览 tab；点击历史会话 / 新建会话
-  → 激活「会话」tab。
-- **读写 IPC**：主进程 `fs:read-file` / `fs:write-text-file`（工作区包含校验 + 大小上限 + 文本写白名单），
-  经 preload 暴露；文件读写不经 sidecar。
-- **预览**：文本 CodeMirror 6（可编辑，Ctrl+S / 保存按钮，脏标记，切换前确认）；
-  图片 `<img>`（适应 / 原始）；PDF `pdfjs-dist` → canvas；Word `.docx` `docx-preview`；
-  Excel `.xlsx/.xlsm` `exceljs`（逐 sheet + 行/列截断）。重依赖按需加载（动态 import）。
-- **CSP**：生产放开 `img-src blob:` / `worker-src 'self' blob:` / `font-src … blob:`，其余不变。
-
-### Phase 7b · 配置表单在右侧 tab 中打开（已完成）
-- **表单 tab**：数据库 / 知识库 / MCP / Skills / Models 的「新增 / 编辑」表单在**右侧区**以 tab 打开；
-  每个实体一个 tab（`form:<域>:<id|new>`），可多开、可关闭；保存 / 取消后关闭该 tab。
-- **编辑能力**：为 MCP / Skills / 数据库连接补上编辑（模型已有）；后端新增
-  `PATCH /db/connections/{id}`，`config.store.update_item` 支持 `drop_none=False` 以显式清空字段。
-- **未保存守卫**：与预览 tab 共用右侧区离开守卫，切换 / 关闭 / 回会话前弹「保存 / 不保存 / 取消」。
-- 表单 tab 不持久化；数据库编辑不改 scope（scope 走查询参数）；表 / 字段授权仍在数据库面板内联。
-
-### Phase 8 · 对话上下文栏（模型 + 资源多选）（已完成）
-- **上下文栏**：模型选择从对话栏头部移到**输入框上方**；同一栏内可多选 MCP / 技能 / 数据库 / 知识库。
-- **默认机制**：四个实体新增 `isDefault`；`enabled ∧ isDefault` 的实体自动提供给模型、不出现在上下文栏，
-  其余 `enabled` 的实体需**勾选后**模型才可使用。
-- **后端联动**：`ChatBody` 增 `skillIds/kbProviderIds/dbConnectionIds/mcpServerIds`；技能提示词注入、
-  `kb_search` Provider、`sql_query` 连接均按「默认 ∪ 勾选」过滤。MCP 仅透传（工具仍未接入）。
-- 选择为会话级、内存持有：新建 / 切换会话清空。MCP 未接线；知识库按 Provider 级（其下已启用条目）。
-- **临时附件**：输入框「附加文件」选取本地文件（txt/md/json/csv/tsv/xlsx/xlsm/docx/pdf），
-  以**纯文本**抽取后随每轮对话注入（作为参考资料、非指令；单文件 ≤2 万字符、合计 ≤6 万字符），
-  **不写入工作区**（不注册数据源、不写 files/schema/project）；附件为会话级、内存持有，可逐个移除。
-
-### Phase 9 · 取证单写作台（已完成）
-- **新建**：选取证单模板 + 勾选疑点 → 直接在右侧写作台打开（不再有「渲染预览」步骤）。
-- **模板作参考范本**：整份模板原文（含 `{{占位符}}` 与表格）随每轮对话注入，模型据此仿写新正文；
-  导出时**不执行** `{{疑点}}` / `{{#疑点}}` 循环，正文完全来自结构化 JSON。
-  模板**不需要占位符**：上传时只校验文件能否打开，界面不再做任何占位符检查或提示。
-- **正文**：`.fireeye/artifacts/evidence-forms/QZ-xxxx/body.json`（大纲 → 逐节段落 / 列表 / 表格），
-  大纲需人工确认后才可写入；导出按模板骨架样式（字体 / 字号 / 行距 / 页边距）重建 docx。
-- **校验**：大纲确认、章节非空、疑点编号引用在范围内、正文金额可在疑点快照追溯到，未通过则拦截导出。
-- **面板**：左侧活动栏新增独立「取证单」入口（紧随「项目报告」），结构与项目报告面板一致——上栏取证单
-  记录（新建 / 打开 / 下载 / 回执 / 删除），下栏取证单概览；「项目报告」面板下栏仍保留取证单快捷入口。
-  会话成果栏回到「疑点 / 归档」，取证单不再出现在其中。
-
-### Phase 10 · 归档独立成面板（已完成）
-
-- **面板**：左侧活动栏新增独立「归档」入口（紧随「取证单」），沿用项目报告面板的上下分栏——上栏归档状态
-  （分支、提交、远程、最近归档、操作人、工作区状态）与操作按钮，下栏归档历史（查看变更 / 推送此归档 / 还原到此版本）。
-- **成果栏**：只剩「疑点」，tab 栏改为标题文字，列表直接铺满。
-- **右侧 tab**：新增「差异与冲突」「变更文件」「远程设置」三个 tab——差异 tab 为单例，按状态显示
-  「未配置远程 / 本地无提交 / 落后 / 领先 / 一致 / 已分叉」，分叉时逐文件选择合并方式并一步完成合并归档；
-  变更文件 tab 列出某个归档的文件清单；远程设置由原弹窗改为 tab。原冲突弹窗与远程设置弹窗已删除。
-- **提交前复查**：合并归档前会重新检查一次，若期间已被他人推送或再次归档，会自动刷新差异并要求重新确认。
-- **迁移**：旧格式取证单产物、暂存区与回执单一并清除，报告里指向它们的 `formIds` / `formsSnapshot`
-  同步剔除并重算疑点数（导出过的报告回到草稿态）；编号从 `QZ-0001` 重新开始。
-
-已知偏差（详见 [`docs/plans/2026-10-09-phase1-mvp.md`](docs/plans/2026-10-09-phase1-mvp.md)、[`docs/plans/2026-10-09-phase2-evidence-review.md`](docs/plans/2026-10-09-phase2-evidence-review.md)、
-[`docs/plans/2026-10-09-phase3-evidence-graph.md`](docs/plans/2026-10-09-phase3-evidence-graph.md)、
-[`docs/plans/2026-10-09-phase4-working-paper-export.md`](docs/plans/2026-10-09-phase4-working-paper-export.md)、
-[`docs/plans/2026-10-09-phase5-database-connections.md`](docs/plans/2026-10-09-phase5-database-connections.md)、
-[`docs/plans/2026-10-10-phase5.5-knowledge-base.md`](docs/plans/2026-10-10-phase5.5-knowledge-base.md)、
-[`docs/plans/2026-10-10-phase6-websearch-mcp-packaging.md`](docs/plans/2026-10-10-phase6-websearch-mcp-packaging.md)、
-[`docs/plans/2026-10-12-phase7-file-preview.md`](docs/plans/2026-10-12-phase7-file-preview.md)、
-[`docs/plans/2026-10-12-phase7b-config-form-tabs.md`](docs/plans/2026-10-12-phase7b-config-form-tabs.md)、
-[`docs/plans/2026-10-12-agent-context-bar-design.md`](docs/plans/2026-10-12-agent-context-bar-design.md)）：
-工具先用进程内 LangChain `StructuredTool`（MCP 仅配置级，不加载执行）；搜索先用主进程 Node 遍历；
-MCP / Skills 为配置 + 面板（Skills 提示词注入生效，`toolIds` 不联动执行）；`web_search` 默认关闭；
-会话/消息投影为简化实现；证据仅记 tool_call/tool_result 两档；打开工作区同步校验证据链；
-图谱 `subject`/`party` 节点推迟；主题切换后需重挂 tab 才更新图谱配色；
-底稿仅内置默认模板（不读 `.fireeye/templates/`），产物目录用 `wp_<n>`；
-DB 只读依赖 SQL 白名单（非数据库侧强制），字段级授权为 best-effort（`SELECT *` 不裁剪返回列）；
-知识库为外部服务（命中片段写入证据链，非本机 base URL 会外发查询文本）；
-打包仅产出配置 + CI（本地仅验证 PyInstaller 可构建 sidecar、electron-builder 配置有效），
-安装包未签名（Windows 安装提示）。
-预览仅支持现代格式（旧版 `.doc`/`.xls` 需用系统程序打开）；Word/Excel/PDF 仅预览不可编辑；
-`.csv` 按纯文本处理（可编辑）；预览 tab 不持久化；各格式在真实 Electron 下的渲染需人工 QA。
-真实模型 / 非 SQLite 数据库 / Dify·RAGFlow 知识库 / Tavily 联网检索 E2E 需人工按计划步骤验证。
-取证单模板不再执行占位符与 `{{#疑点}}` 循环（模型按范本仿写正文）；旧取证单与旧回执单在首次打开
-工作区时被一次性清除且不可恢复，报告里的相关快照同步剔除；取证单写作台的真实模型 E2E 需人工验证。
-
-## 文档
-
-- 设计文档：[`docs/plans/fireeyeaud-design.md`](docs/plans/fireeyeaud-design.md)
-- UI 设计说明：[`docs/design/设计说明.md`](docs/design/设计说明.md)
+- 功能设计与实施记录：[`docs/plans/fireeyeaud-design.md`](docs/plans/fireeyeaud-design.md)
+- 界面设计说明：[`docs/design/设计说明.md`](docs/design/设计说明.md)
+- 历史进度与已知偏差：[`docs/plans/`](docs/plans/)
