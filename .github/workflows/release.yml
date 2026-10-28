@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
@@ -72,19 +74,29 @@ jobs:
           node-version: '24'
           cache: 'npm'
 
+      - name: Configure npm registry
+        shell: pwsh
+        run: |
+          # Runner 到 registry.npmjs.org 持续 ECONNRESET（连续三轮全部失败）。
+          # 换 npmmirror：npm 的 replace-registry-host 默认是 npmjs，会把 lockfile 里
+          # registry.npmjs.org 的 tarball 地址自动改写到这里，无需改 lock。
+          npm config set registry https://registry.npmmirror.com
+          npm config set fetch-retries 5
+          npm config set fetch-retry-mintimeout 20000
+          npm config set fetch-retry-maxtimeout 120000
+          npm config set fetch-timeout 600000
+          # 并发太高容易被对端重置连接。
+          npm config set maxsockets 6
+          Write-Host "registry = $(npm config get registry)"
+          Write-Host "maxsockets = $(npm config get maxsockets)"
+
       - name: Install dependencies
         shell: pwsh
         run: |
-          # npm registry 偶发 ECONNRESET（网络重置），一次失败不代表依赖有问题。
-          # 重试 3 次，并调高 npm 自身对单次请求的重试次数与超时。
           $max = 3
           for ($i = 1; $i -le $max; $i++) {
             Write-Host "npm ci 尝试 $i/$max"
-            npm ci --no-audit --no-fund --prefer-offline `
-              --fetch-retries 5 `
-              --fetch-retry-mintimeout 20000 `
-              --fetch-retry-maxtimeout 120000 `
-              --fetch-timeout 600000
+            npm ci --no-audit --no-fund
             if ($LASTEXITCODE -eq 0) {
               Write-Host "npm ci 成功（第 $i 次尝试）"
               exit 0
@@ -131,6 +143,8 @@ jobs:
           if ($missing) { throw "安装包缺文件: $($missing -join ', ')" }
 
       - uses: actions/upload-artifact@v4
+        # 只有打 tag 时才留产物：每次 push main 都上传 200MB+ 会迅速吃掉 artifact 配额。
+        if: startsWith(github.ref, 'refs/tags/')
         with:
           name: fireeyeaud-windows
           path: apps/desktop/release/**
