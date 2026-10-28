@@ -1,7 +1,7 @@
 {
   "name": "fireeyeaud",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "火眼审计助手 — 纯本地财务/会计审计桌面助手",
   "workspaces": [
     "apps/*",
