@@ -24,6 +24,25 @@ jobs:
           uv sync --dev
           uv run pyinstaller fireeyeaud-agent.spec --noconfirm --clean
 
+      - name: Smoke-test sidecar
+        working-directory: services/agent/dist
+        shell: pwsh
+        run: |
+          $env:FIREYEAUD_PORT = '18765'
+          $proc = Start-Process -FilePath .\fireeyeaud-agent.exe -PassThru -WindowStyle Hidden
+          try {
+            $ok = $false
+            foreach ($i in 1..60) {
+              try {
+                $r = Invoke-RestMethod "http://127.0.0.1:18765/api/v1/health" -TimeoutSec 2
+                if ($r.status -eq 'ok') { $ok = $true; break }
+              } catch { Start-Sleep -Milliseconds 500 }
+            }
+            if (-not $ok) { throw 'sidecar 未在 30 秒内就绪' }
+          } finally {
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+          }
+
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -35,12 +54,37 @@ jobs:
       - name: Build renderer
         run: npm run renderer:build
 
+      # 安装包装完要包含前端与 sidecar，缺任何一样都是「装上打不开」，这里先卡住。
+      - name: Check packaging inputs
+        shell: pwsh
+        run: |
+          $need = @(
+            'services/agent/dist/fireeyeaud-agent.exe',
+            'apps/renderer/dist/index.html',
+            'apps/desktop/build/icon.ico'
+          )
+          $missing = $need | Where-Object { -not (Test-Path $_) }
+          if ($missing) { throw "缺少打包输入: $($missing -join ', ')" }
+
       - name: Package app (electron-builder, unsigned)
         working-directory: apps/desktop
         run: npx electron-builder --win --publish never
+
+      # 出包后核对产物：前端和 sidecar 必须真的在安装目录里，否则就是空壳包。
+      - name: Verify packaged output
+        shell: pwsh
+        run: |
+          $root = 'apps/desktop/release/win-unpacked/resources'
+          $need = @(
+            "$root/renderer/index.html",
+            "$root/agent/fireeyeaud-agent.exe",
+            "$root/app.asar"
+          )
+          $missing = $need | Where-Object { -not (Test-Path $_) }
+          if ($missing) { throw "安装包缺文件: $($missing -join ', ')" }
 
       - uses: actions/upload-artifact@v4
         with:
           name: fireeyeaud-windows
           path: apps/desktop/release/**
-          if-no-files-found: warn
+          if-no-files-found: error
