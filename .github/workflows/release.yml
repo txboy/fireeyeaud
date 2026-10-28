@@ -73,7 +73,30 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        shell: pwsh
+        run: |
+          # npm registry 偶发 ECONNRESET（网络重置），一次失败不代表依赖有问题。
+          # 重试 3 次，并调高 npm 自身对单次请求的重试次数与超时。
+          $max = 3
+          for ($i = 1; $i -le $max; $i++) {
+            Write-Host "npm ci 尝试 $i/$max"
+            npm ci --no-audit --no-fund --prefer-offline `
+              --fetch-retries 5 `
+              --fetch-retry-mintimeout 20000 `
+              --fetch-retry-maxtimeout 120000 `
+              --fetch-timeout 600000
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "npm ci 成功（第 $i 次尝试）"
+              exit 0
+            }
+            Write-Host "npm ci 第 $i 次失败（exit $LASTEXITCODE）"
+            if ($i -lt $max) {
+              Write-Host '清理 node_modules 后重试'
+              cmd /c "if exist node_modules rd /s /q node_modules"
+              Start-Sleep -Seconds 10
+            }
+          }
+          throw "npm ci 连续失败 $max 次，请检查网络或 registry"
 
       - name: Build renderer
         run: npm run renderer:build
