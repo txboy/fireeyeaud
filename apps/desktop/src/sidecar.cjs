@@ -127,7 +127,13 @@ class SidecarManager {
 
   _buildCommand(port) {
     if (this.agentExe) {
-      return { cmd: this.agentExe, args: [], cwd: path.dirname(this.agentExe) };
+      // 打包态：两种启动方式都传，命令行为主（PyInstaller 入口优先解析），
+      // 环境变量兜底，避免只认其中一种的旧产物起不来。
+      return {
+        cmd: this.agentExe,
+        args: ['--host', this.host, '--port', String(port)],
+        cwd: path.dirname(this.agentExe),
+      };
     }
     const agentDir = path.join(this.repoRoot, 'services', 'agent');
     const uvicornArgs = [
