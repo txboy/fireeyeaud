@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "agent:dev": "uv run --project services/agent uvicorn fireeyeaud_agent.main:app --host 127.0.0.1 --port 8765 --reload",
-    "agent:test": "uv run --project services/agent pytest",
+    "agent:test": "uv run --project services/agent pytest services/agent/tests",
     "agent:lint": "uv run --project services/agent ruff check services/agent",
     "renderer:dev": "npm run dev -w @fireeyeaud/renderer",
     "renderer:build": "npm run build -w @fireeyeaud/renderer",
