@@ -29,18 +29,42 @@ jobs:
         shell: pwsh
         run: |
           $env:FIREYEAUD_PORT = '18765'
-          $proc = Start-Process -FilePath .\fireeyeaud-agent.exe -PassThru -WindowStyle Hidden
+          $out = Join-Path $env:RUNNER_TEMP 'sidecar.out.log'
+          $err = Join-Path $env:RUNNER_TEMP 'sidecar.err.log'
+
+          # 首次运行要解压 100+MB 到临时目录，Runner 上的 Defender 还会扫描一遍，
+          # 冷启动远慢于开发机，给足 180 秒。
+          $sw = [System.Diagnostics.Stopwatch]::StartNew()
+          $proc = Start-Process -FilePath .\fireeyeaud-agent.exe -PassThru -WindowStyle Hidden `
+            -RedirectStandardOutput $out -RedirectStandardError $err
+
+          $ok = $false
+          while ($sw.Elapsed.TotalSeconds -lt 180) {
+            if ($proc.HasExited) { break }
+            try {
+              $r = Invoke-RestMethod "http://127.0.0.1:18765/api/v1/health" -TimeoutSec 2
+              if ($r.status -eq 'ok') { $ok = $true; break }
+            } catch { Start-Sleep -Seconds 1 }
+          }
+
           try {
-            $ok = $false
-            foreach ($i in 1..60) {
-              try {
-                $r = Invoke-RestMethod "http://127.0.0.1:18765/api/v1/health" -TimeoutSec 2
-                if ($r.status -eq 'ok') { $ok = $true; break }
-              } catch { Start-Sleep -Milliseconds 500 }
+            if ($ok) {
+              Write-Host "sidecar 就绪，耗时 $([math]::Round($sw.Elapsed.TotalSeconds,1)) 秒：$($r | ConvertTo-Json -Compress)"
+            } else {
+              Write-Host "::group::sidecar stderr"
+              Get-Content $err -ErrorAction SilentlyContinue | Select-Object -Last 60
+              Write-Host "::endgroup::"
+              Write-Host "::group::sidecar stdout"
+              Get-Content $out -ErrorAction SilentlyContinue | Select-Object -Last 60
+              Write-Host "::endgroup::"
+              if ($proc.HasExited) {
+                throw "sidecar 进程已退出（exit code $($proc.ExitCode)），耗时 $([math]::Round($sw.Elapsed.TotalSeconds,1)) 秒"
+              }
+              throw "sidecar 未在 180 秒内就绪"
             }
-            if (-not $ok) { throw 'sidecar 未在 30 秒内就绪' }
           } finally {
             Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            Get-Process fireeyeaud-agent -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           }
 
       - uses: actions/setup-node@v4
