@@ -400,4 +400,26 @@ Further reading:
 
 ---
 
+## License
+
+This project is released under the **GNU General Public License v3.0** (`GPL-3.0-only`). The full terms are in [LICENSE](LICENSE).
+
+You are free to use, modify and redistribute it, but when you distribute it — including the installer — you must:
+
+- provide the **complete corresponding source** that exactly matches the binary you ship;
+- keep the same GPLv3 license; it cannot be relicensed as proprietary;
+- retain the copyright and license notices.
+
+The UI design sources (`docs/design/`), documentation (`docs/`) and source code share this license.
+
+### Third-party components
+
+The installer bundles third-party components under their own licenses. One of them is a **strong copyleft** dependency that deserves an explicit note:
+
+| Component | License | Note |
+|---|---|---|
+| [PyMuPDF](https://pymupdf.readthedocs.io/) | **AGPL-3.0** or commercial | Used for PDF parsing. GPLv3 §13 permits combining GPLv3 with AGPLv3, which is the basis for its use here. |
+
+The remaining dependencies are mostly MIT / BSD / Apache-2.0 / LGPL, all compatible with GPLv3. If you intend to ship a closed-source commercial product based on this project, you would need a commercial PyMuPDF license, or to replace that component.
+
 <sub>中文版：[README.md](README.md)</sub>

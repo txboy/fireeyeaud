@@ -8,5 +8,6 @@
   "exports": {
     ".": "./src/index.ts",
     "./locales": "./src/locales/index.ts"
-  }
+  },
+  "license": "GPL-3.0-only"
 }
