@@ -235,10 +235,52 @@ Use the **Archive** panel, which is Git-based: each archive is a version, with c
 
 ## Security notes
 
+### What stays on this machine
+
 - The app listens only on the loopback address (`127.0.0.1`) and opens no external ports.
 - Model keys, database passwords and knowledge base keys are encrypted with OS-level storage on this machine — never written into the project folder.
 - Files outside the workspace cannot be read or written (enforced by path checks).
 - File contents are treated as **untrusted input**: if a spreadsheet contains "ignore previous instructions", the AI won't comply.
+
+### What leaves this machine (please read)
+
+**All four are opt-in.** They only happen after you configure and enable the feature. Once enabled, nothing on this machine constrains what is sent — assess your data sensitivity before turning each one on.
+
+**1. Remote model APIs receive your prompts and the data the AI reads**
+
+If your model is a cloud service rather than a local Ollama / vLLM, the following is sent to **the endpoint you configured**, under that provider's data policy:
+
+| Sent | Detail |
+|---|---|
+| Your prompt | Including `@`-referenced file names and the parsed text of attachments |
+| Data the AI reads | SQL results, table schemas, file extracts, text OCR'd from images / PDFs |
+| Conversation context | Prior turns, for coherence |
+
+This is true of any cloud AI tool; the app cannot shield you from it. For confidential books, use a local model — local models run fully offline with no outbound traffic.
+
+**2. The SQL assistant extracts data samples**
+
+The "let the AI understand this table" feature sends **real sample rows**, not just the schema. Limits per sample:
+
+| Item | Limit |
+|---|---|
+| Rows | **5** |
+| Columns | **50** |
+| Per cell | **200 characters** (truncated with `…`) |
+
+That is at most 5 × 50 = 250 cells per authorized table. **These are actual rows**, including raw values in fields such as ID numbers, bank accounts and customer names — not masked placeholders. The preview query is a single server-built `SELECT`; the model can only name a table and cannot make the app dump or aggregate the whole table. The sample itself, however, is real data.
+
+**Do not authorize this feature on sensitive tables**, or substitute a view / masked table first.
+
+**3. Knowledge base retrieval sends your query to Dify / RAGFlow**
+
+With a knowledge base enabled, the AI's retrieval query is sent verbatim to the Dify / RAGFlow address you configured — your own private deployment or their cloud, depending on the URL you enter.
+
+**4. Web search sends your query to the search service**
+
+Web search is **off by default**. Once enabled, the keywords the AI generates go to Tavily or your custom search endpoint. If those keywords include names or amounts from your books, they leave the machine too.
+
+> **In short:** with a local model, data does not leave this machine. Once you connect a cloud model, a knowledge base or web search, **whatever the AI sees is sent** — including the 5 real sample rows taken by the SQL assistant. Weigh each feature separately.
 
 ---
 
