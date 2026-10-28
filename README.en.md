@@ -313,6 +313,60 @@ npm run agent:test       # Backend tests
 npm run agent:lint       # Backend lint
 ```
 
+### Building the Windows installer
+
+There are two layers: an **Electron shell** (`火眼审计助手 Setup x.y.z.exe`) that bundles a **PyInstaller-built backend**, `fireeyeaud-agent.exe`. Build order matters — **any backend change requires rebuilding the sidecar**, or the installer will ship a stale backend.
+
+```bash
+# 1. Build the backend sidecar → services/agent/dist/fireeyeaud-agent.exe (~107 MB)
+cd services/agent
+uv sync --dev
+uv run pyinstaller fireeyeaud-agent.spec --noconfirm --clean
+
+# 2. Build the frontend → apps/renderer/dist/
+cd ../..
+npm ci
+npm run renderer:build
+
+# 3. Build the installer → apps/desktop/release/
+cd apps/desktop
+npx electron-builder --win --publish never
+```
+
+Behind a slow link to GitHub, set the mirror or the NSIS tool download will time out:
+
+```powershell
+$env:ELECTRON_BUILDER_BINARIES_MIRROR = 'https://npmmirror.com/mirrors/electron-builder-binaries/'
+```
+
+Use `npmmirror.com/mirrors/`, **not** `registry.npmmirror.com`. For the Electron binary itself:
+
+```powershell
+$env:ELECTRON_MIRROR = 'https://npmmirror.com/mirrors/electron/'
+```
+
+To try the app without producing an installer, replace step 3 with `npx electron-builder --dir --win` and run `release\win-unpacked\火眼审计助手.exe` directly.
+
+Output layout:
+
+```
+apps/desktop/release/
+├─ 火眼审计助手 Setup 0.1.0.exe      ← installer (~214 MB), the file you ship
+└─ win-unpacked/
+   ├─ 火眼审计助手.exe               ← portable, runs in place
+   └─ resources/
+      ├─ app.asar                    ← main process + preload
+      ├─ renderer/                   ← frontend assets
+      ├─ agent/fireeyeaud-agent.exe  ← backend sidecar
+      └─ icon.png
+```
+
+`fireeyeaud-agent.exe` cannot be distributed on its own: it is a backend with no UI and no Electron runtime.
+
+CI can do this for you: push a tag (`git tag v0.1.0 && git push origin v0.1.0`) and the pipeline builds the sidecar, smoke-tests `/api/v1/health`, builds the frontend, packages, and verifies the installer actually contains the frontend and sidecar.
+
+The installer is unsigned, so Windows shows a SmartScreen prompt on first install — choose **More info → Run anyway**. First launch takes 5–10 seconds while the sidecar unpacks to a temp directory.
+
 Model defaults can be overridden with environment variables:
 
 | Variable | Default | Purpose |
