@@ -1,6 +1,6 @@
 [project]
 name = "fireeyeaud-agent"
-version = "0.0.0"
+version = "0.1.0"
 description = "火眼审计助手 Agent sidecar（FastAPI + LangGraph）"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
@@ -54,10 +54,8 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/fireeyeaud_agent"]
 
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-testpaths = ["tests"]
-addopts = "-q"
+# pytest 配置放在同目录的 pytest.ini。`testpaths` 相对「启动目录」展开，
+# 写在这里的相对路径在仓库根执行时不生效，pytest 会回退收集整个仓库。
 
 [tool.ruff]
 line-length = 100
