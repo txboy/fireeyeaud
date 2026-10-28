@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "火眼审计助手 Electron 壳（主进程 + preload）",
+  "license": "GPL-3.0-only",
   "author": "fireeyeaud",
   "main": "src/main.cjs",
   "scripts": {

@@ -53,3 +53,6 @@ Thumbs.db
 # --- Local env ---
 .env
 .env.local
+
+# --- Agent 工具产物（执行记录、评审 diff 等，不进仓库）---
+.superpowers/

@@ -399,3 +399,27 @@ fireeyeaud/
 - 功能设计与实施记录：[`docs/plans/fireeyeaud-design.md`](docs/plans/fireeyeaud-design.md)
 - 界面设计说明：[`docs/design/设计说明.md`](docs/design/设计说明.md)
 - 历史进度与已知偏差：[`docs/plans/`](docs/plans/)
+
+---
+
+## 许可证
+
+本项目以 **GNU General Public License v3.0** 发布（`GPL-3.0-only`），完整条款见 [LICENSE](LICENSE)。
+
+你可以自由使用、修改和分发，但分发（包括分发安装包）时必须：
+
+- 一并提供**完整对应的源码**，且与所分发的二进制版本严格对应；
+- 保持同样的 GPLv3 许可，不得转为闭源；
+- 保留版权声明与许可声明。
+
+界面设计稿（`docs/design/`）、文档（`docs/`）与源码采用同一许可。
+
+### 第三方组件
+
+安装包内包含若干第三方组件，各自遵循其原有许可。其中需要特别说明的是一个**强 copyleft** 依赖：
+
+| 组件 | 许可 | 说明 |
+|---|---|---|
+| [PyMuPDF](https://pymupdf.readthedocs.io/) | **AGPL-3.0** 或商业授权 | 用于 PDF 解析。GPLv3 第 13 条允许与 AGPLv3 组合，本项目据此使用。 |
+
+其余依赖多为 MIT / BSD / Apache-2.0 / LGPL，与 GPLv3 兼容。若你打算把本项目用于闭源商业产品，需要另行取得 PyMuPDF 的商业授权，或替换该组件。

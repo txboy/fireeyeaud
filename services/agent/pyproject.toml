@@ -2,6 +2,7 @@
 name = "fireeyeaud-agent"
 version = "0.1.0"
 description = "火眼审计助手 Agent sidecar（FastAPI + LangGraph）"
+license = "GPL-3.0-only"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [

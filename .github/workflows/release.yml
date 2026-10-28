@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
@@ -29,18 +31,42 @@ jobs:
         shell: pwsh
         run: |
           $env:FIREYEAUD_PORT = '18765'
-          $proc = Start-Process -FilePath .\fireeyeaud-agent.exe -PassThru -WindowStyle Hidden
+          $out = Join-Path $env:RUNNER_TEMP 'sidecar.out.log'
+          $err = Join-Path $env:RUNNER_TEMP 'sidecar.err.log'
+
+          # 首次运行要解压 100+MB 到临时目录，Runner 上的 Defender 还会扫描一遍，
+          # 冷启动远慢于开发机，给足 180 秒。
+          $sw = [System.Diagnostics.Stopwatch]::StartNew()
+          $proc = Start-Process -FilePath .\fireeyeaud-agent.exe -PassThru -WindowStyle Hidden `
+            -RedirectStandardOutput $out -RedirectStandardError $err
+
+          $ok = $false
+          while ($sw.Elapsed.TotalSeconds -lt 180) {
+            if ($proc.HasExited) { break }
+            try {
+              $r = Invoke-RestMethod "http://127.0.0.1:18765/api/v1/health" -TimeoutSec 2
+              if ($r.status -eq 'ok') { $ok = $true; break }
+            } catch { Start-Sleep -Seconds 1 }
+          }
+
           try {
-            $ok = $false
-            foreach ($i in 1..60) {
-              try {
-                $r = Invoke-RestMethod "http://127.0.0.1:18765/api/v1/health" -TimeoutSec 2
-                if ($r.status -eq 'ok') { $ok = $true; break }
-              } catch { Start-Sleep -Milliseconds 500 }
+            if ($ok) {
+              Write-Host "sidecar 就绪，耗时 $([math]::Round($sw.Elapsed.TotalSeconds,1)) 秒：$($r | ConvertTo-Json -Compress)"
+            } else {
+              Write-Host "::group::sidecar stderr"
+              Get-Content $err -ErrorAction SilentlyContinue | Select-Object -Last 60
+              Write-Host "::endgroup::"
+              Write-Host "::group::sidecar stdout"
+              Get-Content $out -ErrorAction SilentlyContinue | Select-Object -Last 60
+              Write-Host "::endgroup::"
+              if ($proc.HasExited) {
+                throw "sidecar 进程已退出（exit code $($proc.ExitCode)），耗时 $([math]::Round($sw.Elapsed.TotalSeconds,1)) 秒"
+              }
+              throw "sidecar 未在 180 秒内就绪"
             }
-            if (-not $ok) { throw 'sidecar 未在 30 秒内就绪' }
           } finally {
             Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            Get-Process fireeyeaud-agent -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           }
 
       - uses: actions/setup-node@v4
@@ -48,8 +74,51 @@ jobs:
           node-version: '24'
           cache: 'npm'
 
+      - name: Configure npm registry
+        shell: pwsh
+        run: |
+          # lockfile 里原本混着 238 个 mirrors.cloud.tencent.com 的 tarball 地址
+          # （本地用腾讯镜像生成）。只改 registry 不会重写这些地址，而 Runner 在境外
+          # 连腾讯镜像会被重置连接——这是之前三轮 npm ci 全部 ECONNRESET 的原因。
+          # lockfile 已统一回 registry.npmjs.org；这里再开 always，重试换源时才能整体改写。
+          npm config set replace-registry-host always
+          npm config set fetch-retries 5
+          npm config set fetch-retry-mintimeout 20000
+          npm config set fetch-retry-maxtimeout 120000
+          npm config set fetch-timeout 600000
+          # 并发太高容易被对端重置连接。
+          npm config set maxsockets 6
+          Write-Host "replace-registry-host = $(npm config get replace-registry-host)"
+          Write-Host "maxsockets = $(npm config get maxsockets)"
+
       - name: Install dependencies
-        run: npm ci
+        shell: pwsh
+        run: |
+          # 官方源与 npmmirror 交替重试，避免在同一条坏链路上耗死。
+          $registries = @(
+            'https://registry.npmjs.org',
+            'https://registry.npmmirror.com',
+            'https://registry.npmjs.org'
+          )
+          for ($i = 0; $i -lt $registries.Count; $i++) {
+            $reg = $registries[$i]
+            Write-Host "npm ci 尝试 $($i + 1)/$($registries.Count)（registry = $reg）"
+            npm config set registry $reg
+            npm ci --no-audit --no-fund --prefer-offline
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "npm ci 成功（第 $($i + 1) 次尝试，registry = $reg）"
+              exit 0
+            }
+            Write-Host "npm ci 第 $($i + 1) 次失败（exit $LASTEXITCODE，registry = $reg）"
+            if ($i -lt $registries.Count - 1) {
+              Write-Host '清理 node_modules 后重试'
+              # rd 会偶发 EPERM（Defender 还攥着句柄），交给 Remove-Item 并忽略报错；
+              # npm ci 自身也会先清 node_modules，残留不影响下一次尝试。
+              Remove-Item node_modules -Recurse -Force -ErrorAction SilentlyContinue
+              Start-Sleep -Seconds 10
+            }
+          }
+          throw "npm ci 连续失败 $($registries.Count) 次，请检查网络或 registry"
 
       - name: Build renderer
         run: npm run renderer:build
@@ -84,6 +153,8 @@ jobs:
           if ($missing) { throw "安装包缺文件: $($missing -join ', ')" }
 
       - uses: actions/upload-artifact@v4
+        # 只有打 tag 时才留产物：每次 push main 都上传 200MB+ 会迅速吃掉 artifact 配额。
+        if: startsWith(github.ref, 'refs/tags/')
         with:
           name: fireeyeaud-windows
           path: apps/desktop/release/**
