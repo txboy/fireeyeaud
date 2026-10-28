@@ -315,6 +315,60 @@ npm run agent:test       # 后端测试
 npm run agent:lint       # 后端静态检查
 ```
 
+### 打包成 Windows 安装包
+
+产物是两层：**Electron 桌面壳**（`火眼审计助手 Setup x.y.z.exe`）里再套一个 **PyInstaller 打出的后端** `fireeyeaud-agent.exe`。所以必须按顺序构建，**后端改了就一定要重新打 sidecar**，否则装进去的是旧后端。
+
+```bash
+# 1. 构建后端 sidecar → services/agent/dist/fireeyeaud-agent.exe（约 107 MB）
+cd services/agent
+uv sync --dev
+uv run pyinstaller fireeyeaud-agent.spec --noconfirm --clean
+
+# 2. 构建前端 → apps/renderer/dist/
+cd ../..
+npm ci
+npm run renderer:build
+
+# 3. 打安装包 → apps/desktop/release/
+cd apps/desktop
+npx electron-builder --win --publish never
+```
+
+国内网络需要设镜像，否则会卡在下载 NSIS 工具超时：
+
+```powershell
+$env:ELECTRON_BUILDER_BINARIES_MIRROR = 'https://npmmirror.com/mirrors/electron-builder-binaries/'
+```
+
+注意是 `npmmirror.com/mirrors/`，**不是** `registry.npmmirror.com`。Electron 本体下载慢时另设：
+
+```powershell
+$env:ELECTRON_MIRROR = 'https://npmmirror.com/mirrors/electron/'
+```
+
+只想试跑、不出安装包，第 3 步换成 `npx electron-builder --dir --win`，然后直接运行 `release\win-unpacked\火眼审计助手.exe`。
+
+产物结构：
+
+```
+apps/desktop/release/
+├─ 火眼审计助手 Setup 0.1.0.exe      ← 安装包（约 214 MB），发给用户的就是它
+└─ win-unpacked/
+   ├─ 火眼审计助手.exe               ← 免安装，可直接运行
+   └─ resources/
+      ├─ app.asar                    ← 主进程 + preload
+      ├─ renderer/                   ← 前端静态文件
+      ├─ agent/fireeyeaud-agent.exe  ← 后端 sidecar
+      └─ icon.png
+```
+
+`fireeyeaud-agent.exe` 不能单独分发：它只是后端，没有界面、也没有 Electron 运行时。
+
+也可以交给 CI：打 tag 推送即可（`git tag v0.1.0 && git push origin v0.1.0`），流水线会依次构建 sidecar、冒烟测试 `/api/v1/health`、构建前端、打包，并核对安装包里前端与 sidecar 都在。
+
+安装包未做代码签名，Windows 首次安装会弹 SmartScreen 提示，点「更多信息 → 仍要运行」即可。首次启动需 5–10 秒（sidecar 解压到临时目录）。
+
 模型可用环境变量覆盖：
 
 | 环境变量 | 默认值 | 说明 |
