@@ -1,6 +1,6 @@
 {
   "name": "@fireeyeaud/desktop",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "火眼审计助手 Electron 壳（主进程 + preload）",
   "author": "fireeyeaud",
@@ -14,14 +14,23 @@
   "build": {
     "appId": "com.fireeyeaud.app",
     "productName": "火眼审计助手",
+    "electronVersion": "44.7.0",
     "files": [
       "src/**/*",
-      "loading.html"
+      "build/icon.png"
     ],
     "extraResources": [
       {
         "from": "../../services/agent/dist/fireeyeaud-agent.exe",
         "to": "agent/fireeyeaud-agent.exe"
+      },
+      {
+        "from": "../renderer/dist",
+        "to": "renderer"
+      },
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
       }
     ],
     "directories": {
@@ -33,7 +42,7 @@
     }
   },
   "devDependencies": {
-    "electron": "^44.0.0",
+    "electron": "44.7.0",
     "electron-builder": "^26.0.0"
   }
 }

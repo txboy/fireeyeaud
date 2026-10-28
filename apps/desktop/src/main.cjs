@@ -25,8 +25,17 @@ app.setName('fireeyeaud');
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 const DEV_SERVER_URL = process.env.FIREEYEAUD_DEV_SERVER_URL;
-const RENDERER_DIST = path.join(REPO_ROOT, 'apps', 'renderer', 'dist', 'index.html');
+// 开发态前端在仓库里；打包态作为 extraResources 放在 `<resources>/renderer/`。
+const RENDERER_DIST = app.isPackaged
+  ? path.join(process.resourcesPath, 'renderer', 'index.html')
+  : path.join(REPO_ROOT, 'apps', 'renderer', 'dist', 'index.html');
+// 图标随 asar 打包（build/ 在 files 白名单内），路径相对 app.asar 同样成立。
 const APP_ICON = path.join(__dirname, '..', 'build', 'icon.png');
+// 运行时窗口图标的另一路来源：打包态放到 extraResources，避免 asar 内路径在某些
+// Electron 版本里读不到（窗口图标读不到就会退成默认 Electron 图标）。
+const RESOURCES_ICON = app.isPackaged
+  ? path.join(process.resourcesPath, 'icon.png')
+  : APP_ICON;
 const SIDECAR_TOKEN = crypto.randomBytes(24).toString('hex');
 
 let mainWindow = null;
@@ -119,7 +128,7 @@ function createWindow() {
     frame: false,
     backgroundColor: '#1E1F22',
     title: '火眼审计助手',
-    ...(fs.existsSync(APP_ICON) ? { icon: APP_ICON } : {}),
+    ...(fs.existsSync(RESOURCES_ICON) ? { icon: RESOURCES_ICON } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
