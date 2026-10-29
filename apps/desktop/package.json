@@ -16,6 +16,7 @@
     "appId": "com.fireeyeaud.app",
     "productName": "火眼审计助手",
     "electronVersion": "44.7.0",
+    "npmRebuild": false,
     "files": [
       "src/**/*",
       "build/icon.png"

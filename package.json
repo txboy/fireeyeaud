@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "description": "火眼审计助手 — 纯本地财务/会计审计桌面助手",
   "license": "GPL-3.0-only",
+  "packageManager": "npm@11.12.1",
   "workspaces": [
     "apps/*",
     "packages/*"
