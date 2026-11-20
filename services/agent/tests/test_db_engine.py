@@ -51,6 +51,28 @@ def test_query_connection_error(tmp_path):
     assert ei.value.code == "E_DB_CONN"
 
 
+def test_readonly_setup_sql_postgres():
+    stmts = db_engine._readonly_setup_sql("postgresql", 30)
+    assert stmts == [
+        "SET TRANSACTION READ ONLY",
+        "SET LOCAL statement_timeout = 30000",
+    ]
+
+
+def test_readonly_setup_sql_mysql():
+    stmts = db_engine._readonly_setup_sql("mysql", 30)
+    assert stmts == [
+        "SET SESSION TRANSACTION READ ONLY",
+        "SET SESSION MAX_EXECUTION_TIME = 30000",
+    ]
+
+
+def test_readonly_setup_sql_local_drivers_are_noop():
+    assert db_engine._readonly_setup_sql("sqlite", 30) == []
+    assert db_engine._readonly_setup_sql("access", 30) == []
+    assert db_engine._readonly_setup_sql("mssql", 30) == []
+
+
 def test_column_meta_maps_metadata():
     meta = db_engine._column_meta(
         {"name": "amount", "type": "NUMERIC(14, 2)", "nullable": False, "comment": "交易金额"},

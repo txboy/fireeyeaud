@@ -257,6 +257,28 @@ def _page_sql(
     return f"SELECT * FROM ({text_sql}) AS _sub LIMIT {take} OFFSET {offset}", 0, 0
 
 
+def _readonly_setup_sql(driver: str, timeout_seconds: int) -> list[str]:
+    """返回执行用户 SQL 前必须发送的只读/超时设置。
+
+    SQLite 已经用 mode=ro 打开；Access/MSSQL 暂不设置语句超时，
+    但它们的连接仍然只通过 validate_sql 的 SELECT 通道执行。
+    """
+    ms = max(1, int(timeout_seconds)) * 1000
+    if driver == "postgresql":
+        return [
+            "SET TRANSACTION READ ONLY",
+            f"SET LOCAL statement_timeout = {ms}",
+        ]
+    if driver == "mysql":
+        return [
+            "SET SESSION TRANSACTION READ ONLY",
+            f"SET SESSION MAX_EXECUTION_TIME = {ms}",
+        ]
+    if driver == "oracle":
+        return ["SET TRANSACTION READ ONLY"]
+    return []
+
+
 def run_query(
     conn: dict[str, Any],
     sql: str,
@@ -291,6 +313,8 @@ def run_query(
     try:
         engine = _engine(conn, password)
         with engine.connect() as con:
+            for stmt in _readonly_setup_sql(driver, settings.sql_timeout_seconds):
+                con.execute(text(stmt))
             if not paginated:
                 cursor = con.execute(text(text_sql))
                 fetched = cursor.fetchall()
