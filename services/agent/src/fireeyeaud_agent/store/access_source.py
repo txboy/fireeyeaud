@@ -219,7 +219,7 @@ def query(path, sql: str, limit: int, offset: int) -> dict[str, Any]:
         _page_sql,
     )
 
-    sql = validate_sql(sql)
+    sql = validate_sql(sql, dialect="tsql")
     try:
         limit = int(limit or DEFAULT_LIMIT)
     except (TypeError, ValueError):
@@ -269,7 +269,7 @@ def query(path, sql: str, limit: int, offset: int) -> dict[str, Any]:
 
 def count(path, sql: str) -> int | None:
     try:
-        sql = validate_sql(sql)
+        sql = validate_sql(sql, dialect="tsql")
         with open_db(path) as con:
             cur = con.execute(f"SELECT COUNT(*) FROM ({_transpile(sql)}) AS _sub")
             return int(cur.fetchone()[0])

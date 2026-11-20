@@ -264,7 +264,7 @@ def run_query(
 ) -> dict[str, Any]:
     from sqlalchemy import text
 
-    text_sql = validate_sql(sql)
+    text_sql = validate_sql(sql, dialect=dialect_for(conn))
     try:
         limit = int(limit or DEFAULT_LIMIT)
     except (TypeError, ValueError):
@@ -339,7 +339,7 @@ def count_query(
     from sqlalchemy import text
 
     try:
-        text_sql = validate_sql(sql)
+        text_sql = validate_sql(sql, dialect=dialect_for(conn))
     except ApiError:
         return None
     if text_sql.split()[0].lower() in ("explain", "describe"):

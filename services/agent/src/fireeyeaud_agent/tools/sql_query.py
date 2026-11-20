@@ -48,7 +48,7 @@ def sql_query(root: Path, params: dict[str, Any]) -> dict[str, Any]:
             limit=limit,
         )
 
-    text = validate_sql(params.get("sql", ""))
+    text = validate_sql(params.get("sql", ""), dialect="duckdb")
     try:
         limit = int(params.get("limit") or DEFAULT_LIMIT)
     except (TypeError, ValueError):
