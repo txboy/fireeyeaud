@@ -6,6 +6,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from ..config.settings import settings
 from ..errors import ApiError
 from ..store.duckdb import Database
 from ..store.sandbox import validate_sql
@@ -59,14 +60,16 @@ def sql_query(root: Path, params: dict[str, Any]) -> dict[str, Any]:
     db = Database(Path(root) / ".fireeye" / "workspace.duckdb")
     try:
         if first in ("explain", "describe"):
-            cursor = db.query(text)
-            columns = [d[0] for d in (cursor.description or [])]
-            rows = cursor.fetchall()
+            fetched, columns = db.fetchall(
+                text, timeout_seconds=settings.sql_timeout_seconds
+            )
             truncated = False
+            rows = fetched
         else:
-            cursor = db.query(f"SELECT * FROM ({text}) AS _sub LIMIT {limit + 1}")
-            columns = [d[0] for d in (cursor.description or [])]
-            fetched = cursor.fetchall()
+            fetched, columns = db.fetchall(
+                f"SELECT * FROM ({text}) AS _sub LIMIT {limit + 1}",
+                timeout_seconds=settings.sql_timeout_seconds,
+            )
             truncated = len(fetched) > limit
             rows = fetched[:limit]
     except ApiError:

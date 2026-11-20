@@ -37,3 +37,10 @@ def test_sql_query_rejects_write(tmp_path):
     with pytest.raises(ApiError) as exc:
         sql_query(tmp_path, {"sql": "DROP TABLE src_ds1_x"})
     assert exc.value.code == "E_SQL_REJECTED"
+
+
+def test_sql_query_blocks_file_functions(tmp_path):
+    _seed(tmp_path)
+    with pytest.raises(ApiError) as exc:
+        sql_query(tmp_path, {"sql": "SELECT * FROM read_csv('/etc/passwd')"})
+    assert exc.value.code == "E_SQL_REJECTED"

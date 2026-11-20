@@ -15,8 +15,10 @@ from pathlib import Path
 from typing import Any
 
 from ..errors import ApiError
+from ..config.settings import settings
 from . import access_source
 from .db import build_url
+from .duckdb import DUCKDB_CONFIG
 from .lock import WORKSPACE_MUTATION_LOCK
 from .sandbox import validate_sql
 
@@ -429,7 +431,7 @@ def _duckdb_connect(conn: dict[str, Any]):
         )
     # 同一文件只允许一个写连接；预览与导入/对账串行化，避免争锁。
     with _DUCKDB_LOCK:
-        handle = duckdb.connect(path)
+        handle = duckdb.connect(path, config=dict(DUCKDB_CONFIG))
         try:
             yield handle
         finally:
@@ -438,8 +440,16 @@ def _duckdb_connect(conn: dict[str, Any]):
 
 def _duckdb_execute(conn: dict[str, Any], sql: str, params: list[Any] | None = None):
     with _duckdb_connect(conn) as handle:
-        cursor = handle.execute(sql, params or [])
-        return cursor.fetchall(), list(cursor.description or [])
+        timer = threading.Timer(
+            float(settings.sql_timeout_seconds), handle.interrupt
+        )
+        timer.daemon = True
+        timer.start()
+        try:
+            cursor = handle.execute(sql, params or [])
+            return cursor.fetchall(), list(cursor.description or [])
+        finally:
+            timer.cancel()
 
 
 def _pages_on_any_driver(conn: dict[str, Any]) -> bool:
