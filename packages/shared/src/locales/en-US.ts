@@ -920,6 +920,7 @@ export default {
     opFailed: 'File operation failed',
     sqlRejected: 'Query rejected by the sandbox (read-only only)',
     sqlTimeout: 'Query timed out',
+    toolTimeout: 'Tool execution timed out. Narrow the query or retry.',
     llmUnavailable: 'Model unreachable; check the Models panel',
     llmAuth: 'Model authentication failed',
     llmTimeout: 'The model timed out; retry, or reduce attachments / simplify the question',

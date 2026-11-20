@@ -26,6 +26,7 @@ from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
 from ..config.settings import settings
+from ..errors import ApiError
 from ..mcp import manager
 from ..store import app_settings
 from ..store.evidence import append_evidence
@@ -150,6 +151,28 @@ def _maybe_bind(model: Any, tools: list[StructuredTool]) -> Any:
         return model
     except Exception:  # 绑定失败则退回未绑定模型
         return model
+
+
+async def _run_tool(
+    tool_dict: dict[str, Any], name: str, args: dict[str, Any], root: Path
+) -> Any:
+    """执行一个工具；同步实现放到线程，避免阻塞事件循环。"""
+    if name not in tool_dict:
+        raise ValueError(f"unknown tool: {name}")
+    fn = tool_dict[name]
+    try:
+        async with asyncio.timeout(settings.tool_timeout_seconds):
+            if inspect.iscoroutinefunction(fn):
+                return await fn(root, args)
+            value = await asyncio.to_thread(fn, root, args)
+            return await value if inspect.isawaitable(value) else value
+    except TimeoutError as exc:
+        raise ApiError(
+            "E_TOOL_TIMEOUT",
+            504,
+            "error.toolTimeout",
+            {"tool": name},
+        ) from exc
 
 
 def _summarize(result: Any) -> str:
@@ -404,8 +427,7 @@ async def run_agent(
                 return {"id": record["id"], "status": record["status"]}
             if name not in tool_dict:
                 raise ValueError(f"unknown tool: {name}")
-            value = tool_dict[name](root, args)
-            return await value if inspect.isawaitable(value) else value
+            return await _run_tool(tool_dict, name, args, root)
 
         step = 0
         overflow_retried = False
