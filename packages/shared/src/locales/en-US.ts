@@ -942,6 +942,7 @@ export default {
     webConn: 'Web search request failed',
     webProvider: 'Unsupported web search provider',
     agentLimit: 'Reached the per-turn step/time limit; add details and retry',
+    sessionBusy: 'The previous turn is still running. Wait for it or stop it first.',
     emptyMessage: 'Enter some content before sending',
     invalidScope: 'Invalid scope (only global or project is supported)',
     invalidBase: 'Invalid merge baseline; please re-check the conflict',

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
@@ -9,9 +12,48 @@ from sse_starlette.sse import EventSourceResponse
 from ..errors import ApiError
 from ..store import sessions as sessions_store
 from ..store.workspace import workspace_manager
+from ..util import now_iso
 from .deps import require_token
 
 router = APIRouter(tags=["sessions"], dependencies=[Depends(require_token)])
+
+_LOCKS: dict[str, asyncio.Lock] = {}
+
+
+def _session_lock(session_id: str) -> asyncio.Lock:
+    key = f"{workspace_manager.root}|{session_id}"
+    return _LOCKS.setdefault(key, asyncio.Lock())
+
+
+def _busy_stream(session_id: str):
+    async def _gen():
+        def envelope(etype: str, seq: int, data: dict) -> dict[str, str]:
+            return {
+                "event": "message",
+                "data": json.dumps(
+                    {
+                        "type": etype,
+                        "seq": seq,
+                        "sessionId": session_id,
+                        "ts": now_iso(),
+                        "data": data,
+                    },
+                    ensure_ascii=False,
+                ),
+            }
+
+        yield envelope(
+            "error",
+            1,
+            {
+                "code": "E_SESSION_BUSY",
+                "messageKey": "error.sessionBusy",
+                "params": {},
+            },
+        )
+        yield envelope("done", 2, {"usage": {}})
+
+    return _gen()
 
 
 class CreateSessionBody(BaseModel):
@@ -102,21 +144,33 @@ async def chat(session_id: str, body: ChatBody) -> EventSourceResponse:
     # 惰性导入：`graph` 会拉起整套 LLM 栈，sidecar 启动时不需要（见 docs/plans/2026-10-27-startup-performance.md）。
     from ..agent import stream_chat
 
-    return EventSourceResponse(
-        stream_chat(
-            session_id,
-            body.message,
-            body.locale,
-            body.modelId,
-            {
-                "skillIds": body.skillIds,
-                "kbProviderIds": body.kbProviderIds,
-                "dbConnectionIds": body.dbConnectionIds,
-                "mcpServerIds": body.mcpServerIds,
-                "ruleIds": body.ruleIds,
-            },
-            body.attachments,
-            body.mentions,
-        ),
-        media_type="text/event-stream",
-    )
+    lock = _session_lock(session_id)
+    # 同一会话只允许一轮在跑；第二个请求直接返回 busy，而不是排队等待。
+    if lock.locked():
+        return EventSourceResponse(
+            _busy_stream(session_id), media_type="text/event-stream"
+        )
+    await lock.acquire()
+
+    async def _locked_stream():
+        try:
+            async for item in stream_chat(
+                session_id,
+                body.message,
+                body.locale,
+                body.modelId,
+                {
+                    "skillIds": body.skillIds,
+                    "kbProviderIds": body.kbProviderIds,
+                    "dbConnectionIds": body.dbConnectionIds,
+                    "mcpServerIds": body.mcpServerIds,
+                    "ruleIds": body.ruleIds,
+                },
+                body.attachments,
+                body.mentions,
+            ):
+                yield item
+        finally:
+            lock.release()
+
+    return EventSourceResponse(_locked_stream(), media_type="text/event-stream")

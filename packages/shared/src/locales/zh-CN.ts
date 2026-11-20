@@ -937,6 +937,7 @@ export default {
     webConn: '联网检索请求失败',
     webProvider: '不支持的联网检索提供方',
     agentLimit: '已达到单轮步数或时间上限，请补充说明后重试',
+    sessionBusy: '上一轮对话还在执行，请等待完成或先停止',
     /** 会话 / 报告 / 取证单对话发送了空消息（此前被误报为「发生内部错误」）。 */
     emptyMessage: '请输入内容后再发送',
     /** config 层的 scope 只能是 global / project。 */

@@ -298,3 +298,24 @@ async def test_attachment_text_persists_into_history(tmp_path, monkeypatch) -> N
     )
     assert "附件资料" in joined
     assert "pic.png" in joined
+
+
+async def test_session_lock_is_shared(tmp_path, monkeypatch):
+    monkeypatch.setenv("FIREYEAUD_GLOBAL_DIR", str(tmp_path / "global"))
+    from fireeyeaud_agent.api import sessions
+
+    lock_a = sessions._session_lock("s_busy")
+    lock_b = sessions._session_lock("s_busy")
+    assert lock_a is lock_b
+
+
+async def test_busy_stream_emits_error_event(tmp_path, monkeypatch):
+    monkeypatch.setenv("FIREYEAUD_GLOBAL_DIR", str(tmp_path / "global"))
+    from fireeyeaud_agent.api import sessions
+
+    events = [
+        json.loads(item["data"]) async for item in sessions._busy_stream("s_busy")
+    ]
+    assert events[0]["type"] == "error"
+    assert events[0]["data"]["messageKey"] == "error.sessionBusy"
+    assert events[-1]["type"] == "done"
