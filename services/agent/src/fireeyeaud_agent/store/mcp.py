@@ -21,6 +21,16 @@ def get_server(
     return store.get_item(KIND, server_id, scope, root)
 
 
+def _normalize_permissions(perms: dict[str, Any] | None) -> dict[str, Any]:
+    perms = perms or {}
+    return {
+        "fsScope": perms.get("fsScope", "workspace"),
+        "net": bool(perms.get("net", False)),
+        "toolsAllow": list(perms.get("toolsAllow") or []),
+        "allowWrite": bool(perms.get("allowWrite", False)),
+    }
+
+
 def create_server(data: dict[str, Any], root: Path | None = None) -> dict[str, Any]:
     from ..errors import ApiError
 
@@ -31,12 +41,7 @@ def create_server(data: dict[str, Any], root: Path | None = None) -> dict[str, A
         )
     payload = dict(data)
     payload["transport"] = transport
-    perms = payload.get("permissions") or {}
-    payload["permissions"] = {
-        "fsScope": perms.get("fsScope", "workspace"),
-        "net": bool(perms.get("net", False)),
-        "toolsAllow": list(perms.get("toolsAllow") or []),
-    }
+    payload["permissions"] = _normalize_permissions(payload.get("permissions"))
     if payload.get("env"):
         payload["env"] = {str(k): str(v) for k, v in payload["env"].items()}
     return store.create_item(KIND, payload, root)
@@ -45,6 +50,11 @@ def create_server(data: dict[str, Any], root: Path | None = None) -> dict[str, A
 def update_server(
     server_id: str, scope: str, patch: dict[str, Any], root: Path | None = None
 ) -> dict[str, Any]:
+    if isinstance(patch.get("permissions"), dict):
+        patch = {
+            **patch,
+            "permissions": _normalize_permissions(patch["permissions"]),
+        }
     return store.update_item(KIND, server_id, scope, patch, root)
 
 

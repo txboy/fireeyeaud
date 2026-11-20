@@ -40,6 +40,19 @@ def test_mcp_crud(tmp_path, monkeypatch):
     assert mcp.list_servers(root) == []
 
 
+def test_create_server_defaults_allow_write_false(tmp_path, monkeypatch):
+    monkeypatch.setenv("FIREYEAUD_GLOBAL_DIR", str(tmp_path / "global"))
+    root = tmp_path / "ws"
+    (root / ".fireeye").mkdir(parents=True)
+    from fireeyeaud_agent.store import mcp
+
+    item = mcp.create_server(
+        {"name": "x", "transport": "stdio", "command": "echo", "permissions": {}},
+        root,
+    )
+    assert item["permissions"]["allowWrite"] is False
+
+
 def test_mcp_rejects_bad_transport(tmp_path, monkeypatch):
     import pytest
 

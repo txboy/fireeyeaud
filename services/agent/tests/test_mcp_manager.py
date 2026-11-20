@@ -51,7 +51,12 @@ def _connector(servers, *, fail=()):
         if sid in fail:
             raise RuntimeError(f"boom:{sid}")
         specs = [
-            McpToolSpec(name=t, description=f"{t} desc", input_schema=_schema(t))
+            McpToolSpec(
+                name=t,
+                description=f"{t} desc",
+                input_schema=_schema(t),
+                read_only=False if t == "danger" else True,
+            )
             for t in (server.get("_tools") or ["echo", "danger"])
         ]
         session = _FakeSession(specs, opened)
@@ -116,16 +121,35 @@ async def test_build_tools_empty_allow_denies_all(tmp_path, monkeypatch):
         await result.aclose()
 
 
-async def test_build_tools_allow_star_exposes_all(tmp_path, monkeypatch):
+async def test_build_tools_star_still_denies_write_tools(tmp_path, monkeypatch):
     root = _workspace(tmp_path, monkeypatch)
     _write_servers(root, [_server("mcp_1", permissions={"toolsAllow": ["*"]})])
     fake_open, _ = _connector({})
     result = await manager.build_mcp_tools(root, {"mcp_1"}, open_session=fake_open)
     try:
-        assert {t.name for t in result.tools} == {
-            "mcp__mcp_1__echo",
-            "mcp__mcp_1__danger",
-        }
+        names = [t.name for t in result.tools]
+        assert "mcp__mcp_1__echo" in names
+        assert "mcp__mcp_1__danger" not in names
+        assert any(e.get("code") == "E_MCP_WRITE_DENIED" for e in result.errors)
+    finally:
+        await result.aclose()
+
+
+async def test_build_tools_can_opt_in_to_write_tools(tmp_path, monkeypatch):
+    root = _workspace(tmp_path, monkeypatch)
+    _write_servers(
+        root,
+        [
+            _server(
+                "mcp_1",
+                permissions={"toolsAllow": ["*"], "allowWrite": True},
+            )
+        ],
+    )
+    fake_open, _ = _connector({})
+    result = await manager.build_mcp_tools(root, {"mcp_1"}, open_session=fake_open)
+    try:
+        assert any(t.name == "mcp__mcp_1__danger" for t in result.tools)
     finally:
         await result.aclose()
 

@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -91,6 +93,25 @@ async def test_stdio_secret_reaches_subprocess_env(tmp_path):
             assert "TOPSECRET-9" in client.result_text(result)
     finally:
         secrets.clear()
+
+
+def test_list_tools_projects_read_only_hint():
+    from fireeyeaud_agent.mcp.client import McpSession
+
+    tool = SimpleNamespace(
+        name="write_rows",
+        description="write",
+        input_schema={},
+        annotations=SimpleNamespace(read_only_hint=False),
+    )
+
+    async def _list_tools():
+        return SimpleNamespace(tools=[tool])
+
+    session = SimpleNamespace(list_tools=_list_tools)
+
+    specs = asyncio.run(McpSession(session).list_tools())
+    assert specs[0].read_only is False
 
 
 def test_secret_value_not_persisted_to_config(tmp_path, monkeypatch):

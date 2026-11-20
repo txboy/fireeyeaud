@@ -26,6 +26,7 @@ class McpToolSpec:
     name: str
     description: str
     input_schema: dict[str, Any]
+    read_only: bool | None = None
 
 
 def _timeout() -> float:
@@ -92,11 +93,16 @@ class McpSession:
         specs: list[McpToolSpec] = []
         for tool in getattr(result, "tools", None) or []:
             schema = getattr(tool, "input_schema", None)
+            annotations = getattr(tool, "annotations", None)
+            read_only = (
+                getattr(annotations, "read_only_hint", None) if annotations else None
+            )
             specs.append(
                 McpToolSpec(
                     name=str(tool.name),
                     description=str(getattr(tool, "description", "") or ""),
                     input_schema=dict(schema) if isinstance(schema, dict) else {},
+                    read_only=read_only,
                 )
             )
         return specs

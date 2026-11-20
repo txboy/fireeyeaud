@@ -159,6 +159,7 @@ async def build_mcp_tools(
                 continue
             name = str(server.get("name") or sid)
             perms = server.get("permissions") or {}
+            allow_write = bool(perms.get("allowWrite", False))
             reason = _connect_guard(server)
             if reason is not None:
                 errors.append(
@@ -195,6 +196,16 @@ async def build_mcp_tools(
             exposed: list[str] = []
             for spec in specs:
                 if allowed is not _ALL and spec.name not in allowed:  # type: ignore[operator]
+                    continue
+                if not allow_write and spec.read_only is False:
+                    errors.append(
+                        {
+                            "serverId": sid,
+                            "tool": spec.name,
+                            "code": "E_MCP_WRITE_DENIED",
+                            "message": "tool is annotated readOnlyHint=false; enable permissions.allowWrite to use it",
+                        }
+                    )
                     continue
                 lname = adapters.tool_name(sid, spec.name)
                 if lname in used_names:
