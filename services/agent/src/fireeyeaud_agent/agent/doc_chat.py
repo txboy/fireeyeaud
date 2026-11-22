@@ -11,6 +11,7 @@ from typing import Any, AsyncIterator, Callable
 from langchain_core.messages import AIMessage, ToolMessage
 
 from ..config.settings import settings
+from .streaming import StreamCollector, iter_model
 from .tool_calls import call_id, tool_error_payload
 
 MAX_STEPS = 12
@@ -37,17 +38,15 @@ async def run_tool_loop(
     messages = list(messages)
 
     for step in range(max_steps):
-        merged: Any = None
+        collector = StreamCollector()
         try:
-            async with asyncio.timeout(settings.turn_timeout_seconds):
-                async for chunk in bound.astream(messages):
-                    if merged is None:
-                        merged = chunk
-                    else:
-                        merged = merged + chunk
-                    piece = chunk.content
-                    if isinstance(piece, str) and piece:
-                        yield {"event": "delta", "data": {"text": piece}}
+            async for piece in iter_model(
+                bound,
+                messages,
+                timeout_seconds=settings.turn_timeout_seconds,
+                collector=collector,
+            ):
+                yield {"event": "delta", "data": {"text": piece}}
         except TimeoutError:
             yield {
                 "event": "error",
@@ -60,6 +59,7 @@ async def run_tool_loop(
             yield {"event": "done", "data": {}}
             return
 
+        merged = collector.ai
         if merged is None:
             break
 

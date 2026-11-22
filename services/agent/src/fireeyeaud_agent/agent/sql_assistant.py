@@ -25,7 +25,9 @@ from langchain_core.messages import (
     ToolMessage,
 )
 
+from ..config.settings import settings
 from ..util import now_iso
+from .streaming import StreamCollector, iter_model
 
 if TYPE_CHECKING:  # pragma: no cover - 仅类型检查用，避免循环导入
     from ..api.db import SqlChatBody
@@ -742,14 +744,17 @@ async def stream_sql_assistant(
         allowed = _allowed_tables(body.context if isinstance(body.context, dict) else {})
 
         for round_index in range(MAX_TOOL_ROUNDS + 1):
-            ai: Any = None
-            async for chunk in bound.astream(messages):
-                ai = chunk if ai is None else ai + chunk
-                delta = chunk.content
-                if isinstance(delta, str) and delta:
-                    streamed_any = True
-                    yield emit("token", {"delta": delta})
+            collector = StreamCollector()
+            async for delta in iter_model(
+                bound,
+                messages,
+                timeout_seconds=settings.turn_timeout_seconds,
+                collector=collector,
+            ):
+                streamed_any = True
+                yield emit("token", {"delta": delta})
 
+            ai = collector.ai
             tool_calls = list(getattr(ai, "tool_calls", []) or []) if ai is not None else []
             if not tool_calls or preview is None:
                 break
@@ -757,11 +762,15 @@ async def stream_sql_assistant(
             if round_index >= MAX_TOOL_ROUNDS:
                 # 已达轮次上限：不再执行工具，强制一次**不带工具**的最终答复，
                 # 否则模型继续要工具时会以空正文结束本轮。
-                async for chunk in chat.astream(messages):
-                    delta = chunk.content
-                    if isinstance(delta, str) and delta:
-                        streamed_any = True
-                        yield emit("token", {"delta": delta})
+                final_collector = StreamCollector()
+                async for delta in iter_model(
+                    chat,
+                    messages,
+                    timeout_seconds=settings.turn_timeout_seconds,
+                    collector=final_collector,
+                ):
+                    streamed_any = True
+                    yield emit("token", {"delta": delta})
                 break
 
             messages.append(ai)
