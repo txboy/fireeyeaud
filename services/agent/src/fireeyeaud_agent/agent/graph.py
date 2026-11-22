@@ -213,6 +213,11 @@ async def _run_tool_batch(
     return list(await asyncio.gather(*(_limited(item) for item in items)))
 
 
+def log_llm(text: str) -> None:
+    if settings.llm_debug_log:
+        print(text, flush=True)
+
+
 def _summarize(result: Any) -> str:
     if isinstance(result, dict):
         if "tables" in result:
@@ -494,7 +499,7 @@ async def run_agent(
 
             yield event("status", {"phase": "executing"})
             # 每次发给大模型的参数打印到 sidecar 控制台（Electron 主进程日志）。
-            print(format_llm_request(messages, step=step), flush=True)
+            log_llm(format_llm_request(messages, step=step))
             collector = StreamCollector()
             try:
                 # 流式调用：内容边生成边推送 token，避免长时间黑屏。
@@ -618,7 +623,7 @@ async def run_agent(
                 yield event("done", {"usage": _usage()})
                 return
 
-            print(format_llm_response(ai, step=step), flush=True)
+            log_llm(format_llm_response(ai, step=step))
 
             tool_calls = list(getattr(ai, "tool_calls", []) or [])
             if not tool_calls:

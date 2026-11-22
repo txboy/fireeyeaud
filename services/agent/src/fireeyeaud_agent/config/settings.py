@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     tool_output_max_chars: int = 12000
     llm_max_attempts: int = 3
     llm_retry_base_seconds: float = 0.5
+    # 把每一步完整的 LLM 请求/响应打到 sidecar 控制台；默认关闭（含 SQL 与数据样本）。
+    llm_debug_log: bool = False
     # 附件读取：单文件/单轮字符上限，以及单个文件转写的最长等待秒数。
     attachment_max_chars: int = 20_000
     attachment_total_chars: int = 60_000

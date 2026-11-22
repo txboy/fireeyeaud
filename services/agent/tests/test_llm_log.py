@@ -48,3 +48,21 @@ def test_format_llm_response_reports_tools_and_reasoning():
     assert "tool_calls=1" in out
     assert "sql_query" in out
     assert "reasoning: 我需要先看表结构" in out
+
+
+def test_llm_log_is_silent_by_default(capsys, monkeypatch):
+    from fireeyeaud_agent.agent.graph import log_llm
+    from fireeyeaud_agent.config.settings import settings
+
+    monkeypatch.setattr(settings, "llm_debug_log", False)
+    log_llm("===== secret sql: SELECT * FROM salary =====")
+    assert capsys.readouterr().out == ""
+
+
+def test_llm_log_prints_when_enabled(capsys, monkeypatch):
+    from fireeyeaud_agent.agent.graph import log_llm
+    from fireeyeaud_agent.config.settings import settings
+
+    monkeypatch.setattr(settings, "llm_debug_log", True)
+    log_llm("hello")
+    assert "hello" in capsys.readouterr().out
