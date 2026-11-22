@@ -14,6 +14,7 @@ from .base import dump_artifact
 
 DEFAULT_LIMIT = 200
 MAX_LIMIT = 10000
+ARTIFACT_MAX_ROWS = 5000
 
 
 def sql_query(root: Path, params: dict[str, Any]) -> dict[str, Any]:
@@ -91,9 +92,33 @@ def sql_query(root: Path, params: dict[str, Any]) -> dict[str, Any]:
         "truncated": truncated,
     }
     if truncated:
+        # 回读用的 artifact 不能只存「已截断的当前页」，否则模型无从展开。
+        artifact_rows = [list(r) for r in rows]
+        artifact_truncated = True
+        db = None
+        try:
+            db = Database(Path(root) / ".fireeye" / "workspace.duckdb")
+            cursor = db.query(
+                f"SELECT * FROM ({text}) AS _sub LIMIT {ARTIFACT_MAX_ROWS}"
+            )
+            fetched = [list(r) for r in cursor.fetchall()]
+            artifact_rows = fetched
+            artifact_truncated = len(fetched) >= ARTIFACT_MAX_ROWS
+        except Exception:
+            # 二次查询失败时退回当前页，不能让「落盘」把查询本身变成失败。
+            pass
+        finally:
+            if db is not None:
+                db.close()
         result["artifactRef"] = dump_artifact(
             Path(root),
             f"query_{uuid.uuid4().hex[:8]}",
-            {"columns": columns, "rows": [list(r) for r in rows]},
+            {
+                "columns": columns,
+                "rows": artifact_rows,
+                "savedRows": len(artifact_rows),
+                "artifactTruncated": artifact_truncated,
+                "sql": text,
+            },
         )
     return result

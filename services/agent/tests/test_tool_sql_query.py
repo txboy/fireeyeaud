@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from fireeyeaud_agent.errors import ApiError
@@ -30,6 +32,27 @@ def test_sql_query_truncates(tmp_path):
     assert out["rowCount"] == 1
     assert out["truncated"] is True
     assert out["artifactRef"].startswith("artifacts/")
+
+
+def test_artifact_contains_more_rows_than_page(tmp_path):
+    fe = tmp_path / ".fireeye"
+    fe.mkdir()
+    db = Database(fe / "workspace.duckdb")
+    db.create_table_from_rows(
+        "src_ds1_big",
+        ["__row_id", "a"],
+        [[str(i), str(i)] for i in range(50)],
+    )
+    db.close()
+
+    out = sql_query(tmp_path, {"sql": "SELECT a FROM src_ds1_big", "limit": 5})
+    assert out["rowCount"] == 5
+    assert out["truncated"] is True
+
+    payload = json.loads((fe / out["artifactRef"]).read_text(encoding="utf-8"))
+    assert len(payload["rows"]) > 5
+    assert payload["savedRows"] == len(payload["rows"])
+    assert payload["artifactTruncated"] in (True, False)
 
 
 def test_sql_query_rejects_write(tmp_path):
