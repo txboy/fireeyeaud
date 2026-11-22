@@ -100,6 +100,18 @@ def append_evidence(
     return append_event(path, event)
 
 
+def load_session_tool_trace(
+    root: Path, session_id: str, *, limit: int = 40
+) -> list[dict[str, Any]]:
+    """取某会话最近的工具结果事件（新→旧截取后再反转）。"""
+    items = [
+        event
+        for event in read_events(evidence_path(Path(root)))
+        if event.get("sessionId") == session_id and event.get("step") == "tool_result"
+    ]
+    return items[-limit:]
+
+
 def append_manual_evidence(
     root: Path,
     *,
