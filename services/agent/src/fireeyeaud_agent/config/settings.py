@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     turn_timeout_seconds: int = 300
     tool_timeout_seconds: int = 60
     tool_concurrency: int = 4
+    # 单条工具结果进入模型上下文的字符上限；超出则落 artifact 并只回传预览。
+    tool_output_max_chars: int = 12000
     llm_max_attempts: int = 3
     llm_retry_base_seconds: float = 0.5
     # 附件读取：单文件/单轮字符上限，以及单个文件转写的最长等待秒数。

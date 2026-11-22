@@ -36,6 +36,7 @@ from ..util import now_iso
 from .compaction import is_context_overflow, prepare, summary_message
 from .tool_calls import call_id, tool_error_payload
 from .retry import is_retryable, retry_delay
+from .tool_output import render_tool_result
 from .token_budget import estimate_messages_tokens, estimate_tokens, resolve_context_window
 from .prompts import system_prompt
 from .context_snapshot import build_snapshot
@@ -285,8 +286,15 @@ def _summarize(result: Any) -> str:
     return json.dumps(result, ensure_ascii=False, default=str)[:200]
 
 
-def _tool_message_content(result: Any) -> str:
-    return json.dumps(result, ensure_ascii=False, default=str)
+def _tool_message_content(
+    result: Any, *, tool: str, root: Path | None
+) -> str:
+    return render_tool_result(
+        result,
+        tool=tool,
+        root=root,
+        max_chars=settings.tool_output_max_chars,
+    )
 
 
 def _allowed_ids(items: list[dict[str, Any]], selected: Any) -> set[str]:
@@ -752,7 +760,7 @@ async def run_agent(
                 )
                 messages.append(
                     ToolMessage(
-                        content=_tool_message_content(result),
+                        content=_tool_message_content(result, tool=name, root=root),
                         tool_call_id=call_id_value,
                     )
                 )
