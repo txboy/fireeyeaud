@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 import pytest
 from fake_model import FakeChatModel
@@ -223,6 +224,46 @@ async def test_two_reads_get_distinct_call_ids(tmp_path):
         results[0]["data"]["callId"],
         results[1]["data"]["callId"],
     }
+
+
+class _ReadMissingModel:
+    def __init__(self):
+        self.calls = []
+
+    def bind_tools(self, _tools):
+        return self
+
+    async def astream(self, messages):
+        self.calls.append(list(messages))
+        if len(self.calls) == 1:
+            yield AIMessageChunk(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "read_file",
+                        "args": {"path": "不存在.md"},
+                        "id": "call_missing",
+                    }
+                ],
+            )
+        else:
+            yield AIMessageChunk(content="已处理错误")
+
+
+@pytest.mark.asyncio
+async def test_tool_error_keeps_code_and_params(tmp_path):
+    _seed(tmp_path)
+    model = _ReadMissingModel()
+    events = [
+        e async for e in run_agent(tmp_path, "s_1", "读文件", "zh-CN", model=model)
+    ]
+    result = next(e for e in events if e["type"] == "tool_result")
+    assert result["data"]["ok"] is False
+    tool_msg = next(m for m in model.calls[1] if isinstance(m, ToolMessage))
+    payload = json.loads(tool_msg.content)
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "E_FILE_NOT_FOUND"
+    assert payload["error"]["params"]["path"] == "不存在.md"
 
 
 class _FileReadingModel:
