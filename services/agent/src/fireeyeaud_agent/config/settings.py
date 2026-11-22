@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     turn_timeout_seconds: int = 300
     tool_timeout_seconds: int = 60
     tool_concurrency: int = 4
+    llm_max_attempts: int = 3
+    llm_retry_base_seconds: float = 0.5
     # 附件读取：单文件/单轮字符上限，以及单个文件转写的最长等待秒数。
     attachment_max_chars: int = 20_000
     attachment_total_chars: int = 60_000

@@ -35,6 +35,7 @@ from ..tools.registry import build_langchain_tools, build_tool_dict
 from ..util import now_iso
 from .compaction import is_context_overflow, prepare, summary_message
 from .tool_calls import call_id, tool_error_payload
+from .retry import is_retryable, retry_delay
 from .token_budget import estimate_messages_tokens, estimate_tokens, resolve_context_window
 from .prompts import system_prompt
 from .context_snapshot import build_snapshot
@@ -206,6 +207,49 @@ async def _run_tool_batch(
             return await run_one(item)
 
     return list(await asyncio.gather(*(_limited(item) for item in items)))
+
+
+class _StreamOutcome:
+    def __init__(self) -> None:
+        self.ai: AIMessage | None = None
+        self.emitted = False
+
+
+async def _stream_model(
+    bound: Any,
+    messages: list[BaseMessage],
+    event: Any,
+    *,
+    step: int,
+    outcome: _StreamOutcome,
+) -> AsyncIterator[dict[str, Any]]:
+    """流式调用模型；仅在“尚未输出正文”时重试。"""
+    attempt = 0
+    while True:
+        attempt += 1
+        outcome.ai = None
+        outcome.emitted = False
+        try:
+            async for chunk in bound.astream(messages):
+                outcome.ai = chunk if outcome.ai is None else outcome.ai + chunk
+                piece = chunk.content
+                if isinstance(piece, str) and piece:
+                    outcome.emitted = True
+                    yield event("token", {"delta": piece})
+            return
+        except Exception as exc:
+            if (
+                outcome.emitted
+                or not is_retryable(exc)
+                or attempt >= settings.llm_max_attempts
+            ):
+                raise
+            # 丢弃本次的部分 AI，避免和重试结果拼接。
+            outcome.ai = None
+            yield event("status", {"phase": "retrying", "attempt": attempt})
+            await asyncio.sleep(
+                retry_delay(attempt, base=settings.llm_retry_base_seconds)
+            )
 
 
 def _summarize(result: Any) -> str:
@@ -475,16 +519,15 @@ async def run_agent(
             yield event("status", {"phase": "executing"})
             # 每次发给大模型的参数打印到 sidecar 控制台（Electron 主进程日志）。
             print(format_llm_request(messages, step=step), flush=True)
-            ai: AIMessage | None = None
+            outcome = _StreamOutcome()
             try:
                 # 流式调用：内容边生成边推送 token，避免长时间黑屏。
                 # 用整体超时兜底：服务端持续发送空块（推理阶段）时，HTTP 读超时不会触发。
                 async with asyncio.timeout(settings.turn_timeout_seconds):
-                    async for chunk in bound.astream(messages):
-                        ai = chunk if ai is None else ai + chunk
-                        piece = chunk.content
-                        if isinstance(piece, str) and piece:
-                            yield event("token", {"delta": piece})
+                    async for ev in _stream_model(
+                        bound, messages, event, step=step, outcome=outcome
+                    ):
+                        yield ev
             except TimeoutError:
                 print(
                     f"===== LLM timeout (step {step}) after "
@@ -575,6 +618,7 @@ async def run_agent(
                 yield event("done", {"usage": _usage()})
                 return
 
+            ai = outcome.ai
             if ai is None:
                 yield event(
                     "error",
