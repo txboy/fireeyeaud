@@ -36,7 +36,7 @@ from ..util import now_iso
 from .compaction import is_context_overflow, prepare, summary_message
 from .tool_calls import call_id, tool_error_payload
 from .retry import is_retryable, retry_delay
-from .tool_output import render_tool_result
+from .tool_output import prune_tool_messages, render_tool_result
 from .token_budget import estimate_messages_tokens, estimate_tokens, resolve_context_window
 from .prompts import system_prompt
 from .context_snapshot import build_snapshot
@@ -571,6 +571,13 @@ async def run_agent(
                     )
                     from ..store.sessions import get_summary
 
+                    pruned = prune_tool_messages(
+                        turn_extra, keep_last=2, max_chars=800
+                    )
+                    if pruned:
+                        yield event(
+                            "status", {"phase": "pruning", "pruned": pruned}
+                        )
                     try:
                         forced = await prepare(
                             fe,

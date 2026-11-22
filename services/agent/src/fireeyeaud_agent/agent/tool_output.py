@@ -50,3 +50,31 @@ def render_tool_result(
         ),
     }
     return json.dumps(payload, ensure_ascii=False, default=str)
+
+
+def prune_tool_messages(
+    messages: list[Any], *, keep_last: int = 4, max_chars: int = 600
+) -> int:
+    """把较早的 ToolMessage 压缩成「已裁剪 + 摘要头尾」，返回实际裁剪条数。
+
+    只动工具观察，不动用户/AI 文本；最近 keep_last 条保持原样。
+    """
+    from langchain_core.messages import ToolMessage
+
+    tool_indexes = [
+        i for i, m in enumerate(messages) if isinstance(m, ToolMessage)
+    ]
+    targets = tool_indexes[: max(0, len(tool_indexes) - keep_last)]
+    changed = 0
+    for i in targets:
+        content = messages[i].content
+        if not isinstance(content, str) or len(content) <= max_chars:
+            continue
+        head = content[: int(max_chars * 0.7)]
+        tail = content[-int(max_chars * 0.2) :]
+        messages[i] = ToolMessage(
+            content=f"{head}\n…[已裁剪 {len(content)} 字符]…\n{tail}",
+            tool_call_id=messages[i].tool_call_id,
+        )
+        changed += 1
+    return changed

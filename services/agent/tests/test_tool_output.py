@@ -28,3 +28,24 @@ def test_truncated_payload_keeps_head_and_tail():
     payload = json.loads(text)
     assert "HEAD" in payload["head"]
     assert "TAIL" in payload["tail"]
+
+
+def test_prune_keeps_recent_tool_messages_and_shrinks_old_ones():
+    from langchain_core.messages import AIMessage, ToolMessage
+
+    from fireeyeaud_agent.agent.tool_output import prune_tool_messages
+
+    big = "x" * 5000
+    messages = [
+        AIMessage(content="", tool_calls=[{"name": "sql_query", "args": {}, "id": "1"}]),
+        ToolMessage(content=big, tool_call_id="1"),
+        AIMessage(content="", tool_calls=[{"name": "sql_query", "args": {}, "id": "2"}]),
+        ToolMessage(content=big, tool_call_id="2"),
+        AIMessage(content="", tool_calls=[{"name": "sql_query", "args": {}, "id": "3"}]),
+        ToolMessage(content=big, tool_call_id="3"),
+    ]
+    changed = prune_tool_messages(messages, keep_last=1, max_chars=500)
+    assert changed >= 1
+    assert len(messages[1].content) < 1000
+    assert messages[5].content == big
+    assert "已裁剪" in messages[1].content
