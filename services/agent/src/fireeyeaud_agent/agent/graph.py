@@ -417,6 +417,7 @@ async def run_agent(
             custom_prompt,
             mcp_servers=mcp_tools.servers if mcp_tools else None,
             skill_catalog=skill_catalog,
+            tools=tools,
         )
         messages: list[BaseMessage] = [SystemMessage(content=system_text)]
 
