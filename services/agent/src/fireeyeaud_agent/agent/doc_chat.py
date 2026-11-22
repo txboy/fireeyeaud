@@ -10,7 +10,8 @@ from typing import Any, AsyncIterator, Callable
 
 from langchain_core.messages import AIMessage, ToolMessage
 
-from ..errors import ApiError
+from ..config.settings import settings
+from .tool_calls import call_id, tool_error_payload
 
 MAX_STEPS = 12
 
@@ -35,22 +36,40 @@ async def run_tool_loop(
     bound = model.bind_tools(list(tool_map.values())) if hasattr(model, "bind_tools") else model
     messages = list(messages)
 
-    for _step in range(max_steps):
+    for step in range(max_steps):
         merged: Any = None
-        async for chunk in bound.astream(messages):
-            if merged is None:
-                merged = chunk
-            else:
-                merged = merged + chunk
-            piece = chunk.content
-            if isinstance(piece, str) and piece:
-                yield {"event": "delta", "data": {"text": piece}}
+        try:
+            async with asyncio.timeout(settings.turn_timeout_seconds):
+                async for chunk in bound.astream(messages):
+                    if merged is None:
+                        merged = chunk
+                    else:
+                        merged = merged + chunk
+                    piece = chunk.content
+                    if isinstance(piece, str) and piece:
+                        yield {"event": "delta", "data": {"text": piece}}
+        except TimeoutError:
+            yield {
+                "event": "error",
+                "data": {
+                    "code": "E_LLM_TIMEOUT",
+                    "messageKey": "error.llmTimeout",
+                    "params": {},
+                },
+            }
+            yield {"event": "done", "data": {}}
+            return
 
         if merged is None:
             break
 
         content = merged.content if isinstance(merged.content, str) else ""
         tool_calls = list(getattr(merged, "tool_calls", []) or [])
+        calls = []
+        for index, call in enumerate(tool_calls):
+            resolved = call_id(call, step=step, index=index)
+            call["id"] = resolved
+            calls.append((index, call, resolved))
         messages.append(AIMessage(content=content, tool_calls=tool_calls))
 
         if not tool_calls:
@@ -62,29 +81,25 @@ async def run_tool_loop(
             on_assistant_text(content)
 
         mutated = False
-        for call in tool_calls:
+        for index, call, call_id_value in calls:
             name = str(call.get("name") or "")
             args = call.get("args") or {}
             tool = tool_map.get(name)
             if tool is None:
-                result: Any = {"ok": False, "error": f"unknown tool {name}"}
+                result: Any = tool_error_payload(
+                    ValueError(f"unknown tool {name}"), tool=name
+                )
             else:
                 try:
                     result = await asyncio.to_thread(tool.invoke, args)
-                except ApiError as exc:
-                    result = {
-                        "ok": False,
-                        "code": exc.code,
-                        "messageKey": exc.message_key,
-                    }
-                except Exception as exc:  # 工具失败回给模型修正
-                    result = {"ok": False, "error": str(exc)[:500]}
+                except Exception as exc:
+                    result = tool_error_payload(exc, tool=name)
             if not isinstance(result, str):
                 result = dump(result)
             messages.append(
                 ToolMessage(
                     content=result,
-                    tool_call_id=str(call.get("id") or name),
+                    tool_call_id=call_id_value,
                 )
             )
             yield {
