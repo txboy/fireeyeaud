@@ -954,6 +954,8 @@ export default {
     /** 知识库检索的查询为空。 */
     emptyQuery: '请输入检索内容',
     fileNotFound: '文件不存在或不可读',
+    artifactInvalid: '结果引用无效或不在工作区内',
+    artifactNotFound: '结果文件不存在或已被清理',
     fileType: '文件类型不支持（仅接受 .docx）',
     fileTooLarge: '文件过大（单个模板不超过 20MB）',
     fileRequired: '请先选择文件',

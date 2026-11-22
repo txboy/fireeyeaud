@@ -19,6 +19,7 @@ from .kb_search import kb_search
 from .list_files import list_files
 from .load_skill import load_skill
 from .parse_ledger import parse_ledger
+from .read_artifact import read_artifact
 from .read_file import read_file
 from .run_rule import run_rule
 from .search_files import search_files
@@ -110,6 +111,14 @@ class LoadSkillArgs(BaseModel):
     skillId: str = Field(description="技能 id，如 sk_3（见系统提示词中的可用技能列表）")
 
 
+class ReadArtifactArgs(BaseModel):
+    artifactRef: str = Field(
+        description="工具结果里返回的 artifactRef，如 artifacts/query_ab12.json"
+    )
+    offset: int | None = Field(default=0, description="起始行（从 0 开始）")
+    limit: int | None = Field(default=100, description="返回行数上限")
+
+
 _SPECS: list[tuple[str, str, ToolFn, type[BaseModel]]] = [
     (
         "describe_source",
@@ -158,6 +167,12 @@ _SPECS: list[tuple[str, str, ToolFn, type[BaseModel]]] = [
         "获取某个可用技能的完整方法/视角正文（技能 id 见系统提示词中的可用技能列表）。",
         load_skill,
         LoadSkillArgs,
+    ),
+    (
+        "read_artifact",
+        "按页回读之前工具落盘的大型结果（artifactRef），避免重复执行同一查询。",
+        read_artifact,
+        ReadArtifactArgs,
     ),
 ]
 
