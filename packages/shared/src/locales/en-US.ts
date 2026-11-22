@@ -953,7 +953,6 @@ export default {
     emptyQuery: 'Enter something to search for',
     fileNotFound: 'File not found or unreadable',
     artifactInvalid: 'Invalid artifact reference or path outside the workspace.',
-    artifactNotFound: 'Artifact not found or already cleaned up.',
     fileType: 'Unsupported file type (only .docx)',
     fileTooLarge: 'File too large (max 20MB per template)',
     fileRequired: 'Choose a file first',
