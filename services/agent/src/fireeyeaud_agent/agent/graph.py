@@ -225,6 +225,7 @@ async def _stream_model(
     *,
     step: int,
     outcome: _StreamOutcome,
+    usage: dict[str, int],
 ) -> AsyncIterator[dict[str, Any]]:
     """流式调用模型；仅在“尚未输出正文”时重试。"""
     attempt = 0
@@ -235,6 +236,18 @@ async def _stream_model(
         try:
             async for chunk in bound.astream(messages):
                 outcome.ai = chunk if outcome.ai is None else outcome.ai + chunk
+                chunk_usage = getattr(chunk, "usage_metadata", None)
+                if chunk_usage:
+                    usage["promptTokens"] = int(
+                        chunk_usage.get("input_tokens") or 0
+                    )
+                    usage["completionTokens"] = int(
+                        chunk_usage.get("output_tokens") or 0
+                    )
+                    details = chunk_usage.get("input_token_details") or {}
+                    usage["cachedTokens"] = int(
+                        details.get("cache_read") or 0
+                    )
                 piece = chunk.content
                 if isinstance(piece, str) and piece:
                     outcome.emitted = True
@@ -488,13 +501,17 @@ async def run_agent(
         human_index = len(messages) - 1
 
         def _usage() -> dict[str, Any]:
-            """done 事件的用量：最近估算总 token 与当前模型窗口（方案 §4.5）。"""
-            return {
+            """done 事件的用量：最近估算总 token + provider 实测值（方案 §4.5）。"""
+            data: dict[str, Any] = {
                 "tokensEstimated": estimate_messages_tokens(messages),
                 "contextWindow": resolve_context_window(
                     profile, default=settings.default_context_window
                 ),
             }
+            if usage_actual:
+                data.update(usage_actual)
+                data["tokensMeasured"] = True
+            return data
 
         evidence_ids: list[str] = []
 
@@ -521,6 +538,7 @@ async def run_agent(
 
         step = 0
         overflow_retried = False
+        usage_actual: dict[str, int] = {}
         # 本轮已追加的 AI / 工具消息：溢出重试重建 messages 时保留，避免重复执行工具。
         turn_extra: list[BaseMessage] = []
         while True:
@@ -538,7 +556,12 @@ async def run_agent(
                 # 用整体超时兜底：服务端持续发送空块（推理阶段）时，HTTP 读超时不会触发。
                 async with asyncio.timeout(settings.turn_timeout_seconds):
                     async for ev in _stream_model(
-                        bound, messages, event, step=step, outcome=outcome
+                        bound,
+                        messages,
+                        event,
+                        step=step,
+                        outcome=outcome,
+                        usage=usage_actual,
                     ):
                         yield ev
             except TimeoutError:

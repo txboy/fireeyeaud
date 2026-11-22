@@ -319,3 +319,43 @@ async def test_busy_stream_emits_error_event(tmp_path, monkeypatch):
     assert events[0]["type"] == "error"
     assert events[0]["data"]["messageKey"] == "error.sessionBusy"
     assert events[-1]["type"] == "done"
+
+async def test_done_event_reports_provider_usage(tmp_path, monkeypatch):
+    fake = FakeChatModel(
+        messages=iter(
+            [
+                AIMessage(
+                    content="好的",
+                    usage_metadata={
+                        "input_tokens": 120,
+                        "output_tokens": 8,
+                        "total_tokens": 128,
+                        "input_token_details": {"cache_read": 64},
+                    },
+                )
+            ]
+        )
+    )
+    monkeypatch.setattr(models_mod, "build_chat_model", lambda *_a, **_k: fake)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        await client.post("/api/v1/workspaces/open", json={"path": str(tmp_path)})
+        created = await client.post("/api/v1/sessions", json={"title": "t"})
+        session_id = created.json()["id"]
+
+        async with client.stream(
+            "POST",
+            f"/api/v1/sessions/{session_id}/chat",
+            json={"message": "你好", "locale": "zh-CN"},
+        ) as response:
+            body = "".join([chunk async for chunk in response.aiter_text()])
+
+    events = _parse_sse(body)
+    done = [e for e in events if e["type"] == "done"][-1]
+    usage = done["data"]["usage"]
+    assert usage["promptTokens"] == 120
+    assert usage["completionTokens"] == 8
+    assert usage["cachedTokens"] == 64
+    assert usage["tokensMeasured"] is True
+    assert usage["tokensEstimated"] > 0

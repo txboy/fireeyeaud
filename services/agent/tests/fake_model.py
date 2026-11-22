@@ -29,5 +29,6 @@ class FakeChatModel(GenericFakeChatModel):
             content=message.content or "",
             tool_calls=list(message.tool_calls or []),
             additional_kwargs=dict(message.additional_kwargs or {}),
+            usage_metadata=getattr(message, "usage_metadata", None),
         )
         yield ChatGenerationChunk(message=chunk)
