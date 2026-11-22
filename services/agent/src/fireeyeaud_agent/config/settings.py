@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     max_steps: int = 12
     turn_timeout_seconds: int = 300
     tool_timeout_seconds: int = 60
+    tool_concurrency: int = 4
     # 附件读取：单文件/单轮字符上限，以及单个文件转写的最长等待秒数。
     attachment_max_chars: int = 20_000
     attachment_total_chars: int = 60_000

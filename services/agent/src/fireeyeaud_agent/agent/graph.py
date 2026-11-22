@@ -34,6 +34,7 @@ from ..store.findings import create_finding
 from ..tools.registry import build_langchain_tools, build_tool_dict
 from ..util import now_iso
 from .compaction import is_context_overflow, prepare, summary_message
+from .tool_calls import call_id, tool_error_payload
 from .token_budget import estimate_messages_tokens, estimate_tokens, resolve_context_window
 from .prompts import system_prompt
 from .context_snapshot import build_snapshot
@@ -173,6 +174,38 @@ async def _run_tool(
             "error.toolTimeout",
             {"tool": name},
         ) from exc
+
+
+# 只并行执行无副作用、且不会争用 DuckDB 写连接的工具。
+# sql_query / run_rule / parse_ledger 仍串行，避免同一 DuckDB 文件的连接竞争。
+_PARALLEL_SAFE_TOOLS = {
+    "describe_source",
+    "list_files",
+    "search_files",
+    "read_file",
+    "kb_search",
+    "load_skill",
+}
+
+
+async def _run_tool_batch(
+    items: list[Any],
+    run_one: Any,
+    *,
+    concurrency: int,
+    parallel: bool,
+) -> list[Any]:
+    """按顺序返回结果；parallel=True 时用信号量限制并发。"""
+    if not parallel or len(items) < 2:
+        return [await run_one(item) for item in items]
+
+    semaphore = asyncio.Semaphore(max(1, int(concurrency)))
+
+    async def _limited(item: Any) -> Any:
+        async with semaphore:
+            return await run_one(item)
+
+    return list(await asyncio.gather(*(_limited(item) for item in items)))
 
 
 def _summarize(result: Any) -> str:
@@ -580,11 +613,17 @@ async def run_agent(
 
             messages.append(ai)
             turn_extra.append(ai)
-            for call in tool_calls:
-                call_id = call.get("id") or f"call_{step}"
-                name = call.get("name", "")
+            # 统一补齐 call id（provider 缺失时用 step+index），确保 ToolMessage 与
+            # assistant 的 tool_calls 一一对应。
+            calls = []
+            for index, call in enumerate(tool_calls):
+                resolved = call_id(call, step=step, index=index)
+                call["id"] = resolved
+                calls.append((index, call, resolved))
+
+            for _index, call, _call_id in calls:
+                name = str(call.get("name") or "")
                 args = call.get("args") or {}
-                started = time.monotonic()
                 append_evidence(
                     root,
                     session_id=session_id,
@@ -593,17 +632,60 @@ async def run_agent(
                     params=args,
                     lang=locale or "zh-CN",
                 )
-                yield event("tool_call", {"callId": call_id, "tool": name, "params": args})
+                yield event(
+                    "tool_call", {"callId": _call_id, "tool": name, "params": args}
+                )
+
+            parallel = all(
+                str(call.get("name") or "") in _PARALLEL_SAFE_TOOLS
+                for _i, call, _cid in calls
+            )
+
+            async def _one(item):
+                index, call, call_id_value = item
+                name = str(call.get("name") or "")
+                args = call.get("args") or {}
+                started = time.monotonic()
                 try:
                     result = await execute_tool(name, args)
                     ok = True
                     summary = _summarize(result)
-                    if name == "report_finding":
-                        yield event("finding", {"id": result["id"], "event": "created"})
-                except Exception as exc:  # 工具失败回传摘要
+                except Exception as exc:
                     ok = False
-                    result = {"error": str(exc)}
-                    summary = str(exc)
+                    result = tool_error_payload(exc, tool=name)
+                    summary = str(
+                        result["error"].get("messageKey") or result["error"]
+                    )
+                return (
+                    index,
+                    call,
+                    call_id_value,
+                    result,
+                    ok,
+                    summary,
+                    started,
+                )
+
+            outcomes = await _run_tool_batch(
+                calls,
+                _one,
+                concurrency=settings.tool_concurrency,
+                parallel=parallel,
+            )
+
+            for (
+                _index,
+                call,
+                call_id_value,
+                result,
+                ok,
+                summary,
+                started,
+            ) in outcomes:
+                name = str(call.get("name") or "")
+                args = call.get("args") or {}
+                if name == "report_finding" and ok:
+                    yield event("finding", {"id": result["id"], "event": "created"})
                 recorded = append_evidence(
                     root,
                     session_id=session_id,
@@ -617,10 +699,14 @@ async def run_agent(
                 )
                 evidence_ids.append(recorded["id"])
                 yield event(
-                    "tool_result", {"callId": call_id, "summary": summary, "ok": ok}
+                    "tool_result",
+                    {"callId": call_id_value, "summary": summary, "ok": ok},
                 )
                 messages.append(
-                    ToolMessage(content=_tool_message_content(result), tool_call_id=call_id)
+                    ToolMessage(
+                        content=_tool_message_content(result),
+                        tool_call_id=call_id_value,
+                    )
                 )
                 turn_extra.append(messages[-1])
             yield event("status", {"phase": "reflecting"})

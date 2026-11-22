@@ -147,6 +147,84 @@ async def test_attachment_first_step_image_then_text(tmp_path):
     )
 
 
+@pytest.mark.asyncio
+async def test_tool_batch_runs_concurrently():
+    from fireeyeaud_agent.agent.graph import _run_tool_batch
+
+    started = asyncio.Event()
+    seen = {"count": 0}
+
+    async def run_one(item):
+        seen["count"] += 1
+        if seen["count"] == 2:
+            started.set()
+        await asyncio.wait_for(started.wait(), timeout=0.5)
+        return item * 10
+
+    out = await asyncio.wait_for(
+        _run_tool_batch([1, 2], run_one, concurrency=4, parallel=True),
+        timeout=1.0,
+    )
+    assert out == [10, 20]
+
+
+@pytest.mark.asyncio
+async def test_tool_batch_is_sequential_when_not_parallel():
+    from fireeyeaud_agent.agent.graph import _run_tool_batch
+
+    order = []
+
+    async def run_one(item):
+        order.append(item)
+        return item
+
+    out = await _run_tool_batch([1, 2, 3], run_one, concurrency=4, parallel=False)
+    assert out == [1, 2, 3]
+    assert order == [1, 2, 3]
+
+
+class _TwoReadModel:
+    def __init__(self, path_a, path_b):
+        self.path_a = path_a
+        self.path_b = path_b
+        self.calls = []
+
+    def bind_tools(self, _tools):
+        return self
+
+    async def astream(self, messages):
+        self.calls.append(list(messages))
+        if len(self.calls) == 1:
+            yield AIMessageChunk(
+                content="",
+                tool_calls=[
+                    {"name": "read_file", "args": {"path": self.path_a}, "id": None},
+                    {"name": "read_file", "args": {"path": self.path_b}, "id": None},
+                ],
+            )
+        else:
+            yield AIMessageChunk(content="完成")
+
+
+@pytest.mark.asyncio
+async def test_two_reads_get_distinct_call_ids(tmp_path):
+    _seed(tmp_path)
+    (tmp_path / "a.md").write_text("AAA", encoding="utf-8")
+    (tmp_path / "b.md").write_text("BBB", encoding="utf-8")
+    model = _TwoReadModel("a.md", "b.md")
+    events = [
+        e async for e in run_agent(tmp_path, "s_1", "读两个文件", "zh-CN", model=model)
+    ]
+    results = [e for e in events if e["type"] == "tool_result"]
+    assert len(results) == 2
+    assert results[0]["data"]["callId"] != results[1]["data"]["callId"]
+    tool_msgs = [m for m in model.calls[1] if isinstance(m, ToolMessage)]
+    assert {m.tool_call_id for m in tool_msgs} == {
+        results[0]["data"]["callId"],
+        results[1]["data"]["callId"],
+    }
+
+
 class _FileReadingModel:
     def __init__(self, path: str) -> None:
         self.path = path
