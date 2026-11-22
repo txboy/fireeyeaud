@@ -922,7 +922,7 @@ export default {
     sqlTimeout: 'Query timed out',
     toolTimeout: 'Tool execution timed out. Narrow the query or retry.',
     toolFailed: 'Tool failed: {{tool}} ({{reason}})',
-    llmUnavailable: 'Model unreachable; check the Models panel',
+    toolUnsupported: 'This model does not support tool calling; running in chat-only mode.',    llmUnavailable: 'Model unreachable; check the Models panel',
     llmAuth: 'Model authentication failed',
     llmTimeout: 'The model timed out; retry, or reduce attachments / simplify the question',
     emptyResponse: 'The model returned no answer (possibly timed out mid-reasoning); retry or switch models',

@@ -146,13 +146,15 @@ def format_llm_response(ai: AIMessage, *, step: int | None = None) -> str:
     return "\n".join(lines)
 
 
-def _maybe_bind(model: Any, tools: list[StructuredTool]) -> Any:
+def _maybe_bind(model: Any, tools: list[StructuredTool]) -> tuple[Any, bool]:
+    if not hasattr(model, "bind_tools"):
+        return model, False
     try:
-        return model.bind_tools(tools)
+        return model.bind_tools(tools), True
     except NotImplementedError:
-        return model
+        return model, False
     except Exception:  # 绑定失败则退回未绑定模型
-        return model
+        return model, False
 
 
 async def _run_tool(
@@ -377,7 +379,7 @@ async def run_agent(
         if mcp_tools is not None:
             tools.extend(mcp_tools.tools)
             tool_dict.update(mcp_tools.tool_dict)
-        bound = _maybe_bind(active_model, tools)
+        bound, tools_bound = _maybe_bind(active_model, tools)
 
         from ..store.rules import list_rules
         from ..store.skills import catalog_for, prompts_for
@@ -411,6 +413,8 @@ async def run_agent(
         messages: list[BaseMessage] = [SystemMessage(content=system_text)]
 
         yield event("status", {"phase": "planning"})
+        if not tools_bound:
+            yield event("notice", {"messageKey": "toolUnsupported"})
         if options is not None:
             yield event("context", {"options": options})
 

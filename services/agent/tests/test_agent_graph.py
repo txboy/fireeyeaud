@@ -266,6 +266,25 @@ async def test_tool_error_keeps_code_and_params(tmp_path):
     assert payload["error"]["params"]["path"] == "不存在.md"
 
 
+class _ChatOnlyModel:
+    async def astream(self, _messages):
+        yield AIMessageChunk(content="我只能聊天")
+
+
+@pytest.mark.asyncio
+async def test_model_without_bind_tools_emits_notice(tmp_path):
+    _seed(tmp_path)
+    events = [
+        e
+        async for e in run_agent(
+            tmp_path, "s_1", "你好", "zh-CN", model=_ChatOnlyModel()
+        )
+    ]
+    notice = next(e for e in events if e["type"] == "notice")
+    assert notice["data"]["messageKey"] == "toolUnsupported"
+    assert events[-1]["type"] == "done"
+
+
 class _FileReadingModel:
     def __init__(self, path: str) -> None:
         self.path = path
