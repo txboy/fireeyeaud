@@ -17,6 +17,17 @@ from fireeyeaud_agent.config.settings import settings
 from fireeyeaud_agent.store import sessions
 
 
+def test_summary_prompt_is_structured():
+    from fireeyeaud_agent.agent import compaction
+
+    assert "目标" in compaction._SUMMARY_SYSTEM_ZH
+    assert "数据" in compaction._SUMMARY_SYSTEM_ZH
+    assert "结论" in compaction._SUMMARY_SYSTEM_ZH
+    assert "待办" in compaction._SUMMARY_SYSTEM_ZH
+    assert "Goals" in compaction._SUMMARY_SYSTEM_EN
+    assert "Open" in compaction._SUMMARY_SYSTEM_EN
+
+
 @pytest.fixture(autouse=True)
 def _force_heuristic_estimator(monkeypatch):
     """固定估算器为启发式：使边界断言与后端分词器无关（估算器由 T2 单独覆盖）。"""

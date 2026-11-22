@@ -48,16 +48,22 @@ _OVERFLOW_CODES = {
 }
 
 _SUMMARY_SYSTEM_ZH = (
-    "你是审计会话的上下文压缩器。把给定的较早期对话压缩成一段简洁摘要，"
-    "保留与审计任务相关的事实：用户目标与约束、已确认的数据源/表结构、"
-    "关键口径与结论、已记录的疑点线索、未完成的待办。不要加入推测，不要寒暄，"
-    "直接输出摘要正文。"
+    "你是审计会话的上下文压缩器。把给定的较早期对话压缩成下列四段，"
+    "每段没有内容就写「无」，不要寒暄、不要推测：\n"
+    "目标：用户的目标与约束。\n"
+    "数据：已确认的数据源、表、关键列与口径。\n"
+    "结论：已确认的事实、金额、疑点编号与证据引用。\n"
+    "待办：尚未完成的步骤与用户待确认的问题。\n"
+    "只输出这四段。"
 )
 _SUMMARY_SYSTEM_EN = (
-    "You compress an audit session's earlier turns into a concise summary. "
-    "Preserve task-relevant facts: user goals and constraints, confirmed data "
-    "sources/tables, key criteria and conclusions, recorded findings, and open "
-    "threads. No speculation, no preamble — output the summary body only."
+    "You compress an audit session's earlier turns into exactly four sections. "
+    "Write 'none' for an empty section. No preamble, no speculation:\n"
+    "Goals: user objectives and constraints.\n"
+    "Data: confirmed sources, tables, key columns and definitions.\n"
+    "Findings: confirmed facts, amounts, finding ids and evidence refs.\n"
+    "Open threads: remaining steps and questions for the user.\n"
+    "Output only these four sections."
 )
 
 
