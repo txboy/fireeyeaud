@@ -1,5 +1,3 @@
-import json
-
 import pytest
 
 from fireeyeaud_agent.errors import ApiError

@@ -99,4 +99,5 @@ async def test_mode_eager_injects_all_bodies(tmp_path, monkeypatch):
     await _run(root, model)
 
     assert "普通正文" in model.system
-    assert "load_skill" not in model.system
+    # eager 模式不广告懒加载目录；工具目录里仍会列出 load_skill 这个工具名。
+    assert "可用技能（相关时用 load_skill" not in model.system

@@ -27,7 +27,7 @@ def test_build_langchain_tools(tmp_path):
     assert "kb_search" in names
     assert "run_rule" in names
     assert {"list_files", "read_file", "search_files"} <= names
-    assert len(tools) == 11
+    assert len(tools) == 12
 
 
 def test_read_file_tool_is_async(tmp_path):
