@@ -916,6 +916,7 @@ export default {
     sqlRejected: '查询被沙箱拒绝（仅允许只读）',
     sqlTimeout: '查询超时',
     toolTimeout: '工具执行超时，请缩小查询范围或重试',
+    toolFailed: '工具执行失败：{{tool}}（{{reason}}）',
     llmUnavailable: '模型不可达，请在 Models 面板检查配置',
     llmAuth: '模型鉴权失败',
     llmTimeout: '模型响应超时，请重试，或减少附件 / 简化问题',
