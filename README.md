@@ -67,9 +67,9 @@ AI 不会凭空给结论。它会先查看表结构、再写只读 SQL 去查、
 
 ### 3. 只读沙箱，改不坏你的数据
 
-所有对数据的查询都是只读的——SQL 在解析后只允许 `SELECT` / `WITH` / `EXPLAIN` / `DESCRIBE`，其他语句直接被拦截。
+所有对数据的查询都在引擎层强制只读：SQL 经 AST 校验，只允许 `SELECT` / `WITH` / `EXPLAIN` / `DESCRIBE`，并拒绝 `read_csv` / `read_parquet` 等文件函数与 `EXPLAIN ANALYZE`；工作区 DuckDB 关闭外部文件访问，外部数据库使用只读事务。
 
-**AI 手上没有写文件的工具**：它能读、能查、能检索，但改不了、删不了你的任何文件。这是工具集层面就没有的能力，不是靠提示词约束。
+内置工具集中没有修改或删除工作区文件的能力：AI 能读、能查、能检索，但改不了、删不了你的文件。MCP 工具是例外——默认只暴露只读工具，写工具需要在 Server 配置里显式开启 `permissions.allowWrite`。
 
 ### 4. 证据链：每条疑点都能追到底
 
@@ -240,6 +240,13 @@ AI 发现的疑点会出现在右侧成果区的 **疑点** 列表中，点开�
 - 程序只监听本机回环地址（`127.0.0.1`），不对外开端口。
 - 模型密钥、数据库密码、知识库密钥均用系统级加密保存在本机，不写入项目文件夹。
 - 工作区外的文件不可读写（有路径校验）。
+- SQL 查询在引擎层强制只读：AST 校验只允许 `SELECT`/`WITH`/`DESCRIBE`，
+  并拒绝 `read_csv`/`read_parquet` 等文件函数与 `EXPLAIN ANALYZE`；
+  工作区 DuckDB 关闭外部文件访问，外部数据库使用只读事务。
+- 工具结果超过上下文预算时写入 `.fireeye/artifacts/`，
+  模型只能通过 `read_artifact` 按页回读，不会把整份数据塞进上下文。
+- MCP 工具默认只暴露只读工具；写工具需要在 Server 配置中显式开启
+  `permissions.allowWrite`。
 - 数据内容本身被当作**不可信输入**处理：文件里写了“忽略之前的指令”，AI 也不会照做。
 
 ### 会发送到远端的部分（请务必知悉）
@@ -381,6 +388,7 @@ apps/desktop/release/
 | `FIREYEAUD_MODEL_API_KEY` | 空（用 `not-needed`） | 云端服务鉴权 |
 | `FIREYEAUD_MODEL_TEMPERATURE` | `0.2` | 采样温度 |
 | `FIREYEAUD_GLOBAL_DIR` | `~/.fireeye` | 全局配置目录 |
+| `FIREYEAUD_LLM_DEBUG_LOG` | `false` | 在 sidecar 控制台打印每步完整 LLM 请求/响应（含 SQL 与数据样本，排障时再开） |
 
 > Electron 二进制下载慢时可用国内镜像：
 > `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ npx electron --version`
