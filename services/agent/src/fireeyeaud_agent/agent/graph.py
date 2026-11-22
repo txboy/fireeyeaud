@@ -189,6 +189,7 @@ _PARALLEL_SAFE_TOOLS = {
     "read_file",
     "kb_search",
     "load_skill",
+    "read_artifact",
 }
 
 
