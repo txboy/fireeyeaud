@@ -6,6 +6,7 @@ from fireeyeaud_agent.store.evidence import (
     load_evidence,
     verify_evidence_chain,
 )
+from fireeyeaud_agent.store.jsonl import read_events as read_events_original
 
 
 def test_append_evidence_builds_hash_chain(tmp_path: Path) -> None:
@@ -60,3 +61,32 @@ def test_verify_detects_tampering(tmp_path: Path) -> None:
     report = verify_evidence_chain(root)
     assert report["ok"] is False
     assert report["breakAt"] == 2
+
+
+def test_append_does_not_full_scan(monkeypatch, tmp_path):
+    from fireeyeaud_agent.store import evidence as evidence_store
+    from fireeyeaud_agent.store import jsonl
+
+    def _boom(*_a, **_k):
+        raise AssertionError("append path must not read the whole JSONL")
+
+    monkeypatch.setattr(jsonl, "read_events", _boom)
+    monkeypatch.setattr(evidence_store, "read_events", _boom)
+
+    for i in range(5):
+        evidence_store.append_evidence(
+            tmp_path,
+            session_id="s_1",
+            step="tool_result",
+            tool="sql_query",
+            params={"sql": "SELECT 1"},
+            result_summary=f"{i} 行",
+            result={"rowCount": i},
+            lang="zh-CN",
+        )
+
+    events = read_events_original(evidence_store.evidence_path(tmp_path))
+    assert [e["seq"] for e in events] == [1, 2, 3, 4, 5]
+    assert events[0]["prevHash"] == ""
+    for prev, cur in zip(events, events[1:]):
+        assert cur["prevHash"] == prev["hash"]

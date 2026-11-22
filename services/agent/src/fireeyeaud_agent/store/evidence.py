@@ -9,7 +9,7 @@ from typing import Any
 
 from ..errors import ApiError
 from ..util import now_iso
-from .jsonl import append_event, next_seq, read_events
+from .jsonl import append_event, last_event, read_events
 
 _ARTIFACT_THRESHOLD = 16 * 1024
 
@@ -29,9 +29,12 @@ def compute_hash(prev_hash: str, event: dict[str, Any]) -> str:
     return f"sha256:{digest}"
 
 
-def _prev_hash(path: Path) -> str:
-    events = read_events(path)
-    return events[-1].get("hash", "") if events else ""
+def _tail(path: Path) -> tuple[int, str]:
+    """返回下一条 seq 与当前的链头哈希。"""
+    last = last_event(path)
+    if not last:
+        return 1, ""
+    return int(last.get("seq", 0)) + 1, str(last.get("hash", ""))
 
 
 def append_evidence(
@@ -56,7 +59,7 @@ def append_evidence(
 ) -> dict[str, Any]:
     root = Path(root)
     path = evidence_path(root)
-    seq = next_seq(path)
+    seq, prev_hash = _tail(path)
     ev_id = f"ev_{seq}"
 
     artifact_ref = None
@@ -82,7 +85,7 @@ def append_evidence(
         "durationMs": duration_ms,
         "tokens": tokens,
         "lang": lang,
-        "prevHash": _prev_hash(path),
+        "prevHash": prev_hash,
     }
     # 人工证据的可选字段：只在有值时写入，保持 Agent 生成的事件形状不变。
     if source != "agent":
@@ -97,7 +100,7 @@ def append_evidence(
     if note is not None:
         event["note"] = note
     event["hash"] = compute_hash(event["prevHash"], event)
-    return append_event(path, event)
+    return append_event(path, event, seq=seq)
 
 
 def load_session_tool_trace(
