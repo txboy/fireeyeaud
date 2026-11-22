@@ -313,7 +313,10 @@ npm run renderer:build   # 构建前端
 npm run agent:dev        # 单独跑 Agent 服务（固定 8765，热重载）
 npm run agent:test       # 后端测试
 npm run agent:lint       # 后端静态检查
+npm run renderer:typecheck  # 前端类型检查
 ```
+
+PR 会跑 `.github/workflows/ci.yml`：后端 `ruff` + `pytest`，前端 `typecheck` + renderer/desktop 测试 + 构建。合并前保持这些命令在本地全绿。
 
 ### 打包成 Windows 安装包
 
