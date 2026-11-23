@@ -1401,6 +1401,7 @@ git commit -m "feat(update): wire updater into main process and preload"
 **Files:**
 - Modify: `apps/renderer/src/env.d.ts`
 - Create: `apps/renderer/src/store/updates.ts`
+- Create: `apps/renderer/tests/updatesStore.test.ts`
 - Modify: `apps/renderer/src/App.tsx`
 
 **Step 1: 声明 preload 类型**
@@ -1418,7 +1419,6 @@ import type {
   SearchOptions,
   SearchResult,
   SidecarInfo,
-  UpdateErrorCode,
   UpdateResult,
   UpdateState,
 } from '@fireeyeaud/shared';
@@ -1429,11 +1429,11 @@ import type {
 ```ts
       updates: {
         getState: () => Promise<UpdateState | null>;
-        setEnabled: (enabled: boolean) => Promise<UpdateResult | null>;
-        setFeedUrl: (url: string) => Promise<UpdateResult | null>;
-        check: () => Promise<UpdateResult | null>;
-        download: () => Promise<UpdateResult | null>;
-        install: () => Promise<UpdateResult | null>;
+        setEnabled: (enabled: boolean) => Promise<UpdateResult>;
+        setFeedUrl: (url: string) => Promise<UpdateResult>;
+        check: () => Promise<UpdateResult>;
+        download: () => Promise<UpdateResult>;
+        install: () => Promise<UpdateResult>;
         onState: (callback: (state: UpdateState) => void) => () => void;
       };
 ```
@@ -1444,7 +1444,7 @@ import type {
 
 ```ts
 import { create } from 'zustand';
-import type { UpdateErrorCode, UpdateState } from '@fireeyeaud/shared';
+import type { UpdateErrorCode, UpdateResult, UpdateState } from '@fireeyeaud/shared';
 
 const initialState: UpdateState = {
   enabled: true,
@@ -1457,8 +1457,18 @@ const initialState: UpdateState = {
   error: null,
 };
 
+/** 主进程通过 preload 暴露的更新接口；工厂依赖它以便单测注入。 */
+export interface UpdatesBridge {
+  getState: () => Promise<UpdateState | null>;
+  setEnabled: (enabled: boolean) => Promise<UpdateResult>;
+  setFeedUrl: (url: string) => Promise<UpdateResult>;
+  check: () => Promise<UpdateResult>;
+  download: () => Promise<UpdateResult>;
+  install: () => Promise<UpdateResult>;
+  onState: (callback: (state: UpdateState) => void) => () => void;
+}
+
 interface UpdatesStore extends UpdateState {
-  ready: boolean;
   init: () => Promise<void>;
   setEnabled: (enabled: boolean) => Promise<void>;
   setFeedUrl: (feedUrl: string) => Promise<{ ok: boolean; error?: UpdateErrorCode }>;
@@ -1467,45 +1477,90 @@ interface UpdatesStore extends UpdateState {
   install: () => Promise<void>;
 }
 
-let subscribed = false;
-
 /** 主进程负责检查/下载；这里只镜像状态并转发命令。 */
-export const useUpdatesStore = create<UpdatesStore>((set) => ({
-  ...initialState,
-  ready: false,
-  init: async () => {
-    const api = window.fireeyeaud?.updates;
-    if (!api || subscribed) return;
-    subscribed = true;
-    const state = await api.getState();
-    if (state) set({ ...state, ready: true });
-    api.onState((next) => set({ ...next, ready: true }));
-  },
-  setEnabled: async (enabled) => {
-    const result = await window.fireeyeaud?.updates?.setEnabled(enabled);
-    if (result?.state) set(result.state);
-  },
-  setFeedUrl: async (feedUrl) => {
-    const result = await window.fireeyeaud?.updates?.setFeedUrl(feedUrl);
-    if (result?.state) set(result.state);
-    return { ok: Boolean(result?.ok), error: result?.error };
-  },
-  check: async () => {
-    const result = await window.fireeyeaud?.updates?.check();
-    if (result?.state) set(result.state);
-  },
-  download: async () => {
-    const result = await window.fireeyeaud?.updates?.download();
-    if (result?.state) set(result.state);
-  },
-  install: async () => {
-    try {
-      await window.fireeyeaud?.updates?.install();
-    } catch {
-      // 主进程退出或 IPC 中断时 Promise 可能 reject；吞掉以避免未处理的拒绝。
-    }
-  },
-}));
+export function createUpdatesStore(api: UpdatesBridge | undefined) {
+  let subscribed = false;
+  let unsubscribe: (() => void) | null = null;
+
+  const store = create<UpdatesStore>((set) => {
+    /** 统一吞掉 IPC 拒绝并镜像成功返回的状态。 */
+    const apply = async (call: () => Promise<UpdateResult>) => {
+      try {
+        const result = await call();
+        if (result?.state) set(result.state);
+        return result;
+      } catch (err) {
+        console.error('[update] update command failed', err);
+        return null;
+      }
+    };
+
+    return {
+      ...initialState,
+
+      init: async () => {
+        if (!api || subscribed) return;
+        subscribed = true;
+        let eventSeen = false;
+        // 先订阅再取快照：期间的推送会置位 eventSeen，避免旧快照覆盖新事件。
+        unsubscribe = api.onState((next) => {
+          eventSeen = true;
+          set(next);
+        });
+        try {
+          const state = await api.getState();
+          if (state && !eventSeen) set(state);
+        } catch (err) {
+          console.error('[update] failed to read update state', err);
+          unsubscribe?.();
+          unsubscribe = null;
+          subscribed = false;
+        }
+      },
+
+      setEnabled: async (enabled) => {
+        if (!api) return;
+        await apply(() => api.setEnabled(enabled));
+      },
+
+      setFeedUrl: async (feedUrl) => {
+        if (!api) return { ok: false };
+        const result = await apply(() => api.setFeedUrl(feedUrl));
+        return { ok: Boolean(result?.ok), error: result?.error };
+      },
+
+      check: async () => {
+        if (!api) return;
+        await apply(() => api.check());
+      },
+
+      download: async () => {
+        if (!api) return;
+        await apply(() => api.download());
+      },
+
+      install: async () => {
+        if (!api) return;
+        await apply(() => api.install());
+      },
+    };
+  });
+
+  // HMR 替换模块时释放旧监听，避免同一渲染进程里累积订阅。
+  if (typeof import.meta.hot?.dispose === 'function') {
+    import.meta.hot.dispose(() => {
+      unsubscribe?.();
+      unsubscribe = null;
+      subscribed = false;
+    });
+  }
+
+  return store;
+}
+
+export const useUpdatesStore = createUpdatesStore(
+  typeof window === 'undefined' ? undefined : window.fireeyeaud?.updates,
+);
 ```
 
 **Step 3: 在 App 挂载时初始化**
@@ -1528,20 +1583,22 @@ import { useUpdatesStore } from './store/updates';
   }, [initUpdates]);
 ```
 
-**Step 4: 类型检查**
+**Step 4: 类型检查与渲染层单测**
 
 Run:
 
 ```powershell
 npm run renderer:typecheck
+cd apps/renderer; npm test; cd ../..
 ```
 
-Expected: PASS。
+Expected: 类型检查 PASS；`tests/*.test.ts` 全部通过（含 `updatesStore.test.ts`：快照应用、
+事件优先于迟到快照、init 失败复位可重试、命令失败吞掉、`setFeedUrl` 结果透传）。
 
 **Step 5: Commit**
 
 ```powershell
-git add packages/shared/src/types.ts apps/desktop/src/main.cjs apps/renderer/src/env.d.ts apps/renderer/src/store/updates.ts apps/renderer/src/App.tsx docs/plans/2026-11-23-auto-update.md
+git add packages/shared/src/types.ts apps/desktop/src/main.cjs apps/renderer/src/env.d.ts apps/renderer/src/store/updates.ts apps/renderer/tests/updatesStore.test.ts apps/renderer/src/App.tsx docs/plans/2026-11-23-auto-update.md
 git commit -m "feat(update): add renderer update store and normalize IPC results"
 ```
 
@@ -2039,6 +2096,7 @@ Run:
 ```powershell
 npm run desktop:test
 npm run renderer:typecheck
+cd apps/renderer; npm test; cd ../..
 npm run renderer:build
 ```
 
@@ -2047,6 +2105,7 @@ Expected:
 - `desktop:test`：除本机缺 `uvicorn` 导致的 2 个 sidecar 环境用例外全部通过；其中
   `updater.test.mjs` 36/36、`quit-flow.test.mjs` 7/7。
 - `renderer:typecheck`：无输出、退出码 0。
+- `npm test`（renderer）：`tests/*.test.ts` 全部通过，含 `updatesStore.test.ts`。
 - `renderer:build`：生成 `apps/renderer/dist/`，退出码 0。
 
 **Step 2: 打包**

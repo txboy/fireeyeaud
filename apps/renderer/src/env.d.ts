@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-import type { AppInfo, FsDeleteResult, FsEntry, FsFileContent, FsOpResult, FsWriteResult, SearchOptions, SearchResult, SidecarInfo, UpdateErrorCode, UpdateResult, UpdateState } from '@fireeyeaud/shared';
+import type { AppInfo, FsDeleteResult, FsEntry, FsFileContent, FsOpResult, FsWriteResult, SearchOptions, SearchResult, SidecarInfo, UpdateResult, UpdateState } from '@fireeyeaud/shared';
 
 declare global {
   interface Window {
@@ -64,11 +64,11 @@ declare global {
       onSidecarStatus: (callback: (info: SidecarInfo) => void) => () => void;
       updates: {
         getState: () => Promise<UpdateState | null>;
-        setEnabled: (enabled: boolean) => Promise<UpdateResult | null>;
-        setFeedUrl: (url: string) => Promise<UpdateResult | null>;
-        check: () => Promise<UpdateResult | null>;
-        download: () => Promise<UpdateResult | null>;
-        install: () => Promise<UpdateResult | null>;
+        setEnabled: (enabled: boolean) => Promise<UpdateResult>;
+        setFeedUrl: (url: string) => Promise<UpdateResult>;
+        check: () => Promise<UpdateResult>;
+        download: () => Promise<UpdateResult>;
+        install: () => Promise<UpdateResult>;
         onState: (callback: (state: UpdateState) => void) => () => void;
       };
     };
