@@ -234,6 +234,12 @@ test('非打包环境返回 dev_mode 且不发起请求', () => {
   assert.equal(state.error, 'dev_mode');
 });
 
+test('非打包环境初始状态就标记 dev_mode', () => {
+  const { controller } = makeUpdater({ isPackaged: false });
+  assert.equal(controller.getState().phase, 'idle');
+  assert.equal(controller.getState().error, 'dev_mode');
+});
+
 test('没有新版本时进入 not-available 状态', () => {
   const { autoUpdater, controller } = makeUpdater();
   controller.check();

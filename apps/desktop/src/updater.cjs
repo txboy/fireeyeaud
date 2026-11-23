@@ -122,7 +122,8 @@ function createUpdater({
     availableVersion: null,
     percent: 0,
     bytesPerSecond: 0,
-    error: null,
+    // 开发模式下一开始就给出明确状态，避免设置面板显示“尚未检查”。
+    error: isPackaged ? null : 'dev_mode',
   };
 
   function publish(patch) {

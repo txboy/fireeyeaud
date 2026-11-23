@@ -54,7 +54,7 @@
    npx electron-builder --win --publish never
    ```
 
-   也可以从仓库根跑 `npm run dist -w @fireeyeaud/desktop`，效果相同。产物在 `apps/desktop/release/`：安装包（`火眼审计助手 Setup x.y.z.exe`）、`.blockmap`、`latest.yml`。
+   也可以从仓库根跑 `npm run dist -w @fireeyeaud/desktop`；该脚本不带 `--publish` 参数，默认同样是 `never`。产物在 `apps/desktop/release/`：安装包（`火眼审计助手 Setup x.y.z.exe`）、`.blockmap`、`latest.yml`。
 
 4. 在 GitHub 创建 tag `v0.1.1` 的 Release。不要存为 draft，也不要勾选 pre-release（`releases/latest` 会跳过这两种）。上传安装包、`.blockmap`、`latest.yml` 三个文件。
 

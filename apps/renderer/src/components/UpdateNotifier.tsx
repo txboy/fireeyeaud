@@ -15,6 +15,7 @@ export function UpdateNotifier() {
   const { t } = useTranslation('settings');
   const phase = useUpdatesStore((s) => s.phase);
   const version = useUpdatesStore((s) => s.availableVersion);
+  const error = useUpdatesStore((s) => s.error);
   const download = useUpdatesStore((s) => s.download);
   const install = useUpdatesStore((s) => s.install);
   const last = useRef('');
@@ -124,7 +125,18 @@ export function UpdateNotifier() {
       notification.destroy(readyKey.current);
       readyKey.current = null;
     }
-  }, [phase, version, download, install, notification, t]);
+
+    // 下载异步失败时 available 通知已随阶段变化销毁；这里补一条错误提示，
+    // 同一版本只提示一次，详细状态仍可在设置里查看。
+    if (error === 'download_failed' && last.current !== `failed:${version}`) {
+      last.current = `failed:${version}`;
+      notification.error({
+        key: `update-failed-${version ?? 'unknown'}`,
+        message: t('updateDownloadFailed'),
+        duration: 4,
+      });
+    }
+  }, [phase, error, version, download, install, notification, t]);
 
   // 卸载时清理尚未关闭的通知；同时复位去重状态，StrictMode/HMR 重挂载后能重新提示。
   useEffect(

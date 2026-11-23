@@ -54,7 +54,7 @@ File: `%APPDATA%\fireeyeaud\update-settings.json`
    npx electron-builder --win --publish never
    ```
 
-   `npm run dist -w @fireeyeaud/desktop` from the repo root is equivalent. Output lands in `apps/desktop/release/`: the installer (`火眼审计助手 Setup x.y.z.exe`), its `.blockmap`, and `latest.yml`.
+   `npm run dist -w @fireeyeaud/desktop` from the repo root does the same build; the script passes no `--publish` flag, so it also defaults to `never`. Output lands in `apps/desktop/release/`: the installer (`火眼审计助手 Setup x.y.z.exe`), its `.blockmap`, and `latest.yml`.
 
 4. Create a GitHub Release for tag `v0.1.1`. Don't save it as a draft and don't mark it pre-release — `releases/latest` skips both. Upload the installer, the `.blockmap`, and `latest.yml`.
 

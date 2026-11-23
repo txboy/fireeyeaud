@@ -70,7 +70,13 @@ function createQuitFlow({
     if (shutdownStarted) return;
     shutdownStarted = true;
     stopWorkspaceWatch();
-    stopSidecar().then(finishQuit);
+    stopSidecar()
+      .then(finishQuit)
+      .catch((err) => {
+        // finishQuit 已做内部保护；这里兜住意外的同步异常，避免应用卡在退出中。
+        logger.error(`[quit] finish quit failed: ${err}`);
+        app.exit(0);
+      });
   }
 
   return { onBeforeQuit };

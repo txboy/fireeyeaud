@@ -531,6 +531,12 @@ test('非打包环境返回 dev_mode 且不发起请求', () => {
   assert.equal(state.error, 'dev_mode');
 });
 
+test('非打包环境初始状态就标记 dev_mode', () => {
+  const { controller } = makeUpdater({ isPackaged: false });
+  assert.equal(controller.getState().phase, 'idle');
+  assert.equal(controller.getState().error, 'dev_mode');
+});
+
 test('没有新版本时进入 not-available 状态', () => {
   const { autoUpdater, controller } = makeUpdater();
   controller.check();
@@ -882,7 +888,8 @@ function createUpdater({
     availableVersion: null,
     percent: 0,
     bytesPerSecond: 0,
-    error: null,
+    // 开发模式下一开始就给出明确状态，避免设置面板显示“尚未检查”。
+    error: isPackaged ? null : 'dev_mode',
   };
 
   function publish(patch) {
@@ -1318,7 +1325,13 @@ function createQuitFlow({
     if (shutdownStarted) return;
     shutdownStarted = true;
     stopWorkspaceWatch();
-    stopSidecar().then(finishQuit);
+    stopSidecar()
+      .then(finishQuit)
+      .catch((err) => {
+        // finishQuit 已做内部保护；这里兜住意外的同步异常，避免应用卡在退出中。
+        logger.error(`[quit] finish quit failed: ${err}`);
+        app.exit(0);
+      });
   }
 
   return { onBeforeQuit };
@@ -1919,6 +1932,7 @@ export function UpdateNotifier() {
   const { t } = useTranslation('settings');
   const phase = useUpdatesStore((s) => s.phase);
   const version = useUpdatesStore((s) => s.availableVersion);
+  const error = useUpdatesStore((s) => s.error);
   const download = useUpdatesStore((s) => s.download);
   const install = useUpdatesStore((s) => s.install);
   const last = useRef('');
@@ -2028,7 +2042,18 @@ export function UpdateNotifier() {
       notification.destroy(readyKey.current);
       readyKey.current = null;
     }
-  }, [phase, version, download, install, notification, t]);
+
+    // 下载异步失败时 available 通知已随阶段变化销毁；这里补一条错误提示，
+    // 同一版本只提示一次，详细状态仍可在设置里查看。
+    if (error === 'download_failed' && last.current !== `failed:${version}`) {
+      last.current = `failed:${version}`;
+      notification.error({
+        key: `update-failed-${version ?? 'unknown'}`,
+        message: t('updateDownloadFailed'),
+        duration: 4,
+      });
+    }
+  }, [phase, error, version, download, install, notification, t]);
 
   // 卸载时清理尚未关闭的通知；同时复位去重状态，StrictMode/HMR 重挂载后能重新提示。
   useEffect(
@@ -2053,6 +2078,7 @@ export function UpdateNotifier() {
 - 版本缺失时用 `—` 占位（`last` 按实际版本值去重，占位符仅用于展示）。
 - 通知实例取自 `AntdApp.useApp()`，因此继承 `ConfigProvider` 的主题、语言与按钮样式；静态 `notification` API 在暗色模式下仍是亮色。
 - 下载/安装按钮在命令 resolve 后才关闭通知；失败时保留通知便于重试，并弹 `updateActionFailed` 错误提示。`pending` 防止重复点击。
+- 下载在后台异步失败（命令已成功启动）时，阶段回到可用态并带 `error: 'download_failed'`；通知组件补一条 `updateDownloadFailed` 错误提示，同一版本只提示一次。
 - 卸载清理会复位去重 ref，StrictMode 双挂载或 HMR 后若仍处于 `available`/`downloaded`，通知会重新出现。
 
 
@@ -2360,12 +2386,12 @@ Expected: `apps/desktop/release/` 下生成安装包、`.exe.blockmap`、`latest
    - 右上角出现非模态通知；切到暗色主题后通知仍是暗色（继承 ConfigProvider）；
    - 设置 → 版本更新显示可用版本。
 4. 点状态栏徽标，确认打开设置并平滑滚动到「版本更新」分组、焦点落在分组内首个控件。
-5. 点通知里的「下载」，确认进度更新，完成后提示「新版本已就绪」。下载失败时点一次，确认通知保留且弹出错误提示。
+5. 点通知里的「下载」，确认进度更新，完成后提示「新版本已就绪」。下载失败时确认弹出一次错误通知（`updateDownloadFailed`），设置里也能看到失败状态。
 6. 选择「稍后」，关闭应用；确认安装器运行、应用自动以新版本重启，状态栏版本号变化。
 7. 重复到下载完成，选「立即重启安装」，确认同样升级成功。
 8. 关闭自动检查开关，重启应用，确认不再自动检查；手动点「检查更新」仍可用。
 9. 把 `feedUrl` 改成不可达地址，手动检查，确认显示失败文案且应用不崩溃。
-10. 在 `npm run dev` 下点「检查更新」，确认显示「开发模式不检查更新」。
+10. 在 `npm run desktop:dev` 下启动，确认设置里直接显示「开发模式不检查更新」，点「检查更新」也不发请求。
 
 **Step 4: 检查副作用**
 
