@@ -15,6 +15,12 @@
   "build": {
     "appId": "com.fireeyeaud.app",
     "productName": "火眼审计助手",
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://github.com/txboy/fireeyeaud/releases/latest/download/"
+      }
+    ],
     "electronVersion": "44.7.0",
     "npmRebuild": false,
     "files": [
@@ -42,6 +48,9 @@
       "target": "nsis",
       "icon": "build/icon.ico"
     }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
   },
   "devDependencies": {
     "electron": "44.7.0",

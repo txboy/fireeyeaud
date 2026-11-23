@@ -1,6 +1,6 @@
 import { StrictMode, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ConfigProvider } from 'antd';
+import { App as AntdApp, ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import enUS from 'antd/locale/en_US';
 import App from './App';
@@ -19,7 +19,9 @@ function Root() {
 
   return (
     <ConfigProvider theme={antdTheme(theme)} locale={locale === 'en-US' ? enUS : zhCN}>
-      <App />
+      <AntdApp component={false}>
+        <App />
+      </AntdApp>
     </ConfigProvider>
   );
 }

@@ -20,6 +20,9 @@ const { loadWindowState, saveWindowState } = require('./window-state.cjs');
 const { readFileContent, writeTextFile, deletePath } = require('./file-preview.cjs');
 const { copyInto, move, createDir, createFile, rename } = require('./file-ops.cjs');
 const { parseTokens, isExcluded, isIncluded } = require('./search-tokens.cjs');
+const { autoUpdater } = require('electron-updater');
+const { createUpdatePrefsStore, createUpdater } = require('./updater.cjs');
+const { createQuitFlow } = require('./quit-flow.cjs');
 
 app.setName('fireeyeaud');
 
@@ -39,8 +42,8 @@ const RESOURCES_ICON = app.isPackaged
 const SIDECAR_TOKEN = crypto.randomBytes(24).toString('hex');
 
 let mainWindow = null;
-let quitting = false;
 let secrets = null;
+let updater = null;
 
 function createLogger() {
   const dir = path.join(app.getPath('userData'), 'logs');
@@ -114,6 +117,15 @@ const sidecar = new SidecarManager({
   logger,
 });
 
+// getUpdater 是惰性的：quitFlow 在模块加载期就绪，updater 稍后在 whenReady 里创建。
+const quitFlow = createQuitFlow({
+  app,
+  sidecar,
+  getUpdater: () => updater,
+  logger,
+  stopWorkspaceWatch,
+});
+
 function createWindow() {
   const state = loadWindowState(app.getPath('userData'));
 
@@ -185,10 +197,18 @@ function createWindow() {
   return mainWindow;
 }
 
-function broadcastStatus(info) {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('sidecar:status', info);
+function sendToMainWindow(channel, payload) {
+  if (
+    mainWindow &&
+    !mainWindow.isDestroyed() &&
+    !mainWindow.webContents.isDestroyed()
+  ) {
+    mainWindow.webContents.send(channel, payload);
   }
+}
+
+function broadcastStatus(info) {
+  sendToMainWindow('sidecar:status', info);
 }
 
 /** 把主进程内存中的全部明文凭据推送给 sidecar（仅内存持有）。 */
@@ -216,6 +236,42 @@ function registerIpc() {
     platform: process.platform,
     userData: app.getPath('userData'),
   }));
+  ipcMain.handle('update:get-state', () => updater?.getState() ?? null);
+  ipcMain.handle('update:set-enabled', (_event, enabled) => {
+    if (!updater) return { ok: false, error: 'unavailable', state: null };
+    if (typeof enabled !== 'boolean') {
+      return { ok: false, error: 'invalid_input', state: updater.getState() };
+    }
+    return updater.setEnabled(enabled);
+  });
+  ipcMain.handle(
+    'update:set-feed',
+    (_event, url) =>
+      updater?.setFeedUrl(url) ?? { ok: false, error: 'unavailable', state: null },
+  );
+  ipcMain.handle('update:check', () =>
+    updater
+      ? { ok: true, state: updater.check({ manual: true }) }
+      : { ok: false, error: 'unavailable', state: null },
+  );
+  ipcMain.handle('update:download', () =>
+    updater
+      ? { ...updater.download(), state: updater.getState() }
+      : { ok: false, error: 'unavailable', state: null },
+  );
+  // 走正常退出路径：before-quit 会判断是否已下载并触发静默安装。
+  ipcMain.handle('update:install', () => {
+    if (!updater || !updater.isUpdateReady()) {
+      return {
+        ok: false,
+        error: 'not_available',
+        state: updater?.getState() ?? null,
+      };
+    }
+    const state = updater.getState();
+    app.quit();
+    return { ok: true, state };
+  });
   ipcMain.handle('window:minimize', () => {
     mainWindow?.minimize();
   });
@@ -578,6 +634,14 @@ app.whenReady().then(async () => {
     safeStorage,
     logger,
   });
+  updater = createUpdater({
+    autoUpdater,
+    prefs: createUpdatePrefsStore({ dir: app.getPath('userData'), logger }),
+    logger,
+    isPackaged: app.isPackaged,
+    currentVersion: app.getVersion(),
+    send: (state) => sendToMainWindow('update:state', state),
+  });
   registerIpc();
   hardenWebContents();
 
@@ -609,6 +673,8 @@ app.whenReady().then(async () => {
     .then((info) => logger.info(`[sidecar] ready on port ${info.port} (${info.status})`))
     .catch((err) => logger.error(`[sidecar] start failed: ${err}`));
 
+  updater.start();
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
@@ -618,13 +684,4 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-app.on('before-quit', (event) => {
-  if (quitting) return;
-  event.preventDefault();
-  quitting = true;
-  stopWorkspaceWatch();
-  sidecar
-    .stop()
-    .catch((err) => logger.error(`[sidecar] stop failed: ${err}`))
-    .finally(() => app.exit(0));
-});
+app.on('before-quit', (event) => quitFlow.onBeforeQuit(event));

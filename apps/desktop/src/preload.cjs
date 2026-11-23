@@ -46,4 +46,17 @@ contextBridge.exposeInMainWorld('fireeyeaud', {
     ipcRenderer.on('sidecar:status', handler);
     return () => ipcRenderer.removeListener('sidecar:status', handler);
   },
+  updates: {
+    getState: () => ipcRenderer.invoke('update:get-state'),
+    setEnabled: (enabled) => ipcRenderer.invoke('update:set-enabled', enabled),
+    setFeedUrl: (url) => ipcRenderer.invoke('update:set-feed', url),
+    check: () => ipcRenderer.invoke('update:check'),
+    download: () => ipcRenderer.invoke('update:download'),
+    install: () => ipcRenderer.invoke('update:install'),
+    onState: (callback) => {
+      const handler = (_event, state) => callback(state);
+      ipcRenderer.on('update:state', handler);
+      return () => ipcRenderer.removeListener('update:state', handler);
+    },
+  },
 });

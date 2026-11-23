@@ -16,6 +16,7 @@
 | 查某个端点的路径、SSE 事件字段 | [API 与协议](04-api-reference.md) |
 | 搞清楚 `.fireeye/` 里那些文件是什么 | [数据模型](05-data-model.md) |
 | 照着清单做一件具体的事 | [常见任务](06-workflows.md) |
+| 发布新版本、排查自动更新 | [自动更新](07-updater.md) |
 
 ## 文档分工
 

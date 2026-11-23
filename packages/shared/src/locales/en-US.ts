@@ -1026,6 +1026,42 @@ export default {
     systemPromptHint:
       'Appended to the agent system prompt for every conversation; leave blank to use the default.',
     save: 'Save',
+    updateSection: 'Version updates',
+    autoUpdateEnabled: 'Check for updates at startup',
+    updateFeed: 'Update feed URL',
+    updateFeedHint:
+      'Defaults to GitHub Releases. For intranet use, point this to a mirror; it must start with http:// or https://.',
+    updateApplyFeed: 'Apply URL',
+    updateCurrent: 'Current version {{version}}',
+    updateCheck: 'Check for updates',
+    updateChecking: 'Checking…',
+    updateNotChecked: 'Not checked yet',
+    updateIdle: 'You are up to date',
+    updateAvailable: 'Version {{version}} is available',
+    updateDownload: 'Download',
+    updateDownloading: 'Downloading {{percent}}%',
+    updateDownloaded: 'Version {{version}} downloaded',
+    updateRestart: 'Restart and install',
+    updateLater: 'Later',
+    updateAvailableBadge: 'Update {{version}} available',
+    updateReadyBadge: 'Restart to update',
+    updateOpenSettings: 'View update',
+    updateAvailableTitle: 'Version {{version}} is available',
+    updateAvailableBody:
+      'Download and install the new version; you will be asked before restarting.',
+    updateReadyTitle: 'Update ready',
+    updateReadyBody:
+      'Version {{version}} has been downloaded. Restart now or it will install when you quit.',
+    updateFailed: 'Update check failed. Check your network or feed URL.',
+    updateDevMode: 'Update checks are disabled in development mode',
+    updateFeedInvalid: 'Invalid feed URL; it must start with http:// or https://',
+    updateFeedBusy:
+      'An update is in progress or waiting to restart; please try again shortly.',
+    updateFeedSaveFailed: 'Could not save the update feed URL. Please try again.',
+    updateToggleFailed: 'Could not save the auto-update setting.',
+    updateDownloadFailed: 'Update download failed. Please try again.',
+    updateActionFailed:
+      'The action did not take effect. Check the update state and try again.',
     saved: 'Saved',
   },
   welcome: {

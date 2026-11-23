@@ -3163,6 +3163,26 @@ textarea.searchbox {
   white-space: nowrap;
 }
 
+.statusbar__item--update {
+  border: 0;
+  padding: 1px 2px;
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.statusbar__item--update:hover {
+  text-decoration: underline;
+}
+
+.statusbar__item--update:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .statusbar__dot {
   width: 8px;
   height: 8px;
