@@ -72,7 +72,7 @@ export function UpdateNotifier() {
           message: t('updateAvailableTitle', { version: version ?? '—' }),
           description: t('updateAvailableBody'),
           duration: 0,
-          btn: (
+          actions: (
             <Button
               type="primary"
               size="small"
@@ -98,7 +98,7 @@ export function UpdateNotifier() {
           message: t('updateReadyTitle'),
           description: t('updateReadyBody', { version: version ?? '—' }),
           duration: 0,
-          btn: (
+          actions: (
             <div style={{ display: 'flex', gap: 8 }}>
               <Button
                 type="primary"
