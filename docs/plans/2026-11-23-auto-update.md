@@ -62,27 +62,40 @@ export type UpdatePhase =
   | 'idle'
   | 'checking'
   | 'available'
+  | 'not-available'
   | 'downloading'
   | 'downloaded'
   | 'error';
 
+export type UpdateErrorCode =
+  | 'dev_mode'
+  | 'invalid_url'
+  | 'persist_failed'
+  | 'unavailable'
+  | 'not_available'
+  | 'busy'
+  | 'check_failed'
+  | 'download_failed';
+
 export interface UpdateState {
   /** 是否在启动时自动检查。 */
   enabled: boolean;
-  /** generic provider 的基地址，必须以 / 结尾。 */
+  /** generic provider 基地址；规范化后始终以 / 结尾。 */
   feedUrl: string;
   phase: UpdatePhase;
   currentVersion: string;
   availableVersion: string | null;
+  /** 下载进度，0-100 的整数。 */
   percent: number;
+  /** 当前下载速度，字节/秒。 */
   bytesPerSecond: number;
-  /** 'dev_mode' | 'invalid_url' | 'persist_failed' | 具体错误文本。 */
-  error: string | null;
+  /** 失败原因代码；详细堆栈写日志，不进入状态。 */
+  error: UpdateErrorCode | null;
 }
 
 export interface UpdateResult {
   ok: boolean;
-  error?: string;
+  error?: UpdateErrorCode;
   state: UpdateState;
 }
 ```
@@ -413,6 +426,14 @@ test('非打包环境返回 dev_mode 且不发起请求', () => {
   assert.equal(state.error, 'dev_mode');
 });
 
+test('没有新版本时进入 not-available 状态', () => {
+  const { autoUpdater, controller } = makeUpdater();
+  controller.check();
+  autoUpdater.emit('update-not-available', { version: '0.1.0' });
+  assert.equal(controller.getState().phase, 'not-available');
+  assert.equal(controller.getState().availableVersion, null);
+});
+
 test('发现更新后可下载并进入已下载状态', () => {
   const { autoUpdater, controller } = makeUpdater();
   controller.check();
@@ -446,12 +467,21 @@ test('没有可用版本时下载被拒绝', () => {
   assert.equal(autoUpdater.downloads, 0);
 });
 
-test('错误事件进入 error 状态并保留信息', () => {
+test('检查阶段错误进入 error 状态并记录错误代码', () => {
   const { autoUpdater, controller } = makeUpdater();
   controller.check();
   autoUpdater.emit('error', new Error('network down'));
   assert.equal(controller.getState().phase, 'error');
-  assert.match(controller.getState().error, /network down/);
+  assert.equal(controller.getState().error, 'check_failed');
+});
+
+test('下载阶段错误记录 download_failed', () => {
+  const { autoUpdater, controller } = makeUpdater();
+  autoUpdater.emit('update-available', { version: '0.2.0' });
+  controller.download();
+  autoUpdater.emit('error', new Error('network down'));
+  assert.equal(controller.getState().phase, 'error');
+  assert.equal(controller.getState().error, 'download_failed');
 });
 
 test('修改更新源后重置为 idle 并持久化', () => {
@@ -532,9 +562,14 @@ function createUpdater({
     return { ...state };
   }
 
+  let pendingAction = 'check';
+
   function onError(err) {
     logger.error(`[update] ${err?.stack || err}`);
-    publish({ phase: 'error', error: String(err?.message || err) });
+    publish({
+      phase: 'error',
+      error: pendingAction === 'download' ? 'download_failed' : 'check_failed',
+    });
   }
 
   autoUpdater.autoDownload = false;
@@ -559,7 +594,7 @@ function createUpdater({
   );
   autoUpdater.on('update-not-available', () =>
     publish({
-      phase: 'idle',
+      phase: 'not-available',
       availableVersion: null,
       percent: 0,
       error: null,
@@ -595,6 +630,7 @@ function createUpdater({
       return { ...state };
     }
     if (state.phase === 'downloaded') return { ...state };
+    pendingAction = 'check';
     applyFeed();
     publish({ phase: 'checking', error: null });
     try {
@@ -638,13 +674,14 @@ function createUpdater({
     if (state.phase === 'downloading' || state.phase === 'downloaded') {
       return { ok: false, error: 'busy' };
     }
+    pendingAction = 'download';
     publish({ phase: 'downloading', percent: 0, error: null });
     try {
       const result = autoUpdater.downloadUpdate();
       if (result && typeof result.catch === 'function') result.catch(onError);
     } catch (err) {
       onError(err);
-      return { ok: false, error: String(err?.message || err) };
+      return { ok: false, error: 'download_failed' };
     }
     return { ok: true };
   }
@@ -698,7 +735,7 @@ Run:
 npm run desktop:test
 ```
 
-Expected: PASS，6 个旧测试 + 8 个新测试全部通过。
+Expected: PASS，6 个旧测试 + 10 个新测试全部通过。
 
 **Step 5: Commit**
 
@@ -1016,6 +1053,7 @@ git commit -m "feat(update): add renderer update store and preload types"
     updateCurrent: '当前版本 {{version}}',
     updateCheck: '检查更新',
     updateChecking: '正在检查…',
+    updateNotChecked: '尚未检查',
     updateIdle: '已是最新版本',
     updateAvailable: '发现新版本 {{version}}',
     updateDownload: '下载并安装',
@@ -1049,6 +1087,7 @@ git commit -m "feat(update): add renderer update store and preload types"
     updateCurrent: 'Current version {{version}}',
     updateCheck: 'Check for updates',
     updateChecking: 'Checking…',
+    updateNotChecked: 'Not checked yet',
     updateIdle: 'You are up to date',
     updateAvailable: 'Version {{version}} is available',
     updateDownload: 'Download and install',
@@ -1103,19 +1142,21 @@ import { FormActions } from '../forms/FormActions';
   };
 
   const statusText =
-    update.phase === 'checking'
-      ? t('updateChecking')
-      : update.phase === 'available'
-        ? t('updateAvailable', { version: update.availableVersion ?? '' })
-        : update.phase === 'downloading'
-          ? t('updateDownloading', { percent: update.percent })
-          : update.phase === 'downloaded'
-            ? t('updateDownloaded', { version: update.availableVersion ?? '' })
-            : update.phase === 'error' && update.error !== 'dev_mode'
-              ? t('updateFailed')
-              : update.error === 'dev_mode'
-                ? t('updateDevMode')
-                : t('updateIdle');
+    update.error === 'dev_mode'
+      ? t('updateDevMode')
+      : update.error
+        ? t('updateFailed')
+        : update.phase === 'checking'
+          ? t('updateChecking')
+          : update.phase === 'available'
+            ? t('updateAvailable', { version: update.availableVersion ?? '' })
+            : update.phase === 'downloading'
+              ? t('updateDownloading', { percent: update.percent })
+              : update.phase === 'downloaded'
+                ? t('updateDownloaded', { version: update.availableVersion ?? '' })
+                : update.phase === 'not-available'
+                  ? t('updateIdle')
+                  : t('updateNotChecked');
 ```
 
 3. 在 `FormActions` 之前插入更新区块：
@@ -1419,10 +1460,11 @@ git commit -m "feat(update): surface update status in status bar and notificatio
 3. 在 GitHub 创建 tag `v0.1.1` 的 Release（不要存为 draft），上传安装包、`.blockmap`、`latest.yml` 三个文件。
 4. 已安装旧版本的用户下次启动时会看到更新提示。
 
-也可以在设置 `GH_TOKEN` 后使用 `npm run dist -w @fireeyeaud/desktop -- --publish always` 自动上传。
+采用 generic provider 时 electron-builder 不会自动上传（`--publish always` 对 generic provider 不生效），保持默认的 `--publish never`；构建完成后手动把安装包、`.blockmap`、`latest.yml` 上传到 GitHub Release。
 
 ## 注意
 
+- `releases/latest` 按 Release 的创建时间取最新，不比较版本号；发布多个版本时务必最后创建最新 semver 的 Release，确保 `latest/download` 指向它。
 - `latest.yml` 中的版本必须高于已安装版本，否则不会提示。
 - 安装包未做代码签名时，Windows SmartScreen 可能对下载的安装包给出警告；正式分发建议补签名。
 - 更新源默认在 GitHub，国内网络可能较慢，可改为内网镜像地址。

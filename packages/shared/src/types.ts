@@ -886,26 +886,39 @@ export type UpdatePhase =
   | 'idle'
   | 'checking'
   | 'available'
+  | 'not-available'
   | 'downloading'
   | 'downloaded'
   | 'error';
 
+export type UpdateErrorCode =
+  | 'dev_mode'
+  | 'invalid_url'
+  | 'persist_failed'
+  | 'unavailable'
+  | 'not_available'
+  | 'busy'
+  | 'check_failed'
+  | 'download_failed';
+
 export interface UpdateState {
   /** 是否在启动时自动检查。 */
   enabled: boolean;
-  /** generic provider 的基地址，必须以 / 结尾。 */
+  /** generic provider 基地址；规范化后始终以 / 结尾。 */
   feedUrl: string;
   phase: UpdatePhase;
   currentVersion: string;
   availableVersion: string | null;
+  /** 下载进度，0-100 的整数。 */
   percent: number;
+  /** 当前下载速度，字节/秒。 */
   bytesPerSecond: number;
-  /** 'dev_mode' | 'invalid_url' | 'persist_failed' | 具体错误文本。 */
-  error: string | null;
+  /** 失败原因代码；详细堆栈写日志，不进入状态。 */
+  error: UpdateErrorCode | null;
 }
 
 export interface UpdateResult {
   ok: boolean;
-  error?: string;
+  error?: UpdateErrorCode;
   state: UpdateState;
 }

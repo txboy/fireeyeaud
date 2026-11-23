@@ -49,11 +49,11 @@
       "icon": "build/icon.ico"
     }
   },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
+  },
   "devDependencies": {
     "electron": "44.7.0",
     "electron-builder": "^26.0.0"
-  },
-  "dependencies": {
-    "electron-updater": "^6.8.11"
   }
 }
