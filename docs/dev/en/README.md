@@ -15,6 +15,7 @@ For anyone changing this project: understand how it's built, and know which laye
 | Look up an endpoint path or an SSE field | [API & protocols](04-api-reference.md) |
 | Figure out what the files in `.fireeye/` are | [Data model](05-data-model.md) |
 | Follow a checklist to do one concrete thing | [Common tasks](06-workflows.md) |
+| Release a new version or debug auto-update | [Auto update](07-updater.md) |
 
 ## Three kinds of docs
 
