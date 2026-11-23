@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Radio, Select, Switch } from 'antd';
+import { Button, Progress, Radio, Select, Switch } from 'antd';
 import { supportedLocales } from '@fireeyeaud/shared/locales';
 import { useSettingsStore } from '../../store/settings';
 import { useUiStore } from '../../store/ui';
+import { useUpdatesStore } from '../../store/updates';
 import { FormActions } from '../forms/FormActions';
 
 /** 「设置」tab 内容：与配置表单一致的布局（单列表单 + 保存/取消）。 */
@@ -18,6 +19,37 @@ export function SettingsPanel() {
   const saveGeneral = useSettingsStore((s) => s.saveGeneral);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const closeTab = useUiStore((s) => s.closeRightTab);
+  const update = useUpdatesStore();
+  const [feedDraft, setFeedDraft] = useState(update.feedUrl);
+  const [feedError, setFeedError] = useState<'invalid_url' | 'busy' | null>(null);
+
+  useEffect(() => {
+    setFeedDraft(update.feedUrl);
+  }, [update.feedUrl]);
+
+  const applyFeed = async () => {
+    const result = await update.setFeedUrl(feedDraft);
+    setFeedError(
+      result.ok ? null : result.error === 'busy' ? 'busy' : 'invalid_url',
+    );
+  };
+
+  const statusText =
+    update.error === 'dev_mode'
+      ? t('updateDevMode')
+      : update.error
+        ? t('updateFailed')
+        : update.phase === 'checking'
+          ? t('updateChecking')
+          : update.phase === 'available'
+            ? t('updateAvailable', { version: update.availableVersion ?? '' })
+            : update.phase === 'downloading'
+              ? t('updateDownloading', { percent: update.percent })
+              : update.phase === 'downloaded'
+                ? t('updateDownloaded', { version: update.availableVersion ?? '' })
+                : update.phase === 'not-available'
+                  ? t('updateIdle')
+                  : t('updateNotChecked');
 
   useEffect(() => {
     void loadSettings();
@@ -118,6 +150,70 @@ export function SettingsPanel() {
         />
       </label>
       <span className="card__meta">{t('systemPromptHint')}</span>
+
+      <div className="field">
+        <span className="field__label">{t('updateSection')}</span>
+        <label className="field field--inline">
+          <Switch
+            checked={update.enabled}
+            onChange={(value) => void update.setEnabled(value)}
+          />
+          <span>{t('autoUpdateEnabled')}</span>
+        </label>
+        <span className="card__meta">{t('updateFeedHint')}</span>
+      </div>
+      <label className="field">
+        <span className="field__label">{t('updateFeed')}</span>
+        <input
+          className="searchbox"
+          value={feedDraft}
+          onChange={(event) => setFeedDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') void applyFeed();
+          }}
+        />
+      </label>
+      {feedError && (
+        <span className="card__meta">
+          {t(feedError === 'busy' ? 'updateFeedBusy' : 'updateFeedInvalid')}
+        </span>
+      )}
+      <span className="card__meta">
+        {t('updateCurrent', { version: update.currentVersion || '—' })}
+      </span>
+      <span className="card__meta">{statusText}</span>
+      {update.phase === 'downloading' && (
+        <Progress percent={update.percent} size="small" status="active" />
+      )}
+      <div className="field field--inline">
+        <Button
+          onClick={() => void applyFeed()}
+          disabled={
+            update.phase === 'checking' ||
+            update.phase === 'downloading' ||
+            update.phase === 'downloaded'
+          }
+        >
+          {t('updateApplyFeed')}
+        </Button>
+        <Button
+          onClick={() => void update.check()}
+          loading={update.phase === 'checking'}
+          disabled={update.phase === 'downloading'}
+        >
+          {t('updateCheck')}
+        </Button>
+        {update.phase === 'available' && (
+          <Button type="primary" onClick={() => void update.download()}>
+            {t('updateDownload')}
+          </Button>
+        )}
+        {update.phase === 'downloaded' && (
+          <Button type="primary" onClick={() => void update.install()}>
+            {t('updateRestart')}
+          </Button>
+        )}
+      </div>
 
       <FormActions
         onSave={() => void submit()}
