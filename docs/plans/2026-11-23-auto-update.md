@@ -1912,58 +1912,101 @@ export function UpdateNotifier() {
   const download = useUpdatesStore((s) => s.download);
   const install = useUpdatesStore((s) => s.install);
   const last = useRef('');
+  const availableKey = useRef<string | null>(null);
+  const readyKey = useRef<string | null>(null);
 
   useEffect(() => {
-    if (phase === 'available' && last.current !== `available:${version}`) {
-      last.current = `available:${version}`;
-      const key = `update-available-${version}`;
-      notification.info({
-        key,
-        message: t('updateAvailableTitle', { version }),
-        description: t('updateAvailableBody'),
-        duration: 0,
-        btn: (
-          <Button
-            type="primary"
-            size="small"
-            onClick={() => {
-              notification.destroy(key);
-              void download();
-            }}
-          >
-            {t('updateDownload')}
-          </Button>
-        ),
-      });
+    if (phase === 'available') {
+      const key = `update-available-${version ?? 'unknown'}`;
+      if (last.current !== `available:${version}`) {
+        last.current = `available:${version}`;
+        availableKey.current = key;
+        notification.info({
+          key,
+          message: t('updateAvailableTitle', { version: version ?? '—' }),
+          description: t('updateAvailableBody'),
+          duration: 0,
+          btn: (
+            <Button
+              type="primary"
+              size="small"
+              onClick={() => {
+                notification.destroy(key);
+                availableKey.current = null;
+                void download();
+              }}
+            >
+              {t('updateDownload')}
+            </Button>
+          ),
+        });
+      }
+    } else if (availableKey.current) {
+      notification.destroy(availableKey.current);
+      availableKey.current = null;
     }
 
-    if (phase === 'downloaded' && last.current !== `downloaded:${version}`) {
-      last.current = `downloaded:${version}`;
-      const key = `update-ready-${version}`;
-      notification.success({
-        key,
-        message: t('updateReadyTitle'),
-        description: t('updateReadyBody', { version }),
-        duration: 0,
-        btn: (
-          <Button
-            type="primary"
-            size="small"
-            onClick={() => {
-              notification.destroy(key);
-              void install();
-            }}
-          >
-            {t('updateRestart')}
-          </Button>
-        ),
-      });
+    if (phase === 'downloaded') {
+      const key = `update-ready-${version ?? 'unknown'}`;
+      if (last.current !== `downloaded:${version}`) {
+        last.current = `downloaded:${version}`;
+        readyKey.current = key;
+        notification.success({
+          key,
+          message: t('updateReadyTitle'),
+          description: t('updateReadyBody', { version: version ?? '—' }),
+          duration: 0,
+          btn: (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button
+                type="primary"
+                size="small"
+                onClick={() => {
+                  notification.destroy(key);
+                  readyKey.current = null;
+                  void install();
+                }}
+              >
+                {t('updateRestart')}
+              </Button>
+              <Button
+                size="small"
+                onClick={() => {
+                  notification.destroy(key);
+                  readyKey.current = null;
+                }}
+              >
+                {t('updateLater')}
+              </Button>
+            </div>
+          ),
+        });
+      }
+    } else if (readyKey.current) {
+      notification.destroy(readyKey.current);
+      readyKey.current = null;
     }
   }, [phase, version, download, install, t]);
+
+  // 卸载时清理尚未关闭的通知，避免残留。
+  useEffect(
+    () => () => {
+      if (availableKey.current) notification.destroy(availableKey.current);
+      if (readyKey.current) notification.destroy(readyKey.current);
+    },
+    [],
+  );
 
   return null;
 }
 ```
+
+说明：
+
+- `updateLater` 按钮对应产品要求的「立即重启安装 / 稍后」；选择稍后即关闭通知，安装由主进程在下次正常退出时完成。
+- 当 `phase` 离开 `available` 时销毁可下载通知，避免用户已在设置中开始下载后仍看到过期的「下载」提示。
+- 版本缺失时用 `—` 占位（`last` 按实际版本值去重，占位符仅用于展示）。
+
 
 **Step 2: 挂载通知组件**
 
@@ -1992,9 +2035,10 @@ import { useUpdatesStore } from '../store/updates';
 import { useUiStore } from '../store/ui';
 ```
 
-2. 在组件内加入：
+2. 组件内新增 settings 命名空间翻译（文件原本只有 `common`），并加入更新状态：
 
 ```tsx
+  const { t: tSettings } = useTranslation('settings');
   const updatePhase = useUpdatesStore((s) => s.phase);
   const availableVersion = useUpdatesStore((s) => s.availableVersion);
   const openSettings = useUiStore((s) => s.openSettings);
@@ -2010,8 +2054,8 @@ import { useUiStore } from '../store/ui';
             onClick={() => void openSettings()}
           >
             {updatePhase === 'downloaded'
-              ? t('updateReadyBadge')
-              : t('updateAvailableBadge', { version: availableVersion ?? '' })}
+              ? tSettings('updateReadyBadge')
+              : tSettings('updateAvailableBadge', { version: availableVersion ?? '—' })}
           </button>
         )}
 ```
@@ -2049,7 +2093,7 @@ Expected: 均 PASS。
 
 ```powershell
 git add apps/renderer/src/components/StatusBar.tsx apps/renderer/src/components/UpdateNotifier.tsx apps/renderer/src/App.tsx apps/renderer/src/styles/global.css
-git commit -m "feat(update): surface update status in status bar and notifications"
+git commit -m "feat(update): add update badge and notifications"
 ```
 
 ---

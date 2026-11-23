@@ -5,6 +5,8 @@ import { useSidecarStore } from '../store/sidecar';
 import { useWorkspaceStore } from '../store/workspace';
 import { useModelsStore } from '../store/models';
 import { useDatasourcesStore } from '../store/datasources';
+import { useUpdatesStore } from '../store/updates';
+import { useUiStore } from '../store/ui';
 
 const STATUS_KEY: Record<SidecarStatus, string> = {
   running: 'statusRunning',
@@ -15,12 +17,17 @@ const STATUS_KEY: Record<SidecarStatus, string> = {
 
 export function StatusBar() {
   const { t } = useTranslation('common');
+  // 更新相关的文案在 settings 命名空间。
+  const { t: tSettings } = useTranslation('settings');
   const info = useSidecarStore((s) => s.info);
   const workspace = useWorkspaceStore((s) => s.workspace);
   const path = useWorkspaceStore((s) => s.path);
   const models = useModelsStore((s) => s.items);
   const loadModels = useModelsStore((s) => s.load);
   const backgroundSync = useDatasourcesStore((s) => s.backgroundSync);
+  const updatePhase = useUpdatesStore((s) => s.phase);
+  const availableVersion = useUpdatesStore((s) => s.availableVersion);
+  const openSettings = useUiStore((s) => s.openSettings);
   const status: SidecarStatus = info?.status ?? 'starting';
 
   // sidecar 就绪后加载模型配置（与上下文栏同一数据源）。
@@ -66,6 +73,17 @@ export function StatusBar() {
         >
           {t('model')}: {model ? model.name : t('notConfigured')}
         </span>
+        {(updatePhase === 'available' || updatePhase === 'downloaded') && (
+          <button
+            type="button"
+            className="statusbar__item statusbar__item--update"
+            onClick={() => void openSettings()}
+          >
+            {updatePhase === 'downloaded'
+              ? tSettings('updateReadyBadge')
+              : tSettings('updateAvailableBadge', { version: availableVersion ?? '—' })}
+          </button>
+        )}
         <span className="statusbar__item">
           {t('version')}: {info?.health?.appVersion ?? '0.0.0'}
         </span>

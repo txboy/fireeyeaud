@@ -10,6 +10,7 @@ import { PromptDialog } from './components/PromptDialog';
 import { AttachDbDialog } from './components/AttachDbDialog';
 import { SelectionCopyMenu } from './components/SelectionCopyMenu';
 import { WorkspaceWatcher } from './components/WorkspaceWatcher';
+import { UpdateNotifier } from './components/UpdateNotifier';
 import { useSidecarStore } from './store/sidecar';
 import { useWorkspaceStore } from './store/workspace';
 import { useUpdatesStore } from './store/updates';
@@ -83,6 +84,7 @@ export default function App() {
       <AttachDbDialog />
       <SelectionCopyMenu />
       <WorkspaceWatcher />
+      <UpdateNotifier />
     </div>
   );
 }
