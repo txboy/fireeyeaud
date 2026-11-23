@@ -56,6 +56,13 @@
 
    也可以从仓库根跑 `npm run dist -w @fireeyeaud/desktop`；该脚本不带 `--publish` 参数，默认同样是 `never`。产物在 `apps/desktop/release/`：安装包（`火眼审计助手 Setup x.y.z.exe`）、`.blockmap`、`latest.yml`。
 
+   首次打包时 electron-builder 会下载 Electron 与 NSIS/winCodeSign 工具链；国内网络卡住时先设置镜像再重试：
+
+   ```powershell
+   $env:ELECTRON_MIRROR = 'https://npmmirror.com/mirrors/electron/'
+   $env:ELECTRON_BUILDER_BINARIES_MIRROR = 'https://npmmirror.com/mirrors/electron-builder-binaries/'
+   ```
+
 4. 在 GitHub 创建 tag `v0.1.1` 的 Release。不要存为 draft，也不要勾选 pre-release（`releases/latest` 会跳过这两种）。上传安装包、`.blockmap`、`latest.yml` 三个文件。
 
 5. 已安装旧版本的用户下次启动时会看到更新提示。

@@ -2377,6 +2377,13 @@ npm run dist -w @fireeyeaud/desktop
 
 Expected: `apps/desktop/release/` 下生成安装包、`.exe.blockmap`、`latest.yml`。检查 `latest.yml` 中的 `version` 与 `apps/desktop/package.json` 一致。
 
+若首次打包卡在下载 Electron/NSIS/winCodeSign，设置镜像后重试：
+
+```powershell
+$env:ELECTRON_MIRROR = 'https://npmmirror.com/mirrors/electron/'
+$env:ELECTRON_BUILDER_BINARIES_MIRROR = 'https://npmmirror.com/mirrors/electron-builder-binaries/'
+```
+
 **Step 3: 端到端验收（需要 GitHub Release 或本地 HTTP 镜像）**
 
 1. 安装当前 `0.1.0` 安装包。

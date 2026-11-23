@@ -56,6 +56,13 @@ File: `%APPDATA%\fireeyeaud\update-settings.json`
 
    `npm run dist -w @fireeyeaud/desktop` from the repo root does the same build; the script passes no `--publish` flag, so it also defaults to `never`. Output lands in `apps/desktop/release/`: the installer (`火眼审计助手 Setup x.y.z.exe`), its `.blockmap`, and `latest.yml`.
 
+   The first build downloads Electron plus the NSIS/winCodeSign toolchain. If that stalls, set the mirrors and retry:
+
+   ```powershell
+   $env:ELECTRON_MIRROR = 'https://npmmirror.com/mirrors/electron/'
+   $env:ELECTRON_BUILDER_BINARIES_MIRROR = 'https://npmmirror.com/mirrors/electron-builder-binaries/'
+   ```
+
 4. Create a GitHub Release for tag `v0.1.1`. Don't save it as a draft and don't mark it pre-release — `releases/latest` skips both. Upload the installer, the `.blockmap`, and `latest.yml`.
 
 5. Users on older versions see the update prompt on their next launch.
