@@ -210,6 +210,42 @@ test('setFeedUrl propagates ok/error and applies state on success', async () => 
   assert.equal(acceptedStore.getState().feedUrl, 'https://mirror.example.com/');
 });
 
+test('download and install report ok/error instead of swallowing it', async () => {
+  const { api } = fakeBridge({
+    download: async () => ({
+      ok: false,
+      error: 'download_failed',
+      state: state({ phase: 'available' }),
+    }),
+    install: async () => ({
+      ok: false,
+      error: 'busy',
+      state: state({ phase: 'downloaded' }),
+    }),
+  });
+  const store = createUpdatesStore(api);
+
+  assert.deepEqual(await store.getState().download(), {
+    ok: false,
+    error: 'download_failed',
+  });
+  assert.deepEqual(await store.getState().install(), { ok: false, error: 'busy' });
+  // 失败结果里的 state 仍要镜像到 store。
+  assert.equal(store.getState().phase, 'downloaded');
+});
+
+test('download and install return ok on success', async () => {
+  const { api } = fakeBridge({
+    download: async () => ok(state({ phase: 'downloading' })),
+    install: async () => ok(state({ phase: 'downloaded' })),
+  });
+  const store = createUpdatesStore(api);
+
+  assert.deepEqual(await store.getState().download(), { ok: true, error: undefined });
+  assert.equal(store.getState().phase, 'downloading');
+  assert.deepEqual(await store.getState().install(), { ok: true, error: undefined });
+});
+
 test('install rejection is swallowed', async () => {
   const log = captureConsoleError();
   try {
@@ -220,7 +256,7 @@ test('install rejection is swallowed', async () => {
     });
     const store = createUpdatesStore(api);
 
-    await assert.doesNotReject(store.getState().install());
+    assert.deepEqual(await store.getState().install(), { ok: false, error: undefined });
     assert.equal(log.calls.length, 1);
   } finally {
     log.restore();
@@ -233,7 +269,7 @@ test('commands are no-ops without a bridge', async () => {
   assert.deepEqual(await store.getState().setEnabled(false), { ok: false });
   assert.deepEqual(await store.getState().setFeedUrl('https://x.example.com/'), { ok: false });
   await assert.doesNotReject(store.getState().check());
-  await assert.doesNotReject(store.getState().download());
-  await assert.doesNotReject(store.getState().install());
+  assert.deepEqual(await store.getState().download(), { ok: false });
+  assert.deepEqual(await store.getState().install(), { ok: false });
   assert.equal(store.getState().enabled, true);
 });

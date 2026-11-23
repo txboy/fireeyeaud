@@ -28,8 +28,8 @@ interface UpdatesStore extends UpdateState {
   setEnabled: (enabled: boolean) => Promise<{ ok: boolean; error?: UpdateErrorCode }>;
   setFeedUrl: (feedUrl: string) => Promise<{ ok: boolean; error?: UpdateErrorCode }>;
   check: () => Promise<void>;
-  download: () => Promise<void>;
-  install: () => Promise<void>;
+  download: () => Promise<{ ok: boolean; error?: UpdateErrorCode }>;
+  install: () => Promise<{ ok: boolean; error?: UpdateErrorCode }>;
 }
 
 /** 主进程负责检查/下载；这里只镜像状态并转发命令。 */
@@ -91,13 +91,15 @@ export function createUpdatesStore(api: UpdatesBridge | undefined) {
       },
 
       download: async () => {
-        if (!api) return;
-        await apply(() => api.download());
+        if (!api) return { ok: false };
+        const result = await apply(() => api.download());
+        return { ok: Boolean(result?.ok), error: result?.error };
       },
 
       install: async () => {
-        if (!api) return;
-        await apply(() => api.install());
+        if (!api) return { ok: false };
+        const result = await apply(() => api.install());
+        return { ok: Boolean(result?.ok), error: result?.error };
       },
     };
   });

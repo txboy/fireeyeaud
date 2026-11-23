@@ -77,7 +77,20 @@ export function StatusBar() {
           <button
             type="button"
             className="statusbar__item statusbar__item--update"
-            onClick={() => void openSettings()}
+            title={tSettings('updateOpenSettings')}
+            aria-live="polite"
+            onClick={() => {
+              void openSettings().then(() => {
+                // 设置 tab 由 state 驱动挂载，等两帧确保面板已提交再滚动/聚焦。
+                requestAnimationFrame(() => {
+                  requestAnimationFrame(() => {
+                    const section = document.getElementById('settings-update');
+                    section?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                    section?.querySelector<HTMLElement>('button, input')?.focus();
+                  });
+                });
+              });
+            }}
           >
             {updatePhase === 'downloaded'
               ? tSettings('updateReadyBadge')

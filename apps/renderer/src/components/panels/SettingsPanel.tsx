@@ -177,7 +177,7 @@ export function SettingsPanel() {
       </label>
       <span className="card__meta">{t('systemPromptHint')}</span>
 
-      <div className="field">
+      <div className="field" id="settings-update">
         <span className="field__label">{t('updateSection')}</span>
         <label className="field field--inline">
           <Switch

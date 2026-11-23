@@ -1886,8 +1886,14 @@ git commit -m "feat(update): add update controls to settings panel"
 ### Task 7: 状态栏徽标与非模态通知
 
 **Files:**
+- Modify: `apps/renderer/src/main.tsx`
 - Modify: `apps/renderer/src/components/StatusBar.tsx`
+- Modify: `apps/renderer/src/components/panels/SettingsPanel.tsx`
 - Modify: `apps/renderer/src/App.tsx`
+- Modify: `apps/renderer/src/store/updates.ts`
+- Modify: `apps/renderer/tests/updatesStore.test.ts`
+- Modify: `packages/shared/src/locales/zh-CN.ts`
+- Modify: `packages/shared/src/locales/en-US.ts`
 - Modify: `apps/renderer/src/styles/global.css:3151-3156`（`.statusbar__item` 之后）
 - Create: `apps/renderer/src/components/UpdateNotifier.tsx`
 
@@ -1897,15 +1903,19 @@ git commit -m "feat(update): add update controls to settings panel"
 
 ```tsx
 import { useEffect, useRef } from 'react';
-import { Button, notification } from 'antd';
+import { App as AntdApp, Button } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useUpdatesStore } from '../store/updates';
 
 /**
  * 发现新版本 / 下载完成时弹非模态通知；同一版本只提示一次。
  * 关闭通知不会中断下载，状态仍可在设置与状态栏查看。
+ *
+ * 通知 key 是模块级字符串，按渲染进程（单窗口假设）全局唯一；
+ * 若将来支持多窗口，需要按窗口加前缀。
  */
 export function UpdateNotifier() {
+  const { notification } = AntdApp.useApp();
   const { t } = useTranslation('settings');
   const phase = useUpdatesStore((s) => s.phase);
   const version = useUpdatesStore((s) => s.availableVersion);
@@ -1914,6 +1924,46 @@ export function UpdateNotifier() {
   const last = useRef('');
   const availableKey = useRef<string | null>(null);
   const readyKey = useRef<string | null>(null);
+  // 命令进行中时忽略重复点击；失败时保留通知以便重试。
+  const pending = useRef(false);
+
+  const handleDownload = async (key: string) => {
+    if (pending.current) return;
+    pending.current = true;
+    try {
+      const result = await download();
+      if (result.ok) {
+        notification.destroy(key);
+        availableKey.current = null;
+      } else {
+        notification.error({
+          message: t('updateActionFailed'),
+          duration: 4,
+        });
+      }
+    } finally {
+      pending.current = false;
+    }
+  };
+
+  const handleInstall = async (key: string) => {
+    if (pending.current) return;
+    pending.current = true;
+    try {
+      const result = await install();
+      if (result.ok) {
+        notification.destroy(key);
+        readyKey.current = null;
+      } else {
+        notification.error({
+          message: t('updateActionFailed'),
+          duration: 4,
+        });
+      }
+    } finally {
+      pending.current = false;
+    }
+  };
 
   useEffect(() => {
     if (phase === 'available') {
@@ -1930,11 +1980,7 @@ export function UpdateNotifier() {
             <Button
               type="primary"
               size="small"
-              onClick={() => {
-                notification.destroy(key);
-                availableKey.current = null;
-                void download();
-              }}
+              onClick={() => void handleDownload(key)}
             >
               {t('updateDownload')}
             </Button>
@@ -1961,11 +2007,7 @@ export function UpdateNotifier() {
               <Button
                 type="primary"
                 size="small"
-                onClick={() => {
-                  notification.destroy(key);
-                  readyKey.current = null;
-                  void install();
-                }}
+                onClick={() => void handleInstall(key)}
               >
                 {t('updateRestart')}
               </Button>
@@ -1986,15 +2028,18 @@ export function UpdateNotifier() {
       notification.destroy(readyKey.current);
       readyKey.current = null;
     }
-  }, [phase, version, download, install, t]);
+  }, [phase, version, download, install, notification, t]);
 
-  // 卸载时清理尚未关闭的通知，避免残留。
+  // 卸载时清理尚未关闭的通知；同时复位去重状态，StrictMode/HMR 重挂载后能重新提示。
   useEffect(
     () => () => {
       if (availableKey.current) notification.destroy(availableKey.current);
       if (readyKey.current) notification.destroy(readyKey.current);
+      availableKey.current = null;
+      readyKey.current = null;
+      last.current = '';
     },
-    [],
+    [notification],
   );
 
   return null;
@@ -2006,6 +2051,9 @@ export function UpdateNotifier() {
 - `updateLater` 按钮对应产品要求的「立即重启安装 / 稍后」；选择稍后即关闭通知，安装由主进程在下次正常退出时完成。
 - 当 `phase` 离开 `available` 时销毁可下载通知，避免用户已在设置中开始下载后仍看到过期的「下载」提示。
 - 版本缺失时用 `—` 占位（`last` 按实际版本值去重，占位符仅用于展示）。
+- 通知实例取自 `AntdApp.useApp()`，因此继承 `ConfigProvider` 的主题、语言与按钮样式；静态 `notification` API 在暗色模式下仍是亮色。
+- 下载/安装按钮在命令 resolve 后才关闭通知；失败时保留通知便于重试，并弹 `updateActionFailed` 错误提示。`pending` 防止重复点击。
+- 卸载清理会复位去重 ref，StrictMode 双挂载或 HMR 后若仍处于 `available`/`downloaded`，通知会重新出现。
 
 
 **Step 2: 挂载通知组件**
@@ -2024,7 +2072,21 @@ import { UpdateNotifier } from './components/UpdateNotifier';
       <UpdateNotifier />
 ```
 
-**Step 3: 状态栏徽标**
+**Step 3: 让通知继承主题**
+
+修改 `apps/renderer/src/main.tsx`，在 `ConfigProvider` 内用 antd 的 `App` 包裹渲染树（`component={false}` 不额外生成 DOM 容器）：
+
+```tsx
+import { App as AntdApp, ConfigProvider } from 'antd';
+...
+    <ConfigProvider theme={antdTheme(theme)} locale={locale === 'en-US' ? enUS : zhCN}>
+      <AntdApp component={false}>
+        <App />
+      </AntdApp>
+    </ConfigProvider>
+```
+
+**Step 4: 状态栏徽标**
 
 修改 `apps/renderer/src/components/StatusBar.tsx`：
 
@@ -2051,7 +2113,20 @@ import { useUiStore } from '../store/ui';
           <button
             type="button"
             className="statusbar__item statusbar__item--update"
-            onClick={() => void openSettings()}
+            title={tSettings('updateOpenSettings')}
+            aria-live="polite"
+            onClick={() => {
+              void openSettings().then(() => {
+                // 设置 tab 由 state 驱动挂载，等两帧确保面板已提交再滚动/聚焦。
+                requestAnimationFrame(() => {
+                  requestAnimationFrame(() => {
+                    const section = document.getElementById('settings-update');
+                    section?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                    section?.querySelector<HTMLElement>('button, input')?.focus();
+                  });
+                });
+              });
+            }}
           >
             {updatePhase === 'downloaded'
               ? tSettings('updateReadyBadge')
@@ -2060,25 +2135,80 @@ import { useUiStore } from '../store/ui';
         )}
 ```
 
-**Step 4: 补样式**
+4. 给设置面板的更新分组加锚点（`apps/renderer/src/components/panels/SettingsPanel.tsx`）：
+
+```tsx
+      <div className="field" id="settings-update">
+        <span className="field__label">{t('updateSection')}</span>
+```
+
+设置内容滚动在 `.formtab__body`（`overflow: auto`）里，`scrollIntoView` 会滚动该容器；设置 tab 是点击后由 state 挂载的，因此用两层 `requestAnimationFrame` 等待提交。
+
+**Step 5: 补样式**
 
 在 `apps/renderer/src/styles/global.css` 的 `.statusbar__item` 规则之后加入：
 
 ```css
 .statusbar__item--update {
   border: 0;
-  padding: 0;
+  padding: 1px 2px;
   background: none;
   color: var(--accent);
   cursor: pointer;
+  font: inherit;
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .statusbar__item--update:hover {
   text-decoration: underline;
 }
+
+.statusbar__item--update:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
 ```
 
-**Step 5: 类型检查与构建**
+**Step 6: 文案与命令返回值**
+
+1. `apps/renderer/src/store/updates.ts`：`download` / `install` 返回命令结果而不是 `void`：
+
+```ts
+  download: () => Promise<{ ok: boolean; error?: UpdateErrorCode }>;
+  install: () => Promise<{ ok: boolean; error?: UpdateErrorCode }>;
+...
+      download: async () => {
+        if (!api) return { ok: false };
+        const result = await apply(() => api.download());
+        return { ok: Boolean(result?.ok), error: result?.error };
+      },
+
+      install: async () => {
+        if (!api) return { ok: false };
+        const result = await apply(() => api.install());
+        return { ok: Boolean(result?.ok), error: result?.error };
+      },
+```
+
+2. `apps/renderer/tests/updatesStore.test.ts`：补充 download/install 的失败与成功返回值断言。
+
+3. 两个语言文件新增/修改：
+
+```ts
+    updateDownload: '下载',                 // 仅下载，安装动作在「立即重启安装」
+    updateOpenSettings: '查看更新',
+    updateActionFailed: '操作未生效，请检查当前更新状态后重试',
+```
+
+```ts
+    updateDownload: 'Download',
+    updateOpenSettings: 'View update',
+    updateActionFailed:
+      'The action did not take effect. Check the update state and try again.',
+```
+
+**Step 7: 类型检查与构建**
 
 Run:
 
@@ -2089,10 +2219,10 @@ npm run renderer:build
 
 Expected: 均 PASS。
 
-**Step 6: Commit**
+**Step 8: Commit**
 
 ```powershell
-git add apps/renderer/src/components/StatusBar.tsx apps/renderer/src/components/UpdateNotifier.tsx apps/renderer/src/App.tsx apps/renderer/src/styles/global.css
+git add apps/renderer/src/main.tsx apps/renderer/src/components/StatusBar.tsx apps/renderer/src/components/panels/SettingsPanel.tsx apps/renderer/src/components/UpdateNotifier.tsx apps/renderer/src/App.tsx apps/renderer/src/store/updates.ts apps/renderer/tests/updatesStore.test.ts packages/shared/src/locales/zh-CN.ts packages/shared/src/locales/en-US.ts apps/renderer/src/styles/global.css
 git commit -m "feat(update): add update badge and notifications"
 ```
 
@@ -2227,14 +2357,15 @@ Expected: `apps/desktop/release/` 下生成安装包、`.exe.blockmap`、`latest
 2. 把 `feedUrl` 指向一个包含更高版本 `latest.yml`、安装包、`.blockmap` 的目录（本地可用 `python -m http.server` 模拟）。
 3. 启动应用，等待约 9 秒，确认：
    - 状态栏出现「有新版本 vX.Y.Z」；
-   - 右上角出现非模态通知；
+   - 右上角出现非模态通知；切到暗色主题后通知仍是暗色（继承 ConfigProvider）；
    - 设置 → 版本更新显示可用版本。
-4. 点「下载并安装」，确认进度更新，完成后提示「新版本已就绪」。
-5. 选择「稍后」，关闭应用；确认安装器运行、应用自动以新版本重启，状态栏版本号变化。
-6. 重复到下载完成，选「立即重启安装」，确认同样升级成功。
-7. 关闭自动检查开关，重启应用，确认不再自动检查；手动点「检查更新」仍可用。
-8. 把 `feedUrl` 改成不可达地址，手动检查，确认显示失败文案且应用不崩溃。
-9. 在 `npm run dev` 下点「检查更新」，确认显示「开发模式不检查更新」。
+4. 点状态栏徽标，确认打开设置并平滑滚动到「版本更新」分组、焦点落在分组内首个控件。
+5. 点通知里的「下载」，确认进度更新，完成后提示「新版本已就绪」。下载失败时点一次，确认通知保留且弹出错误提示。
+6. 选择「稍后」，关闭应用；确认安装器运行、应用自动以新版本重启，状态栏版本号变化。
+7. 重复到下载完成，选「立即重启安装」，确认同样升级成功。
+8. 关闭自动检查开关，重启应用，确认不再自动检查；手动点「检查更新」仍可用。
+9. 把 `feedUrl` 改成不可达地址，手动检查，确认显示失败文案且应用不崩溃。
+10. 在 `npm run dev` 下点「检查更新」，确认显示「开发模式不检查更新」。
 
 **Step 4: 检查副作用**
 

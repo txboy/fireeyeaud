@@ -1038,13 +1038,14 @@ export default {
     updateNotChecked: 'Not checked yet',
     updateIdle: 'You are up to date',
     updateAvailable: 'Version {{version}} is available',
-    updateDownload: 'Download and install',
+    updateDownload: 'Download',
     updateDownloading: 'Downloading {{percent}}%',
     updateDownloaded: 'Version {{version}} downloaded',
     updateRestart: 'Restart and install',
     updateLater: 'Later',
     updateAvailableBadge: 'Update {{version}} available',
     updateReadyBadge: 'Restart to update',
+    updateOpenSettings: 'View update',
     updateAvailableTitle: 'Version {{version}} is available',
     updateAvailableBody:
       'Download and install the new version; you will be asked before restarting.',
@@ -1059,6 +1060,8 @@ export default {
     updateFeedSaveFailed: 'Could not save the update feed URL. Please try again.',
     updateToggleFailed: 'Could not save the auto-update setting.',
     updateDownloadFailed: 'Update download failed. Please try again.',
+    updateActionFailed:
+      'The action did not take effect. Check the update state and try again.',
     saved: 'Saved',
   },
   welcome: {
