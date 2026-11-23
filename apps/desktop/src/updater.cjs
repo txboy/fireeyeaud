@@ -152,7 +152,7 @@ function createUpdater({
   autoUpdater.allowPrerelease = false;
   autoUpdater.logger = {
     info: (...args) => logger.info(...args),
-    warn: (...args) => logger.error(...args),
+    warn: (...args) => logger.info(...args),
     error: (...args) => logger.error(...args),
     debug: () => {},
   };

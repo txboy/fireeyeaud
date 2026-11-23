@@ -892,6 +892,8 @@ export type UpdatePhase =
   | 'error';
 
 export type UpdateErrorCode =
+  /** 输入参数非法（例如 enabled 不是布尔值）。 */
+  | 'invalid_input'
   | 'dev_mode'
   | 'invalid_url'
   | 'persist_failed'

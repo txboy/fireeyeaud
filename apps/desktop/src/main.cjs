@@ -22,6 +22,7 @@ const { copyInto, move, createDir, createFile, rename } = require('./file-ops.cj
 const { parseTokens, isExcluded, isIncluded } = require('./search-tokens.cjs');
 const { autoUpdater } = require('electron-updater');
 const { createUpdatePrefsStore, createUpdater } = require('./updater.cjs');
+const { createQuitFlow } = require('./quit-flow.cjs');
 
 app.setName('fireeyeaud');
 
@@ -41,7 +42,6 @@ const RESOURCES_ICON = app.isPackaged
 const SIDECAR_TOKEN = crypto.randomBytes(24).toString('hex');
 
 let mainWindow = null;
-let quitting = false;
 let secrets = null;
 let updater = null;
 
@@ -117,6 +117,15 @@ const sidecar = new SidecarManager({
   logger,
 });
 
+// getUpdater 是惰性的：quitFlow 在模块加载期就绪，updater 稍后在 whenReady 里创建。
+const quitFlow = createQuitFlow({
+  app,
+  sidecar,
+  getUpdater: () => updater,
+  logger,
+  stopWorkspaceWatch,
+});
+
 function createWindow() {
   const state = loadWindowState(app.getPath('userData'));
 
@@ -188,10 +197,18 @@ function createWindow() {
   return mainWindow;
 }
 
-function broadcastStatus(info) {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('sidecar:status', info);
+function sendToMainWindow(channel, payload) {
+  if (
+    mainWindow &&
+    !mainWindow.isDestroyed() &&
+    !mainWindow.webContents.isDestroyed()
+  ) {
+    mainWindow.webContents.send(channel, payload);
   }
+}
+
+function broadcastStatus(info) {
+  sendToMainWindow('sidecar:status', info);
 }
 
 /** 把主进程内存中的全部明文凭据推送给 sidecar（仅内存持有）。 */
@@ -220,21 +237,29 @@ function registerIpc() {
     userData: app.getPath('userData'),
   }));
   ipcMain.handle('update:get-state', () => updater?.getState() ?? null);
-  ipcMain.handle(
-    'update:set-enabled',
-    (_event, enabled) => updater?.setEnabled(Boolean(enabled)) ?? null,
+  ipcMain.handle('update:set-enabled', (_event, enabled) => {
+    if (!updater) return { ok: false, error: 'unavailable', state: null };
+    if (typeof enabled !== 'boolean') return { ok: false, error: 'invalid_input' };
+    return updater.setEnabled(enabled);
+  });
+  ipcMain.handle('update:set-feed', (_event, url) => {
+    if (!updater) return { ok: false, error: 'unavailable', state: null };
+    return updater.setFeedUrl(url);
+  });
+  ipcMain.handle('update:check', () =>
+    updater
+      ? updater.check({ manual: true })
+      : { ok: false, error: 'unavailable', state: null },
   );
-  ipcMain.handle(
-    'update:set-feed',
-    (_event, url) => updater?.setFeedUrl(url) ?? { ok: false, error: 'unavailable' },
-  );
-  ipcMain.handle('update:check', () => updater?.check({ manual: true }) ?? null);
   ipcMain.handle(
     'update:download',
-    () => updater?.download() ?? { ok: false, error: 'unavailable' },
+    () => updater?.download() ?? { ok: false, error: 'unavailable', state: null },
   );
   // 走正常退出路径：before-quit 会判断是否已下载并触发静默安装。
   ipcMain.handle('update:install', () => {
+    if (!updater || !updater.isUpdateReady()) {
+      return { ok: false, error: 'not_available' };
+    }
     app.quit();
     return { ok: true };
   });
@@ -606,11 +631,7 @@ app.whenReady().then(async () => {
     logger,
     isPackaged: app.isPackaged,
     currentVersion: app.getVersion(),
-    send: (state) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('update:state', state);
-      }
-    },
+    send: (state) => sendToMainWindow('update:state', state),
   });
   registerIpc();
   hardenWebContents();
@@ -654,26 +675,4 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-app.on('before-quit', (event) => {
-  if (quitting) return;
-  event.preventDefault();
-  quitting = true;
-  stopWorkspaceWatch();
-  sidecar
-    .stop()
-    .catch((err) => logger.error(`[sidecar] stop failed: ${err}`))
-    .finally(() => {
-      // 先停 sidecar，再让 electron-updater 拉起 NSIS 安装器；
-      // quitAndInstall 内部会再次 app.quit()，此时 quitting 已为 true，直接放行。
-      if (updater && updater.quitAndInstall()) {
-        logger.info('[update] installing downloaded update on quit');
-        const fallback = setTimeout(() => {
-          logger.error('[update] installer did not quit the app, forcing exit');
-          app.exit(0);
-        }, 5000);
-        if (typeof fallback.unref === 'function') fallback.unref();
-      } else {
-        app.exit(0);
-      }
-    });
-});
+app.on('before-quit', (event) => quitFlow.onBeforeQuit(event));

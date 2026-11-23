@@ -68,6 +68,8 @@ export type UpdatePhase =
   | 'error';
 
 export type UpdateErrorCode =
+  /** 输入参数非法（例如 enabled 不是布尔值）。 */
+  | 'invalid_input'
   | 'dev_mode'
   | 'invalid_url'
   | 'persist_failed'
@@ -1125,14 +1127,17 @@ git commit -m "feat(update): add updater state machine with download/install gat
 - Modify: `apps/desktop/src/main.cjs:575-610`（whenReady）
 - Modify: `apps/desktop/src/main.cjs:621-630`（before-quit）
 - Modify: `apps/desktop/src/preload.cjs:44-49`
+- Create: `apps/desktop/src/quit-flow.cjs`
+- Create: `apps/desktop/test/quit-flow.test.mjs`
 
-**Step 1: 引入 electron-updater 与 updater 模块**
+**Step 1: 引入 electron-updater、updater 与 quit-flow 模块**
 
 在 `apps/desktop/src/main.cjs` 的 require 区加入：
 
 ```js
 const { autoUpdater } = require('electron-updater');
 const { createUpdatePrefsStore, createUpdater } = require('./updater.cjs');
+const { createQuitFlow } = require('./quit-flow.cjs');
 ```
 
 在 `let secrets = null;` 之后加入：
@@ -1147,27 +1152,55 @@ let updater = null;
 
 ```js
   ipcMain.handle('update:get-state', () => updater?.getState() ?? null);
-  ipcMain.handle(
-    'update:set-enabled',
-    (_event, enabled) => updater?.setEnabled(Boolean(enabled)) ?? null,
+  ipcMain.handle('update:set-enabled', (_event, enabled) => {
+    if (!updater) return { ok: false, error: 'unavailable', state: null };
+    if (typeof enabled !== 'boolean') return { ok: false, error: 'invalid_input' };
+    return updater.setEnabled(enabled);
+  });
+  ipcMain.handle('update:set-feed', (_event, url) => {
+    if (!updater) return { ok: false, error: 'unavailable', state: null };
+    return updater.setFeedUrl(url);
+  });
+  ipcMain.handle('update:check', () =>
+    updater ? updater.check({ manual: true }) : { ok: false, error: 'unavailable', state: null },
   );
-  ipcMain.handle(
-    'update:set-feed',
-    (_event, url) => updater?.setFeedUrl(url) ?? { ok: false, error: 'unavailable' },
-  );
-  ipcMain.handle('update:check', () => updater?.check({ manual: true }) ?? null);
   ipcMain.handle(
     'update:download',
-    () => updater?.download() ?? { ok: false, error: 'unavailable' },
+    () => updater?.download() ?? { ok: false, error: 'unavailable', state: null },
   );
   // 走正常退出路径：before-quit 会判断是否已下载并触发静默安装。
   ipcMain.handle('update:install', () => {
+    if (!updater || !updater.isUpdateReady()) {
+      return { ok: false, error: 'not_available' };
+    }
     app.quit();
     return { ok: true };
   });
 ```
 
+说明：`update:get-state` 保持返回状态本身或 `null`；其余命令在 updater 尚未创建时统一返回
+`{ ok: false, error: 'unavailable', state: null }`，避免渲染层拿到 `null` 后分不清“不可用”
+与“无状态”。`set-enabled` 只接受布尔值，不做隐式转换。
+
 **Step 3: 在 whenReady 中创建 updater 并启动**
+
+先抽出统一的窗口推送函数（`broadcastStatus` 也改用它），避免向已销毁的 webContents 发送：
+
+```js
+function sendToMainWindow(channel, payload) {
+  if (
+    mainWindow &&
+    !mainWindow.isDestroyed() &&
+    !mainWindow.webContents.isDestroyed()
+  ) {
+    mainWindow.webContents.send(channel, payload);
+  }
+}
+
+function broadcastStatus(info) {
+  sendToMainWindow('sidecar:status', info);
+}
+```
 
 在 `app.whenReady().then(async () => {` 内、`registerIpc();` 之前加入：
 
@@ -1178,11 +1211,7 @@ let updater = null;
     logger,
     isPackaged: app.isPackaged,
     currentVersion: app.getVersion(),
-    send: (state) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('update:state', state);
-      }
-    },
+    send: (state) => sendToMainWindow('update:state', state),
   });
 ```
 
@@ -1192,35 +1221,121 @@ let updater = null;
   updater.start();
 ```
 
-**Step 4: 改造 before-quit，避免 app.exit 跳过安装**
+**Step 4: 用 quit-flow 模块替换内联 before-quit**
 
-将现有的 `before-quit` 处理器整体替换为：
+退出流程有两个独立状态，不能合并成一个 `quitting` 布尔值：
+
+- `shutdownStarted`：已经收到第一次退出请求，正在停 sidecar；此时再来的退出请求
+  必须继续 `preventDefault()`，否则 Electron 会立刻退出，已下载的更新来不及安装。
+- `allowQuit`：sidecar 已停、正准备调用 `quitAndInstall()`；`quitAndInstall` 内部会
+  同步再次触发 `app.quit()`，这时必须直接放行，否则会自己把自己卡住。
+
+新建 `apps/desktop/src/quit-flow.cjs`：
 
 ```js
-app.on('before-quit', (event) => {
-  if (quitting) return;
-  event.preventDefault();
-  quitting = true;
-  stopWorkspaceWatch();
-  sidecar
-    .stop()
-    .catch((err) => logger.error(`[sidecar] stop failed: ${err}`))
-    .finally(() => {
-      // 先停 sidecar，再让 electron-updater 拉起 NSIS 安装器；
-      // quitAndInstall 内部会再次 app.quit()，此时 quitting 已为 true，直接放行。
-      if (updater && updater.quitAndInstall()) {
-        logger.info('[update] installing downloaded update on quit');
-        const fallback = setTimeout(() => {
-          logger.error('[update] installer did not quit the app, forcing exit');
-          app.exit(0);
-        }, 5000);
-        if (typeof fallback.unref === 'function') fallback.unref();
-      } else {
-        app.exit(0);
-      }
+'use strict';
+
+/**
+ * 退出流程：先停 sidecar，再决定是否拉起已下载的更新安装器。
+ * 依赖全部注入，便于单测。
+ */
+function createQuitFlow({
+  app,
+  sidecar,
+  getUpdater,
+  logger = console,
+  stopWorkspaceWatch = () => {},
+  sidecarStopTimeoutMs = 5000,
+  installTimeoutMs = 5000,
+}) {
+  let shutdownStarted = false;
+  let allowQuit = false;
+
+  /** 等待 sidecar 停止，超时则继续退出。 */
+  function stopSidecar() {
+    return new Promise((resolve) => {
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        logger.error('[quit] sidecar stop timed out, continuing shutdown');
+        resolve();
+      }, sidecarStopTimeoutMs);
+      if (typeof timer.unref === 'function') timer.unref();
+      Promise.resolve()
+        .then(() => sidecar.stop())
+        .catch((err) => logger.error(`[sidecar] stop failed: ${err}`))
+        .finally(() => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          resolve();
+        });
     });
+  }
+
+  function finishQuit() {
+    const updater = getUpdater();
+    const ready = Boolean(updater && updater.isUpdateReady && updater.isUpdateReady());
+    if (!ready) {
+      app.exit(0);
+      return;
+    }
+    // 必须先把 allowQuit 置为 true：quitAndInstall 内部会同步再次 app.quit()，
+    // 那时 before-quit 必须直接放行，否则会再次 preventDefault 把自己卡住。
+    allowQuit = true;
+    try {
+      updater.quitAndInstall();
+    } catch (err) {
+      logger.error(`[update] quitAndInstall failed: ${err}`);
+      app.exit(0);
+      return;
+    }
+    logger.info('[update] installing downloaded update on quit');
+    // 故意不 unref：这个看门狗就是用来兜底进程不退出的情况。
+    setTimeout(() => {
+      logger.error('[update] installer did not quit the app, forcing exit');
+      app.exit(0);
+    }, installTimeoutMs);
+  }
+
+  function onBeforeQuit(event) {
+    if (allowQuit) return;
+    event.preventDefault();
+    if (shutdownStarted) return;
+    shutdownStarted = true;
+    stopWorkspaceWatch();
+    stopSidecar().then(finishQuit);
+  }
+
+  return { onBeforeQuit };
+}
+
+module.exports = { createQuitFlow };
+```
+
+在 `main.cjs` 的 `sidecar` 常量之后创建（`getUpdater` 惰性求值，模块加载期就绪）：
+
+```js
+// getUpdater 是惰性的：quitFlow 在模块加载期就绪，updater 稍后在 whenReady 里创建。
+const quitFlow = createQuitFlow({
+  app,
+  sidecar,
+  getUpdater: () => updater,
+  logger,
+  stopWorkspaceWatch,
 });
 ```
+
+把原来的 `before-quit` 处理器整体替换为：
+
+```js
+app.on('before-quit', (event) => quitFlow.onBeforeQuit(event));
+```
+
+补充：sidecar 停止设 5s 超时；安装看门狗 5s 且**不** `unref()`（它必须在进程本该
+退出却卡住时仍然触发）；`quitAndInstall()` 抛错时回退 `app.exit(0)`。`app.exit(0)`
+只能由 quit-flow 调用。
 
 **Step 5: 暴露 preload API**
 
@@ -1249,15 +1364,20 @@ Run:
 ```powershell
 node --check apps/desktop/src/main.cjs
 node --check apps/desktop/src/preload.cjs
+node --check apps/desktop/src/quit-flow.cjs
+node --test apps/desktop/test/quit-flow.test.mjs
 npm run desktop:test
 ```
 
-Expected: 两条 `node --check` 无输出且退出码 0；测试全部通过。
+Expected: 三条 `node --check` 无输出且退出码 0；`quit-flow.test.mjs` 7 个用例全通过
+（重复退出拦截、正常退出、就绪安装、安装抛错、sidecar 拒绝、sidecar 超时、
+`stopWorkspaceWatch` 只调用一次）；`desktop:test` 除本机缺 `uvicorn` 的 2 个
+sidecar 环境用例外全部通过。
 
 **Step 7: Commit**
 
 ```powershell
-git add apps/desktop/src/main.cjs apps/desktop/src/preload.cjs
+git add apps/desktop/src/main.cjs apps/desktop/src/preload.cjs apps/desktop/src/quit-flow.cjs apps/desktop/test/quit-flow.test.mjs
 git commit -m "feat(update): wire updater into main process and preload"
 ```
 
@@ -1365,7 +1485,11 @@ export const useUpdatesStore = create<UpdatesStore>((set) => ({
     await window.fireeyeaud?.updates?.download();
   },
   install: async () => {
-    await window.fireeyeaud?.updates?.install();
+    try {
+      await window.fireeyeaud?.updates?.install();
+    } catch {
+      // 主进程退出或 IPC 中断时 Promise 可能 reject；吞掉以避免未处理的拒绝。
+    }
   },
 }));
 ```
@@ -1538,6 +1662,9 @@ import { FormActions } from '../forms/FormActions';
                   ? t('updateIdle')
                   : t('updateNotChecked');
 ```
+
+说明：`invalid_input`（例如 `setEnabled` 收到非布尔值）会落入 `update.error` 的通用分支，
+显示 `updateFailed`，无需新增文案；正常 UI 只会传布尔值，该代码主要用于防御异常调用。
 
 3. 在 `FormActions` 之前插入更新区块：
 
@@ -1903,7 +2030,8 @@ npm run renderer:build
 
 Expected:
 
-- `desktop:test`：全部通过（含 `updater.test.mjs`）。
+- `desktop:test`：除本机缺 `uvicorn` 导致的 2 个 sidecar 环境用例外全部通过；其中
+  `updater.test.mjs` 36/36、`quit-flow.test.mjs` 7/7。
 - `renderer:typecheck`：无输出、退出码 0。
 - `renderer:build`：生成 `apps/renderer/dist/`，退出码 0。
 
@@ -1952,5 +2080,7 @@ git commit -m "fix(update): address issues found in end-to-end verification"
 - **GitHub 可达性**：默认源在 GitHub，国内可能慢或不通；`feedUrl` 可改内网镜像。检查失败只提示，不阻塞应用。
 - **代码签名**：未签名的 NSIS 安装包可能触发 SmartScreen；不影响 electron-updater 的静默安装，但正式分发前建议签名。
 - **安装目录权限**：当前 NSIS 为默认的 per-user 一键安装，无需管理员权限；若未来改 `perMachine`，安装更新会需要提权。
-- **退出流程**：`before-quit` 必须保证 sidecar 先停；若 `sidecar.stop()` 长时间不返回，用户会感到退出变慢，后续可加超时兜底。
+- **退出流程**：`before-quit` 必须保证 sidecar 先停；已用 `quit-flow.cjs` 实现 5s
+  sidecar 停止超时与 5s 安装看门狗兜底，避免退出被永久卡住。重复退出请求会被拦截，
+  只有 sidecar 停完并调用 `quitAndInstall()` 后才放行。
 - **不做**：macOS/Linux 更新、灰度/分批、强制更新、版本回滚、 prerelease 通道、下载断点续传之外的定制策略。
