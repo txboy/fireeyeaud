@@ -20,6 +20,8 @@ const { loadWindowState, saveWindowState } = require('./window-state.cjs');
 const { readFileContent, writeTextFile, deletePath } = require('./file-preview.cjs');
 const { copyInto, move, createDir, createFile, rename } = require('./file-ops.cjs');
 const { parseTokens, isExcluded, isIncluded } = require('./search-tokens.cjs');
+const { autoUpdater } = require('electron-updater');
+const { createUpdatePrefsStore, createUpdater } = require('./updater.cjs');
 
 app.setName('fireeyeaud');
 
@@ -41,6 +43,7 @@ const SIDECAR_TOKEN = crypto.randomBytes(24).toString('hex');
 let mainWindow = null;
 let quitting = false;
 let secrets = null;
+let updater = null;
 
 function createLogger() {
   const dir = path.join(app.getPath('userData'), 'logs');
@@ -216,6 +219,25 @@ function registerIpc() {
     platform: process.platform,
     userData: app.getPath('userData'),
   }));
+  ipcMain.handle('update:get-state', () => updater?.getState() ?? null);
+  ipcMain.handle(
+    'update:set-enabled',
+    (_event, enabled) => updater?.setEnabled(Boolean(enabled)) ?? null,
+  );
+  ipcMain.handle(
+    'update:set-feed',
+    (_event, url) => updater?.setFeedUrl(url) ?? { ok: false, error: 'unavailable' },
+  );
+  ipcMain.handle('update:check', () => updater?.check({ manual: true }) ?? null);
+  ipcMain.handle(
+    'update:download',
+    () => updater?.download() ?? { ok: false, error: 'unavailable' },
+  );
+  // 走正常退出路径：before-quit 会判断是否已下载并触发静默安装。
+  ipcMain.handle('update:install', () => {
+    app.quit();
+    return { ok: true };
+  });
   ipcMain.handle('window:minimize', () => {
     mainWindow?.minimize();
   });
@@ -578,6 +600,18 @@ app.whenReady().then(async () => {
     safeStorage,
     logger,
   });
+  updater = createUpdater({
+    autoUpdater,
+    prefs: createUpdatePrefsStore({ dir: app.getPath('userData'), logger }),
+    logger,
+    isPackaged: app.isPackaged,
+    currentVersion: app.getVersion(),
+    send: (state) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update:state', state);
+      }
+    },
+  });
   registerIpc();
   hardenWebContents();
 
@@ -609,6 +643,8 @@ app.whenReady().then(async () => {
     .then((info) => logger.info(`[sidecar] ready on port ${info.port} (${info.status})`))
     .catch((err) => logger.error(`[sidecar] start failed: ${err}`));
 
+  updater.start();
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
@@ -626,5 +662,18 @@ app.on('before-quit', (event) => {
   sidecar
     .stop()
     .catch((err) => logger.error(`[sidecar] stop failed: ${err}`))
-    .finally(() => app.exit(0));
+    .finally(() => {
+      // 先停 sidecar，再让 electron-updater 拉起 NSIS 安装器；
+      // quitAndInstall 内部会再次 app.quit()，此时 quitting 已为 true，直接放行。
+      if (updater && updater.quitAndInstall()) {
+        logger.info('[update] installing downloaded update on quit');
+        const fallback = setTimeout(() => {
+          logger.error('[update] installer did not quit the app, forcing exit');
+          app.exit(0);
+        }, 5000);
+        if (typeof fallback.unref === 'function') fallback.unref();
+      } else {
+        app.exit(0);
+      }
+    });
 });
