@@ -131,13 +131,19 @@ function createUpdater({
     return { ...state };
   }
 
-  let pendingAction = 'check';
+  // 下载完成后状态必须保持“已就绪”，否则迟到的 progress/available 事件
+  // 会把 isUpdateReady() 打回 false，导致退出时静默跳过安装。
+  function publishUnlessReady(patch) {
+    if (state.phase === 'downloaded') return { ...state };
+    return publish(patch);
+  }
 
   function onError(err) {
     logger.error(`[update] ${err?.stack || err}`);
+    if (state.phase === 'downloaded') return; // 安装期错误不能丢掉就绪状态
     publish({
       phase: 'error',
-      error: pendingAction === 'download' ? 'download_failed' : 'check_failed',
+      error: state.phase === 'downloading' ? 'download_failed' : 'check_failed',
     });
   }
 
@@ -152,35 +158,44 @@ function createUpdater({
   };
 
   autoUpdater.on('checking-for-update', () =>
-    publish({ phase: 'checking', error: null }),
+    publishUnlessReady({ phase: 'checking', error: null }),
   );
   autoUpdater.on('update-available', (info) =>
-    publish({
+    publishUnlessReady({
       phase: 'available',
       availableVersion: info?.version ?? null,
+      percent: 0,
+      bytesPerSecond: 0,
       error: null,
     }),
   );
   autoUpdater.on('update-not-available', () =>
-    publish({
+    publishUnlessReady({
       phase: 'not-available',
       availableVersion: null,
       percent: 0,
+      bytesPerSecond: 0,
       error: null,
     }),
   );
-  autoUpdater.on('download-progress', (progress) =>
-    publish({
+  autoUpdater.on('download-progress', (progress) => {
+    const rounded = Math.round(progress?.percent ?? 0);
+    const percent = Number.isFinite(rounded)
+      ? Math.min(100, Math.max(0, rounded))
+      : 0;
+    publishUnlessReady({
       phase: 'downloading',
-      percent: Math.round(progress?.percent ?? 0),
+      percent,
       bytesPerSecond: progress?.bytesPerSecond ?? 0,
-    }),
-  );
+      error: null,
+    });
+  });
   autoUpdater.on('update-downloaded', (info) =>
     publish({
       phase: 'downloaded',
       availableVersion: info?.version ?? state.availableVersion,
       percent: 100,
+      bytesPerSecond: 0,
       error: null,
     }),
   );
@@ -199,18 +214,24 @@ function createUpdater({
       return { ...state };
     }
     if (state.phase === 'downloaded') return { ...state };
-    pendingAction = 'check';
     applyFeed();
     publish({ phase: 'checking', error: null });
     try {
       const result = autoUpdater.checkForUpdates();
-      if (result && typeof result.catch === 'function') result.catch(onError);
+      if (result && typeof result.catch === 'function') {
+        result.catch((err) => {
+          // error 事件是主信号；只有事件没被触发时才由拒绝兜底，避免重复发布。
+          if (state.phase === 'checking') onError(err);
+        });
+      }
     } catch (err) {
       onError(err);
     }
     return { ...state };
   }
 
+  // 开关只控制启动时的自动检查；关闭后手动检查/下载仍然可用，
+  // 也不会取消正在进行的下载。
   function setEnabled(enabled) {
     const result = prefs.set({ enabled: Boolean(enabled) });
     if (!result.ok) {
@@ -220,6 +241,13 @@ function createUpdater({
   }
 
   function setFeedUrl(feedUrl) {
+    if (
+      state.phase === 'checking' ||
+      state.phase === 'downloading' ||
+      state.phase === 'downloaded'
+    ) {
+      return { ok: false, error: 'busy', state: { ...state } };
+    }
     const result = prefs.set({ feedUrl });
     if (!result.ok) {
       return { ok: false, error: result.error, state: { ...state } };
@@ -231,6 +259,7 @@ function createUpdater({
         phase: 'idle',
         availableVersion: null,
         percent: 0,
+        bytesPerSecond: 0,
         error: null,
       }),
     };
@@ -240,14 +269,21 @@ function createUpdater({
     if (!state.availableVersion) {
       return { ok: false, error: 'not_available' };
     }
-    if (state.phase === 'downloading' || state.phase === 'downloaded') {
+    if (
+      state.phase === 'checking' ||
+      state.phase === 'downloading' ||
+      state.phase === 'downloaded'
+    ) {
       return { ok: false, error: 'busy' };
     }
-    pendingAction = 'download';
     publish({ phase: 'downloading', percent: 0, error: null });
     try {
       const result = autoUpdater.downloadUpdate();
-      if (result && typeof result.catch === 'function') result.catch(onError);
+      if (result && typeof result.catch === 'function') {
+        result.catch((err) => {
+          if (state.phase === 'downloading') onError(err);
+        });
+      }
     } catch (err) {
       onError(err);
       return { ok: false, error: 'download_failed' };
@@ -259,15 +295,23 @@ function createUpdater({
     return state.phase === 'downloaded';
   }
 
+  // 返回值表示“已请求安装”，不代表安装器一定成功启动；
+  // Task 4 会在 before-quit 里安排兜底退出。
   function quitAndInstall() {
     if (!isUpdateReady()) return false;
     autoUpdater.quitAndInstall(true, true);
     return true;
   }
 
+  let started = false;
   function start() {
-    if (!isPackaged || !state.enabled) return;
-    schedule(() => check(), startupDelayMs);
+    if (started || !isPackaged || !state.enabled) return;
+    started = true;
+    const timer = schedule(() => {
+      started = false;
+      check();
+    }, startupDelayMs);
+    if (timer && typeof timer.unref === 'function') timer.unref();
   }
 
   return {

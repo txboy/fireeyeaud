@@ -434,13 +434,16 @@ import { EventEmitter } from 'node:events';
 在文件末尾追加：
 
 ```js
+const flush = () => new Promise((resolve) => setImmediate(resolve));
+
 class FakeAutoUpdater extends EventEmitter {
   constructor() {
     super();
     this.checks = 0;
     this.downloads = 0;
     this.installs = 0;
-    this.feed = null;
+    this.rejectCheck = false;
+    this.rejectDownload = false;
   }
 
   setFeedURL(config) {
@@ -449,11 +452,13 @@ class FakeAutoUpdater extends EventEmitter {
 
   checkForUpdates() {
     this.checks += 1;
+    if (this.rejectCheck) return Promise.reject(new Error('check rejected'));
     return Promise.resolve(null);
   }
 
   downloadUpdate() {
     this.downloads += 1;
+    if (this.rejectDownload) return Promise.reject(new Error('download rejected'));
     return Promise.resolve([]);
   }
 
@@ -463,13 +468,32 @@ class FakeAutoUpdater extends EventEmitter {
   }
 }
 
-function makeUpdater({ enabled = true, isPackaged = true, feedUrl } = {}) {
+function makeUpdater({
+  enabled = true,
+  isPackaged = true,
+  feedUrl,
+  deferSchedule = false,
+  prefs: prefsOverride,
+} = {}) {
   const dir = tmpDir();
-  const prefs = createUpdatePrefsStore({ dir, logger: silent() });
-  prefs.set({ enabled });
-  if (feedUrl) prefs.set({ feedUrl });
+  const prefs =
+    prefsOverride ?? createUpdatePrefsStore({ dir, logger: silent() });
+  if (!prefsOverride) {
+    prefs.set({ enabled });
+    if (feedUrl) prefs.set({ feedUrl });
+  }
   const autoUpdater = new FakeAutoUpdater();
   const states = [];
+  const scheduled = [];
+  const schedule = deferSchedule
+    ? (fn) => {
+        scheduled.push(fn);
+        return 0;
+      }
+    : (fn) => {
+        fn();
+        return 0;
+      };
   const controller = createUpdater({
     autoUpdater,
     prefs,
@@ -478,12 +502,9 @@ function makeUpdater({ enabled = true, isPackaged = true, feedUrl } = {}) {
     currentVersion: '0.1.0',
     send: (state) => states.push(state),
     startupDelayMs: 0,
-    schedule: (fn) => {
-      fn();
-      return 0;
-    },
+    schedule,
   });
-  return { autoUpdater, controller, states };
+  return { autoUpdater, controller, states, prefs, scheduled };
 }
 
 test('start 在关闭开关时不检查', () => {
@@ -584,6 +605,229 @@ test('非法更新源被拒绝且状态不变', () => {
   assert.equal(result.state.feedUrl, before.feedUrl);
   assert.equal(result.state.feedUrl, 'https://example.com/mirror/');
 });
+
+test('已下载状态不会被迟到事件回退', () => {
+  const { autoUpdater, controller } = makeUpdater();
+  autoUpdater.emit('update-available', { version: '0.2.0' });
+  controller.download();
+  autoUpdater.emit('update-downloaded', { version: '0.2.0' });
+  assert.equal(controller.getState().percent, 100);
+
+  autoUpdater.emit('download-progress', { percent: 10, bytesPerSecond: 5 });
+  autoUpdater.emit('update-available', { version: '0.3.0' });
+  autoUpdater.emit('update-not-available', { version: '0.1.0' });
+  autoUpdater.emit('checking-for-update');
+  autoUpdater.emit('error', new Error('late failure'));
+
+  const state = controller.getState();
+  assert.equal(state.phase, 'downloaded');
+  assert.equal(state.percent, 100);
+  assert.equal(state.availableVersion, '0.2.0');
+  assert.equal(controller.isUpdateReady(), true);
+  assert.equal(controller.quitAndInstall(), true);
+  assert.equal(autoUpdater.installs, 1);
+});
+
+test('检查失败只发布一次 error 状态', async () => {
+  const { autoUpdater, controller, states } = makeUpdater();
+  autoUpdater.rejectCheck = true;
+  controller.check();
+  autoUpdater.emit('error', new Error('network down'));
+  await flush();
+
+  const errors = states.filter((state) => state.phase === 'error');
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0].error, 'check_failed');
+});
+
+test('仅 Promise 拒绝也能进入 check_failed', async () => {
+  const { autoUpdater, controller, states } = makeUpdater();
+  autoUpdater.rejectCheck = true;
+  controller.check();
+  await flush();
+
+  assert.equal(controller.getState().phase, 'error');
+  assert.equal(controller.getState().error, 'check_failed');
+  assert.equal(states.filter((state) => state.phase === 'error').length, 1);
+});
+
+test('下载完成后的安装期错误不丢失就绪状态', () => {
+  const { autoUpdater, controller } = makeUpdater();
+  autoUpdater.emit('update-available', { version: '0.2.0' });
+  controller.download();
+  autoUpdater.emit('update-downloaded', { version: '0.2.0' });
+  autoUpdater.emit('error', new Error('installer failed'));
+
+  assert.equal(controller.getState().phase, 'downloaded');
+  assert.equal(controller.isUpdateReady(), true);
+});
+
+test('关闭自动更新只影响启动检查并持久化', () => {
+  const { controller, prefs } = makeUpdater();
+  const before = controller.getState().phase;
+
+  const disabled = controller.setEnabled(false);
+  assert.equal(disabled.ok, true);
+  assert.equal(disabled.state.enabled, false);
+  assert.equal(disabled.state.phase, before);
+  assert.equal(prefs.get().enabled, false);
+
+  const reloaded = createUpdatePrefsStore({
+    dir: path.dirname(prefs.file),
+    logger: silent(),
+  });
+  assert.equal(reloaded.get().enabled, false);
+
+  const enabled = controller.setEnabled(true);
+  assert.equal(enabled.ok, true);
+  assert.equal(enabled.state.enabled, true);
+  assert.equal(prefs.get().enabled, true);
+});
+
+test('设置开关持久化失败时返回错误且状态不变', () => {
+  const real = createUpdatePrefsStore({ dir: tmpDir(), logger: silent() });
+  const prefs = {
+    get: () => real.get(),
+    set: () => ({ ok: false, error: 'persist_failed', settings: real.get() }),
+  };
+  const { controller } = makeUpdater({ prefs });
+  const before = controller.getState();
+
+  const result = controller.setEnabled(false);
+  assert.equal(result.ok, false);
+  assert.equal(result.error, 'persist_failed');
+  assert.deepEqual(controller.getState(), before);
+});
+
+test('检查时才应用更新源，修改源延后到下次检查', () => {
+  const { autoUpdater, controller } = makeUpdater();
+  assert.equal(autoUpdater.feed, undefined);
+
+  controller.check();
+  assert.deepEqual(autoUpdater.feed, {
+    provider: 'generic',
+    url: DEFAULT_FEED_URL,
+  });
+
+  autoUpdater.emit('update-available', { version: '0.2.0' });
+  autoUpdater.feed = null;
+  const result = controller.setFeedUrl('https://example.com/mirror');
+  assert.equal(result.ok, true);
+  assert.equal(autoUpdater.feed, null);
+
+  controller.check();
+  assert.deepEqual(autoUpdater.feed, {
+    provider: 'generic',
+    url: 'https://example.com/mirror/',
+  });
+});
+
+test('操作进行中拒绝重复操作', () => {
+  const { autoUpdater, controller } = makeUpdater();
+  autoUpdater.emit('update-available', { version: '0.2.0' });
+  controller.check();
+  assert.equal(controller.getState().phase, 'checking');
+  assert.deepEqual(controller.download(), { ok: false, error: 'busy' });
+
+  autoUpdater.emit('update-downloaded', { version: '0.2.0' });
+  assert.deepEqual(controller.download(), { ok: false, error: 'busy' });
+  const checksBefore = autoUpdater.checks;
+  controller.check();
+  assert.equal(autoUpdater.checks, checksBefore);
+  assert.equal(controller.isUpdateReady(), true);
+});
+
+test('未下载时 quitAndInstall 返回 false', () => {
+  const { autoUpdater, controller } = makeUpdater();
+  assert.equal(controller.quitAndInstall(), false);
+  assert.equal(autoUpdater.installs, 0);
+});
+
+test('下载中或已下载时拒绝修改更新源', () => {
+  const downloading = makeUpdater();
+  downloading.autoUpdater.emit('update-available', { version: '0.2.0' });
+  downloading.controller.download();
+  const downloadingBefore = downloading.controller.getState();
+  const busyWhileDownloading =
+    downloading.controller.setFeedUrl('https://example.com/mirror');
+  assert.equal(busyWhileDownloading.ok, false);
+  assert.equal(busyWhileDownloading.error, 'busy');
+  assert.deepEqual(downloading.controller.getState(), downloadingBefore);
+  assert.equal(downloading.prefs.get().feedUrl, DEFAULT_FEED_URL);
+
+  const downloaded = makeUpdater();
+  downloaded.autoUpdater.emit('update-available', { version: '0.2.0' });
+  downloaded.controller.download();
+  downloaded.autoUpdater.emit('update-downloaded', { version: '0.2.0' });
+  const downloadedBefore = downloaded.controller.getState();
+  const busyWhenReady =
+    downloaded.controller.setFeedUrl('https://example.com/mirror');
+  assert.equal(busyWhenReady.ok, false);
+  assert.equal(busyWhenReady.error, 'busy');
+  assert.deepEqual(downloaded.controller.getState(), downloadedBefore);
+  assert.equal(downloaded.prefs.get().feedUrl, DEFAULT_FEED_URL);
+});
+
+test('下载进度被钳制并传播字节速率', () => {
+  const { autoUpdater, controller } = makeUpdater();
+  autoUpdater.emit('update-available', { version: '0.2.0' });
+  controller.download();
+
+  autoUpdater.emit('download-progress', { percent: 142.7, bytesPerSecond: 2048 });
+  assert.equal(controller.getState().percent, 100);
+  assert.equal(controller.getState().bytesPerSecond, 2048);
+  assert.equal(controller.getState().error, null);
+
+  autoUpdater.emit('download-progress', { percent: Number.NaN, bytesPerSecond: 0 });
+  assert.equal(controller.getState().percent, 0);
+
+  autoUpdater.emit('download-progress', { percent: -5, bytesPerSecond: 1 });
+  assert.equal(controller.getState().percent, 0);
+
+  autoUpdater.emit('download-progress', { percent: 55, bytesPerSecond: 10 });
+  autoUpdater.emit('update-not-available', { version: '0.1.0' });
+  assert.equal(controller.getState().phase, 'not-available');
+  assert.equal(controller.getState().percent, 0);
+  assert.equal(controller.getState().bytesPerSecond, 0);
+});
+
+test('发现新版本时清零进度与速率', () => {
+  const { autoUpdater, controller } = makeUpdater();
+  autoUpdater.emit('download-progress', { percent: 40, bytesPerSecond: 512 });
+  autoUpdater.emit('update-available', { version: '0.2.0' });
+  assert.equal(controller.getState().percent, 0);
+  assert.equal(controller.getState().bytesPerSecond, 0);
+});
+
+test('向渲染层推送的是状态副本', () => {
+  const { autoUpdater, controller, states } = makeUpdater();
+  autoUpdater.emit('update-available', { version: '0.2.0' });
+
+  const captured = states.at(-1);
+  captured.phase = 'error';
+  captured.availableVersion = '9.9.9';
+
+  assert.equal(controller.getState().phase, 'available');
+  assert.equal(controller.getState().availableVersion, '0.2.0');
+
+  const snapshot = controller.getState();
+  snapshot.phase = 'downloaded';
+  assert.equal(controller.getState().phase, 'available');
+});
+
+test('start 只调度一次启动检查', () => {
+  const { autoUpdater, controller, scheduled } = makeUpdater({
+    deferSchedule: true,
+  });
+  controller.start();
+  controller.start();
+
+  assert.equal(scheduled.length, 1);
+  assert.equal(autoUpdater.checks, 0);
+
+  scheduled[0]();
+  assert.equal(autoUpdater.checks, 1);
+});
 ```
 
 同时把文件顶部的解构改为：
@@ -644,13 +888,19 @@ function createUpdater({
     return { ...state };
   }
 
-  let pendingAction = 'check';
+  // 下载完成后状态必须保持“已就绪”，否则迟到的 progress/available 事件
+  // 会把 isUpdateReady() 打回 false，导致退出时静默跳过安装。
+  function publishUnlessReady(patch) {
+    if (state.phase === 'downloaded') return { ...state };
+    return publish(patch);
+  }
 
   function onError(err) {
     logger.error(`[update] ${err?.stack || err}`);
+    if (state.phase === 'downloaded') return; // 安装期错误不能丢掉就绪状态
     publish({
       phase: 'error',
-      error: pendingAction === 'download' ? 'download_failed' : 'check_failed',
+      error: state.phase === 'downloading' ? 'download_failed' : 'check_failed',
     });
   }
 
@@ -665,35 +915,44 @@ function createUpdater({
   };
 
   autoUpdater.on('checking-for-update', () =>
-    publish({ phase: 'checking', error: null }),
+    publishUnlessReady({ phase: 'checking', error: null }),
   );
   autoUpdater.on('update-available', (info) =>
-    publish({
+    publishUnlessReady({
       phase: 'available',
       availableVersion: info?.version ?? null,
+      percent: 0,
+      bytesPerSecond: 0,
       error: null,
     }),
   );
   autoUpdater.on('update-not-available', () =>
-    publish({
+    publishUnlessReady({
       phase: 'not-available',
       availableVersion: null,
       percent: 0,
+      bytesPerSecond: 0,
       error: null,
     }),
   );
-  autoUpdater.on('download-progress', (progress) =>
-    publish({
+  autoUpdater.on('download-progress', (progress) => {
+    const rounded = Math.round(progress?.percent ?? 0);
+    const percent = Number.isFinite(rounded)
+      ? Math.min(100, Math.max(0, rounded))
+      : 0;
+    publishUnlessReady({
       phase: 'downloading',
-      percent: Math.round(progress?.percent ?? 0),
+      percent,
       bytesPerSecond: progress?.bytesPerSecond ?? 0,
-    }),
-  );
+      error: null,
+    });
+  });
   autoUpdater.on('update-downloaded', (info) =>
     publish({
       phase: 'downloaded',
       availableVersion: info?.version ?? state.availableVersion,
       percent: 100,
+      bytesPerSecond: 0,
       error: null,
     }),
   );
@@ -712,18 +971,24 @@ function createUpdater({
       return { ...state };
     }
     if (state.phase === 'downloaded') return { ...state };
-    pendingAction = 'check';
     applyFeed();
     publish({ phase: 'checking', error: null });
     try {
       const result = autoUpdater.checkForUpdates();
-      if (result && typeof result.catch === 'function') result.catch(onError);
+      if (result && typeof result.catch === 'function') {
+        result.catch((err) => {
+          // error 事件是主信号；只有事件没被触发时才由拒绝兜底，避免重复发布。
+          if (state.phase === 'checking') onError(err);
+        });
+      }
     } catch (err) {
       onError(err);
     }
     return { ...state };
   }
 
+  // 开关只控制启动时的自动检查；关闭后手动检查/下载仍然可用，
+  // 也不会取消正在进行的下载。
   function setEnabled(enabled) {
     const result = prefs.set({ enabled: Boolean(enabled) });
     if (!result.ok) {
@@ -733,6 +998,13 @@ function createUpdater({
   }
 
   function setFeedUrl(feedUrl) {
+    if (
+      state.phase === 'checking' ||
+      state.phase === 'downloading' ||
+      state.phase === 'downloaded'
+    ) {
+      return { ok: false, error: 'busy', state: { ...state } };
+    }
     const result = prefs.set({ feedUrl });
     if (!result.ok) {
       return { ok: false, error: result.error, state: { ...state } };
@@ -744,6 +1016,7 @@ function createUpdater({
         phase: 'idle',
         availableVersion: null,
         percent: 0,
+        bytesPerSecond: 0,
         error: null,
       }),
     };
@@ -753,14 +1026,21 @@ function createUpdater({
     if (!state.availableVersion) {
       return { ok: false, error: 'not_available' };
     }
-    if (state.phase === 'downloading' || state.phase === 'downloaded') {
+    if (
+      state.phase === 'checking' ||
+      state.phase === 'downloading' ||
+      state.phase === 'downloaded'
+    ) {
       return { ok: false, error: 'busy' };
     }
-    pendingAction = 'download';
     publish({ phase: 'downloading', percent: 0, error: null });
     try {
       const result = autoUpdater.downloadUpdate();
-      if (result && typeof result.catch === 'function') result.catch(onError);
+      if (result && typeof result.catch === 'function') {
+        result.catch((err) => {
+          if (state.phase === 'downloading') onError(err);
+        });
+      }
     } catch (err) {
       onError(err);
       return { ok: false, error: 'download_failed' };
@@ -772,15 +1052,23 @@ function createUpdater({
     return state.phase === 'downloaded';
   }
 
+  // 返回值表示“已请求安装”，不代表安装器一定成功启动；
+  // Task 4 会在 before-quit 里安排兜底退出。
   function quitAndInstall() {
     if (!isUpdateReady()) return false;
     autoUpdater.quitAndInstall(true, true);
     return true;
   }
 
+  let started = false;
   function start() {
-    if (!isPackaged || !state.enabled) return;
-    schedule(() => check(), startupDelayMs);
+    if (started || !isPackaged || !state.enabled) return;
+    started = true;
+    const timer = schedule(() => {
+      started = false;
+      check();
+    }, startupDelayMs);
+    if (timer && typeof timer.unref === 'function') timer.unref();
   }
 
   return {
@@ -817,7 +1105,7 @@ Run:
 npm run desktop:test
 ```
 
-Expected: PASS，12 个旧测试 + 10 个新测试全部通过。
+Expected: PASS，12 个配置测试 + 24 个控制器测试（共 36）全部通过。
 
 **Step 5: Commit**
 
@@ -922,6 +1210,11 @@ app.on('before-quit', (event) => {
       // quitAndInstall 内部会再次 app.quit()，此时 quitting 已为 true，直接放行。
       if (updater && updater.quitAndInstall()) {
         logger.info('[update] installing downloaded update on quit');
+        const fallback = setTimeout(() => {
+          logger.error('[update] installer did not quit the app, forcing exit');
+          app.exit(0);
+        }, 5000);
+        if (typeof fallback.unref === 'function') fallback.unref();
       } else {
         app.exit(0);
       }
@@ -992,6 +1285,7 @@ import type {
   SearchOptions,
   SearchResult,
   SidecarInfo,
+  UpdateErrorCode,
   UpdateResult,
   UpdateState,
 } from '@fireeyeaud/shared';
@@ -1005,7 +1299,7 @@ import type {
         setEnabled: (enabled: boolean) => Promise<UpdateResult | null>;
         setFeedUrl: (url: string) => Promise<UpdateResult | null>;
         check: () => Promise<UpdateState | null>;
-        download: () => Promise<{ ok: boolean; error?: string } | null>;
+        download: () => Promise<{ ok: boolean; error?: UpdateErrorCode } | null>;
         install: () => Promise<{ ok: boolean } | null>;
         onState: (callback: (state: UpdateState) => void) => () => void;
       };
@@ -1017,7 +1311,7 @@ import type {
 
 ```ts
 import { create } from 'zustand';
-import type { UpdateState } from '@fireeyeaud/shared';
+import type { UpdateErrorCode, UpdateState } from '@fireeyeaud/shared';
 
 const initialState: UpdateState = {
   enabled: true,
@@ -1034,7 +1328,7 @@ interface UpdatesStore extends UpdateState {
   ready: boolean;
   init: () => Promise<void>;
   setEnabled: (enabled: boolean) => Promise<void>;
-  setFeedUrl: (feedUrl: string) => Promise<{ ok: boolean; error?: string }>;
+  setFeedUrl: (feedUrl: string) => Promise<{ ok: boolean; error?: UpdateErrorCode }>;
   check: () => Promise<void>;
   download: () => Promise<void>;
   install: () => Promise<void>;
@@ -1153,6 +1447,7 @@ git commit -m "feat(update): add renderer update store and preload types"
     updateFailed: '检查更新失败，请检查网络或更新源地址',
     updateDevMode: '开发模式不检查更新',
     updateFeedInvalid: '更新源地址无效，需以 http:// 或 https:// 开头',
+    updateFeedBusy: '正在检查或下载更新，请稍后再试',
 ```
 
 **Step 2: 补英文文案**
@@ -1188,6 +1483,7 @@ git commit -m "feat(update): add renderer update store and preload types"
     updateFailed: 'Update check failed. Check your network or feed URL.',
     updateDevMode: 'Update checks are disabled in development mode',
     updateFeedInvalid: 'Invalid feed URL; it must start with http:// or https://',
+    updateFeedBusy: 'An update is in progress; please try again shortly.',
 ```
 
 **Step 3: 扩展 SettingsPanel**
@@ -1212,7 +1508,7 @@ import { FormActions } from '../forms/FormActions';
 ```tsx
   const update = useUpdatesStore();
   const [feedDraft, setFeedDraft] = useState(update.feedUrl);
-  const [feedError, setFeedError] = useState(false);
+  const [feedError, setFeedError] = useState<'invalid_url' | 'busy' | null>(null);
 
   useEffect(() => {
     setFeedDraft(update.feedUrl);
@@ -1220,7 +1516,9 @@ import { FormActions } from '../forms/FormActions';
 
   const applyFeed = async () => {
     const result = await update.setFeedUrl(feedDraft);
-    setFeedError(!result.ok);
+    setFeedError(
+      result.ok ? null : result.error === 'busy' ? 'busy' : 'invalid_url',
+    );
   };
 
   const statusText =
@@ -1266,7 +1564,11 @@ import { FormActions } from '../forms/FormActions';
           }}
         />
       </label>
-      {feedError && <span className="card__meta">{t('updateFeedInvalid')}</span>}
+      {feedError && (
+        <span className="card__meta">
+          {t(feedError === 'busy' ? 'updateFeedBusy' : 'updateFeedInvalid')}
+        </span>
+      )}
       <span className="card__meta">
         {t('updateCurrent', { version: update.currentVersion || '—' })}
       </span>
@@ -1277,7 +1579,11 @@ import { FormActions } from '../forms/FormActions';
       <div className="field field--inline">
         <Button
           onClick={() => void applyFeed()}
-          disabled={update.phase === 'checking' || update.phase === 'downloading'}
+          disabled={
+            update.phase === 'checking' ||
+            update.phase === 'downloading' ||
+            update.phase === 'downloaded'
+          }
         >
           {t('updateApplyFeed')}
         </Button>
