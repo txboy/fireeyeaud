@@ -1050,7 +1050,10 @@ export default {
     updateFailed: '检查更新失败，请检查网络或更新源地址',
     updateDevMode: '开发模式不检查更新',
     updateFeedInvalid: '更新源地址无效，需以 http:// 或 https:// 开头',
-    updateFeedBusy: '正在检查或下载更新，请稍后再试',
+    updateFeedBusy: '更新正在进行或等待重启，请稍后再试',
+    updateFeedSaveFailed: '保存更新源失败，请稍后重试',
+    updateToggleFailed: '自动更新设置保存失败',
+    updateDownloadFailed: '下载更新失败，请稍后重试',
     saved: '已保存',
   },
   welcome: {

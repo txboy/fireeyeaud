@@ -25,7 +25,7 @@ export interface UpdatesBridge {
 
 interface UpdatesStore extends UpdateState {
   init: () => Promise<void>;
-  setEnabled: (enabled: boolean) => Promise<void>;
+  setEnabled: (enabled: boolean) => Promise<{ ok: boolean; error?: UpdateErrorCode }>;
   setFeedUrl: (feedUrl: string) => Promise<{ ok: boolean; error?: UpdateErrorCode }>;
   check: () => Promise<void>;
   download: () => Promise<void>;
@@ -74,8 +74,9 @@ export function createUpdatesStore(api: UpdatesBridge | undefined) {
       },
 
       setEnabled: async (enabled) => {
-        if (!api) return;
-        await apply(() => api.setEnabled(enabled));
+        if (!api) return { ok: false };
+        const result = await apply(() => api.setEnabled(enabled));
+        return { ok: Boolean(result?.ok), error: result?.error };
       },
 
       setFeedUrl: async (feedUrl) => {

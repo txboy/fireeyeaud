@@ -19,37 +19,63 @@ export function SettingsPanel() {
   const saveGeneral = useSettingsStore((s) => s.saveGeneral);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const closeTab = useUiStore((s) => s.closeRightTab);
-  const update = useUpdatesStore();
-  const [feedDraft, setFeedDraft] = useState(update.feedUrl);
-  const [feedError, setFeedError] = useState<'invalid_url' | 'busy' | null>(null);
+  const phase = useUpdatesStore((s) => s.phase);
+  const autoUpdateEnabled = useUpdatesStore((s) => s.enabled);
+  const updateFeedUrl = useUpdatesStore((s) => s.feedUrl);
+  const currentVersion = useUpdatesStore((s) => s.currentVersion);
+  const availableVersion = useUpdatesStore((s) => s.availableVersion);
+  const percent = useUpdatesStore((s) => s.percent);
+  const updateError = useUpdatesStore((s) => s.error);
+  const setAutoUpdate = useUpdatesStore((s) => s.setEnabled);
+  const setUpdateFeedUrl = useUpdatesStore((s) => s.setFeedUrl);
+  const checkForUpdates = useUpdatesStore((s) => s.check);
+  const downloadUpdate = useUpdatesStore((s) => s.download);
+  const installUpdate = useUpdatesStore((s) => s.install);
+  const [feedDraft, setFeedDraft] = useState(updateFeedUrl);
+  const [feedError, setFeedError] = useState<
+    'invalid_url' | 'busy' | 'save_failed' | null
+  >(null);
+  const [toggleError, setToggleError] = useState(false);
 
   useEffect(() => {
-    setFeedDraft(update.feedUrl);
-  }, [update.feedUrl]);
+    setFeedDraft(updateFeedUrl);
+  }, [updateFeedUrl]);
 
   const applyFeed = async () => {
-    const result = await update.setFeedUrl(feedDraft);
+    const result = await setUpdateFeedUrl(feedDraft);
     setFeedError(
-      result.ok ? null : result.error === 'busy' ? 'busy' : 'invalid_url',
+      result.ok
+        ? null
+        : result.error === 'busy'
+          ? 'busy'
+          : result.error === 'invalid_url'
+            ? 'invalid_url'
+            : 'save_failed',
     );
   };
 
-  const statusText =
-    update.error === 'dev_mode'
-      ? t('updateDevMode')
-      : update.error
-        ? t('updateFailed')
-        : update.phase === 'checking'
-          ? t('updateChecking')
-          : update.phase === 'available'
-            ? t('updateAvailable', { version: update.availableVersion ?? '' })
-            : update.phase === 'downloading'
-              ? t('updateDownloading', { percent: update.percent })
-              : update.phase === 'downloaded'
-                ? t('updateDownloaded', { version: update.availableVersion ?? '' })
-                : update.phase === 'not-available'
-                  ? t('updateIdle')
-                  : t('updateNotChecked');
+  const updateStatusText = (() => {
+    if (updateError === 'dev_mode') return t('updateDevMode');
+    if (updateError === 'download_failed') return t('updateDownloadFailed');
+    if (updateError) return t('updateFailed');
+    switch (phase) {
+      case 'checking':
+        return t('updateChecking');
+      case 'available':
+        return t('updateAvailable', { version: availableVersion || '—' });
+      case 'downloading':
+        return t('updateDownloading', { percent });
+      case 'downloaded':
+        return t('updateDownloaded', { version: availableVersion || '—' });
+      case 'not-available':
+        return t('updateIdle');
+      default:
+        return t('updateNotChecked');
+    }
+  })();
+
+  const applyDisabled =
+    phase === 'checking' || phase === 'downloading' || phase === 'downloaded';
 
   useEffect(() => {
     void loadSettings();
@@ -155,11 +181,20 @@ export function SettingsPanel() {
         <span className="field__label">{t('updateSection')}</span>
         <label className="field field--inline">
           <Switch
-            checked={update.enabled}
-            onChange={(value) => void update.setEnabled(value)}
+            aria-label={t('autoUpdateEnabled')}
+            checked={autoUpdateEnabled}
+            onChange={async (value) => {
+              const result = await setAutoUpdate(value);
+              setToggleError(!result.ok);
+            }}
           />
           <span>{t('autoUpdateEnabled')}</span>
         </label>
+        {toggleError && (
+          <span className="card__meta" role="alert">
+            {t('updateToggleFailed')}
+          </span>
+        )}
         <span className="card__meta">{t('updateFeedHint')}</span>
       </div>
       <label className="field">
@@ -167,49 +202,60 @@ export function SettingsPanel() {
         <input
           className="searchbox"
           value={feedDraft}
-          onChange={(event) => setFeedDraft(event.target.value)}
+          onChange={(event) => {
+            setFeedDraft(event.target.value);
+            setFeedError(null);
+            setToggleError(false);
+          }}
           onKeyDown={(event) => {
-            if (event.key === 'Enter') void applyFeed();
+            if (
+              event.key === 'Enter' &&
+              !event.nativeEvent.isComposing &&
+              !applyDisabled
+            ) {
+              void applyFeed();
+            }
           }}
         />
       </label>
       {feedError && (
-        <span className="card__meta">
-          {t(feedError === 'busy' ? 'updateFeedBusy' : 'updateFeedInvalid')}
+        <span className="card__meta" role="alert">
+          {t(
+            feedError === 'save_failed'
+              ? 'updateFeedSaveFailed'
+              : feedError === 'busy'
+                ? 'updateFeedBusy'
+                : 'updateFeedInvalid',
+          )}
         </span>
       )}
       <span className="card__meta">
-        {t('updateCurrent', { version: update.currentVersion || '—' })}
+        {t('updateCurrent', { version: currentVersion || '—' })}
       </span>
-      <span className="card__meta">{statusText}</span>
-      {update.phase === 'downloading' && (
-        <Progress percent={update.percent} size="small" status="active" />
+      <span className="card__meta" aria-live="polite">
+        {updateStatusText}
+      </span>
+      {phase === 'downloading' && (
+        <Progress percent={percent} size="small" status="active" />
       )}
       <div className="field field--inline">
-        <Button
-          onClick={() => void applyFeed()}
-          disabled={
-            update.phase === 'checking' ||
-            update.phase === 'downloading' ||
-            update.phase === 'downloaded'
-          }
-        >
+        <Button onClick={() => void applyFeed()} disabled={applyDisabled}>
           {t('updateApplyFeed')}
         </Button>
         <Button
-          onClick={() => void update.check()}
-          loading={update.phase === 'checking'}
-          disabled={update.phase === 'downloading'}
+          onClick={() => void checkForUpdates()}
+          loading={phase === 'checking'}
+          disabled={phase === 'downloading' || phase === 'downloaded'}
         >
           {t('updateCheck')}
         </Button>
-        {update.phase === 'available' && (
-          <Button type="primary" onClick={() => void update.download()}>
+        {phase === 'available' && (
+          <Button type="primary" onClick={() => void downloadUpdate()}>
             {t('updateDownload')}
           </Button>
         )}
-        {update.phase === 'downloaded' && (
-          <Button type="primary" onClick={() => void update.install()}>
+        {phase === 'downloaded' && (
+          <Button type="primary" onClick={() => void installUpdate()}>
             {t('updateRestart')}
           </Button>
         )}

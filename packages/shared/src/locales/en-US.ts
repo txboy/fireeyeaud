@@ -1054,7 +1054,11 @@ export default {
     updateFailed: 'Update check failed. Check your network or feed URL.',
     updateDevMode: 'Update checks are disabled in development mode',
     updateFeedInvalid: 'Invalid feed URL; it must start with http:// or https://',
-    updateFeedBusy: 'An update is in progress; please try again shortly.',
+    updateFeedBusy:
+      'An update is in progress or waiting to restart; please try again shortly.',
+    updateFeedSaveFailed: 'Could not save the update feed URL. Please try again.',
+    updateToggleFailed: 'Could not save the auto-update setting.',
+    updateDownloadFailed: 'Update download failed. Please try again.',
     saved: 'Saved',
   },
   welcome: {

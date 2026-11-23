@@ -141,8 +141,28 @@ test('commands apply result.state and only init subscribes once', async () => {
   await store.getState().init();
   assert.equal(listeners.length, 1);
 
-  await store.getState().setEnabled(false);
+  assert.deepEqual(await store.getState().setEnabled(false), {
+    ok: true,
+    error: undefined,
+  });
   assert.equal(store.getState().enabled, false);
+});
+
+test('setEnabled reports a rejected persist and leaves state unchanged', async () => {
+  const { api } = fakeBridge({
+    setEnabled: async () => ({
+      ok: false,
+      error: 'persist_failed',
+      state: state({ enabled: true }),
+    }),
+  });
+  const store = createUpdatesStore(api);
+
+  assert.deepEqual(await store.getState().setEnabled(false), {
+    ok: false,
+    error: 'persist_failed',
+  });
+  assert.equal(store.getState().enabled, true);
 });
 
 test('command rejection is swallowed and leaves the store unchanged', async () => {
@@ -210,7 +230,7 @@ test('install rejection is swallowed', async () => {
 test('commands are no-ops without a bridge', async () => {
   const store = createUpdatesStore(undefined);
   await assert.doesNotReject(store.getState().init());
-  await assert.doesNotReject(store.getState().setEnabled(false));
+  assert.deepEqual(await store.getState().setEnabled(false), { ok: false });
   assert.deepEqual(await store.getState().setFeedUrl('https://x.example.com/'), { ok: false });
   await assert.doesNotReject(store.getState().check());
   await assert.doesNotReject(store.getState().download());

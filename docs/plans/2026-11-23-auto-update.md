@@ -1470,7 +1470,7 @@ export interface UpdatesBridge {
 
 interface UpdatesStore extends UpdateState {
   init: () => Promise<void>;
-  setEnabled: (enabled: boolean) => Promise<void>;
+  setEnabled: (enabled: boolean) => Promise<{ ok: boolean; error?: UpdateErrorCode }>;
   setFeedUrl: (feedUrl: string) => Promise<{ ok: boolean; error?: UpdateErrorCode }>;
   check: () => Promise<void>;
   download: () => Promise<void>;
@@ -1519,8 +1519,9 @@ export function createUpdatesStore(api: UpdatesBridge | undefined) {
       },
 
       setEnabled: async (enabled) => {
-        if (!api) return;
-        await apply(() => api.setEnabled(enabled));
+        if (!api) return { ok: false };
+        const result = await apply(() => api.setEnabled(enabled));
+        return { ok: Boolean(result?.ok), error: result?.error };
       },
 
       setFeedUrl: async (feedUrl) => {
@@ -1593,7 +1594,7 @@ cd apps/renderer; npm test; cd ../..
 ```
 
 Expected: 类型检查 PASS；`tests/*.test.ts` 全部通过（含 `updatesStore.test.ts`：快照应用、
-事件优先于迟到快照、init 失败复位可重试、命令失败吞掉、`setFeedUrl` 结果透传）。
+事件优先于迟到快照、init 失败复位可重试、命令失败吞掉、`setEnabled` / `setFeedUrl` 结果透传）。
 
 **Step 5: Commit**
 
@@ -1608,8 +1609,11 @@ git commit -m "feat(update): add renderer update store and normalize IPC results
 
 **Files:**
 - Modify: `apps/renderer/src/components/panels/SettingsPanel.tsx`
-- Modify: `packages/shared/src/locales/zh-CN.ts:1005-1028`
-- Modify: `packages/shared/src/locales/en-US.ts:1004-1029`
+- Modify: `apps/renderer/src/store/updates.ts`
+- Modify: `apps/renderer/tests/updatesStore.test.ts`
+- Modify: `packages/shared/src/locales/zh-CN.ts`
+- Modify: `packages/shared/src/locales/en-US.ts`
+- Modify: `docs/plans/2026-11-23-auto-update.md`
 
 **Step 1: 补中文文案**
 
@@ -1642,7 +1646,10 @@ git commit -m "feat(update): add renderer update store and normalize IPC results
     updateFailed: '检查更新失败，请检查网络或更新源地址',
     updateDevMode: '开发模式不检查更新',
     updateFeedInvalid: '更新源地址无效，需以 http:// 或 https:// 开头',
-    updateFeedBusy: '正在检查或下载更新，请稍后再试',
+    updateFeedBusy: '更新正在进行或等待重启，请稍后再试',
+    updateFeedSaveFailed: '保存更新源失败，请稍后重试',
+    updateToggleFailed: '自动更新设置保存失败',
+    updateDownloadFailed: '下载更新失败，请稍后重试',
 ```
 
 **Step 2: 补英文文案**
@@ -1678,7 +1685,11 @@ git commit -m "feat(update): add renderer update store and normalize IPC results
     updateFailed: 'Update check failed. Check your network or feed URL.',
     updateDevMode: 'Update checks are disabled in development mode',
     updateFeedInvalid: 'Invalid feed URL; it must start with http:// or https://',
-    updateFeedBusy: 'An update is in progress; please try again shortly.',
+    updateFeedBusy:
+      'An update is in progress or waiting to restart; please try again shortly.',
+    updateFeedSaveFailed: 'Could not save the update feed URL. Please try again.',
+    updateToggleFailed: 'Could not save the auto-update setting.',
+    updateDownloadFailed: 'Update download failed. Please try again.',
 ```
 
 **Step 3: 扩展 SettingsPanel**
@@ -1693,49 +1704,76 @@ import { useTranslation } from 'react-i18next';
 import { Button, Progress, Radio, Select, Switch } from 'antd';
 import { supportedLocales } from '@fireeyeaud/shared/locales';
 import { useSettingsStore } from '../../store/settings';
-import { useUpdatesStore } from '../../store/updates';
 import { useUiStore } from '../../store/ui';
+import { useUpdatesStore } from '../../store/updates';
 import { FormActions } from '../forms/FormActions';
 ```
 
-2. 在组件内、现有 `const closeTab = ...` 之后加入：
+2. 在组件内、现有 `const closeTab = ...` 之后加入。用逐字段 selector 订阅，避免下载进度
+   每跳一次就重渲染整张表单；再把 `setEnabled` / `setFeedUrl` 等错误结果反馈到界面：
 
 ```tsx
-  const update = useUpdatesStore();
-  const [feedDraft, setFeedDraft] = useState(update.feedUrl);
-  const [feedError, setFeedError] = useState<'invalid_url' | 'busy' | null>(null);
+  const phase = useUpdatesStore((s) => s.phase);
+  const autoUpdateEnabled = useUpdatesStore((s) => s.enabled);
+  const updateFeedUrl = useUpdatesStore((s) => s.feedUrl);
+  const currentVersion = useUpdatesStore((s) => s.currentVersion);
+  const availableVersion = useUpdatesStore((s) => s.availableVersion);
+  const percent = useUpdatesStore((s) => s.percent);
+  const updateError = useUpdatesStore((s) => s.error);
+  const setAutoUpdate = useUpdatesStore((s) => s.setEnabled);
+  const setUpdateFeedUrl = useUpdatesStore((s) => s.setFeedUrl);
+  const checkForUpdates = useUpdatesStore((s) => s.check);
+  const downloadUpdate = useUpdatesStore((s) => s.download);
+  const installUpdate = useUpdatesStore((s) => s.install);
+  const [feedDraft, setFeedDraft] = useState(updateFeedUrl);
+  const [feedError, setFeedError] = useState<
+    'invalid_url' | 'busy' | 'save_failed' | null
+  >(null);
+  const [toggleError, setToggleError] = useState(false);
 
   useEffect(() => {
-    setFeedDraft(update.feedUrl);
-  }, [update.feedUrl]);
+    setFeedDraft(updateFeedUrl);
+  }, [updateFeedUrl]);
 
   const applyFeed = async () => {
-    const result = await update.setFeedUrl(feedDraft);
+    const result = await setUpdateFeedUrl(feedDraft);
     setFeedError(
-      result.ok ? null : result.error === 'busy' ? 'busy' : 'invalid_url',
+      result.ok
+        ? null
+        : result.error === 'busy'
+          ? 'busy'
+          : result.error === 'invalid_url'
+            ? 'invalid_url'
+            : 'save_failed',
     );
   };
 
-  const statusText =
-    update.error === 'dev_mode'
-      ? t('updateDevMode')
-      : update.error
-        ? t('updateFailed')
-        : update.phase === 'checking'
-          ? t('updateChecking')
-          : update.phase === 'available'
-            ? t('updateAvailable', { version: update.availableVersion ?? '' })
-            : update.phase === 'downloading'
-              ? t('updateDownloading', { percent: update.percent })
-              : update.phase === 'downloaded'
-                ? t('updateDownloaded', { version: update.availableVersion ?? '' })
-                : update.phase === 'not-available'
-                  ? t('updateIdle')
-                  : t('updateNotChecked');
+  const updateStatusText = (() => {
+    if (updateError === 'dev_mode') return t('updateDevMode');
+    if (updateError === 'download_failed') return t('updateDownloadFailed');
+    if (updateError) return t('updateFailed');
+    switch (phase) {
+      case 'checking':
+        return t('updateChecking');
+      case 'available':
+        return t('updateAvailable', { version: availableVersion || '—' });
+      case 'downloading':
+        return t('updateDownloading', { percent });
+      case 'downloaded':
+        return t('updateDownloaded', { version: availableVersion || '—' });
+      case 'not-available':
+        return t('updateIdle');
+      default:
+        return t('updateNotChecked');
+    }
+  })();
+
+  const applyDisabled =
+    phase === 'checking' || phase === 'downloading' || phase === 'downloaded';
 ```
 
-说明：`invalid_input`（例如 `setEnabled` 收到非布尔值）会落入 `update.error` 的通用分支，
-显示 `updateFailed`，无需新增文案；正常 UI 只会传布尔值，该代码主要用于防御异常调用。
+说明：`invalid_input`、`check_failed` 等其余错误码会落入 `updateError` 的通用分支，
+显示 `updateFailed`；`download_failed` 有单独的下载失败文案，`dev_mode` 有开发模式提示。
 
 3. 在 `FormActions` 之前插入更新区块：
 
@@ -1744,11 +1782,20 @@ import { FormActions } from '../forms/FormActions';
         <span className="field__label">{t('updateSection')}</span>
         <label className="field field--inline">
           <Switch
-            checked={update.enabled}
-            onChange={(value) => void update.setEnabled(value)}
+            aria-label={t('autoUpdateEnabled')}
+            checked={autoUpdateEnabled}
+            onChange={async (value) => {
+              const result = await setAutoUpdate(value);
+              setToggleError(!result.ok);
+            }}
           />
           <span>{t('autoUpdateEnabled')}</span>
         </label>
+        {toggleError && (
+          <span className="card__meta" role="alert">
+            {t('updateToggleFailed')}
+          </span>
+        )}
         <span className="card__meta">{t('updateFeedHint')}</span>
       </div>
       <label className="field">
@@ -1756,69 +1803,81 @@ import { FormActions } from '../forms/FormActions';
         <input
           className="searchbox"
           value={feedDraft}
-          onChange={(event) => setFeedDraft(event.target.value)}
+          onChange={(event) => {
+            setFeedDraft(event.target.value);
+            setFeedError(null);
+            setToggleError(false);
+          }}
           onKeyDown={(event) => {
-            if (event.key === 'Enter') void applyFeed();
+            if (
+              event.key === 'Enter' &&
+              !event.nativeEvent.isComposing &&
+              !applyDisabled
+            ) {
+              void applyFeed();
+            }
           }}
         />
       </label>
       {feedError && (
-        <span className="card__meta">
-          {t(feedError === 'busy' ? 'updateFeedBusy' : 'updateFeedInvalid')}
+        <span className="card__meta" role="alert">
+          {t(
+            feedError === 'save_failed'
+              ? 'updateFeedSaveFailed'
+              : feedError === 'busy'
+                ? 'updateFeedBusy'
+                : 'updateFeedInvalid',
+          )}
         </span>
       )}
       <span className="card__meta">
-        {t('updateCurrent', { version: update.currentVersion || '—' })}
+        {t('updateCurrent', { version: currentVersion || '—' })}
       </span>
-      <span className="card__meta">{statusText}</span>
-      {update.phase === 'downloading' && (
-        <Progress percent={update.percent} size="small" status="active" />
+      <span className="card__meta" aria-live="polite">
+        {updateStatusText}
+      </span>
+      {phase === 'downloading' && (
+        <Progress percent={percent} size="small" status="active" />
       )}
       <div className="field field--inline">
-        <Button
-          onClick={() => void applyFeed()}
-          disabled={
-            update.phase === 'checking' ||
-            update.phase === 'downloading' ||
-            update.phase === 'downloaded'
-          }
-        >
+        <Button onClick={() => void applyFeed()} disabled={applyDisabled}>
           {t('updateApplyFeed')}
         </Button>
         <Button
-          onClick={() => void update.check()}
-          loading={update.phase === 'checking'}
-          disabled={update.phase === 'downloading'}
+          onClick={() => void checkForUpdates()}
+          loading={phase === 'checking'}
+          disabled={phase === 'downloading' || phase === 'downloaded'}
         >
           {t('updateCheck')}
         </Button>
-        {update.phase === 'available' && (
-          <Button type="primary" onClick={() => void update.download()}>
+        {phase === 'available' && (
+          <Button type="primary" onClick={() => void downloadUpdate()}>
             {t('updateDownload')}
           </Button>
         )}
-        {update.phase === 'downloaded' && (
-          <Button type="primary" onClick={() => void update.install()}>
+        {phase === 'downloaded' && (
+          <Button type="primary" onClick={() => void installUpdate()}>
             {t('updateRestart')}
           </Button>
         )}
       </div>
 ```
 
-**Step 4: 类型检查**
+**Step 4: 类型检查与渲染层单测**
 
 Run:
 
 ```powershell
 npm run renderer:typecheck
+cd apps/renderer; npm test; cd ../..
 ```
 
-Expected: PASS。
+Expected: 类型检查 PASS；渲染层测试全部通过（含 `setEnabled` 结果透传与持久化失败用例）。
 
 **Step 5: Commit**
 
 ```powershell
-git add apps/renderer/src/components/panels/SettingsPanel.tsx packages/shared/src/locales/zh-CN.ts packages/shared/src/locales/en-US.ts
+git add apps/renderer/src/components/panels/SettingsPanel.tsx apps/renderer/src/store/updates.ts apps/renderer/tests/updatesStore.test.ts packages/shared/src/locales/zh-CN.ts packages/shared/src/locales/en-US.ts docs/plans/2026-11-23-auto-update.md
 git commit -m "feat(update): add update controls to settings panel"
 ```
 
