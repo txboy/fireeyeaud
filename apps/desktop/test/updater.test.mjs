@@ -72,12 +72,28 @@ test('配置写入后可跨实例读取', () => {
 });
 
 test('非法地址不覆盖已保存配置', () => {
-  const store = createUpdatePrefsStore({ dir: tmpDir(), logger: silent() });
+  const dir = tmpDir();
+  const store = createUpdatePrefsStore({ dir, logger: silent() });
   store.set({ feedUrl: 'https://example.com/mirror' });
   const result = store.set({ feedUrl: 'ftp://example.com/' });
   assert.equal(result.ok, false);
   assert.equal(result.error, 'invalid_url');
   assert.equal(store.get().feedUrl, 'https://example.com/mirror/');
+
+  const reloaded = createUpdatePrefsStore({ dir, logger: silent() });
+  assert.equal(reloaded.get().feedUrl, 'https://example.com/mirror/');
+});
+
+test('重命名失败时清理临时文件并回滚缓存', () => {
+  const dir = tmpDir();
+  fs.mkdirSync(path.join(dir, 'update-settings.json'));
+  const store = createUpdatePrefsStore({ dir, logger: silent() });
+  const before = store.get();
+  const result = store.set({ enabled: false });
+  assert.equal(result.ok, false);
+  assert.equal(result.error, 'persist_failed');
+  assert.deepEqual(store.get(), before);
+  assert.equal(fs.existsSync(path.join(dir, 'update-settings.json.tmp')), false);
 });
 
 test('配置文件损坏时回退默认值', () => {

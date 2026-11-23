@@ -76,6 +76,8 @@ function createUpdatePrefsStore({ dir, logger = console }) {
       next.feedUrl = feedUrl;
     }
     cache = next;
+    // 临时文件 + rename 保证不会留下写坏的文件；不做 fsync，
+    // 极端断电时可能丢失最后一次偏好变更，对开关类配置可接受。
     const tmp = `${file}.tmp`;
     try {
       fs.mkdirSync(dir, { recursive: true });

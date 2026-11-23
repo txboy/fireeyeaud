@@ -206,12 +206,28 @@ test('配置写入后可跨实例读取', () => {
 });
 
 test('非法地址不覆盖已保存配置', () => {
-  const store = createUpdatePrefsStore({ dir: tmpDir(), logger: silent() });
+  const dir = tmpDir();
+  const store = createUpdatePrefsStore({ dir, logger: silent() });
   store.set({ feedUrl: 'https://example.com/mirror' });
   const result = store.set({ feedUrl: 'ftp://example.com/' });
   assert.equal(result.ok, false);
   assert.equal(result.error, 'invalid_url');
   assert.equal(store.get().feedUrl, 'https://example.com/mirror/');
+
+  const reloaded = createUpdatePrefsStore({ dir, logger: silent() });
+  assert.equal(reloaded.get().feedUrl, 'https://example.com/mirror/');
+});
+
+test('重命名失败时清理临时文件并回滚缓存', () => {
+  const dir = tmpDir();
+  fs.mkdirSync(path.join(dir, 'update-settings.json'));
+  const store = createUpdatePrefsStore({ dir, logger: silent() });
+  const before = store.get();
+  const result = store.set({ enabled: false });
+  assert.equal(result.ok, false);
+  assert.equal(result.error, 'persist_failed');
+  assert.deepEqual(store.get(), before);
+  assert.equal(fs.existsSync(path.join(dir, 'update-settings.json.tmp')), false);
 });
 
 test('配置文件损坏时回退默认值', () => {
@@ -350,6 +366,8 @@ function createUpdatePrefsStore({ dir, logger = console }) {
       next.feedUrl = feedUrl;
     }
     cache = next;
+    // 临时文件 + rename 保证不会留下写坏的文件；不做 fsync，
+    // 极端断电时可能丢失最后一次偏好变更，对开关类配置可接受。
     const tmp = `${file}.tmp`;
     try {
       fs.mkdirSync(dir, { recursive: true });
@@ -388,7 +406,7 @@ Run:
 npm run desktop:test
 ```
 
-Expected: PASS，全部 11 个测试通过。
+Expected: PASS，全部 12 个测试通过。
 
 **Step 5: Commit**
 
@@ -799,7 +817,7 @@ Run:
 npm run desktop:test
 ```
 
-Expected: PASS，11 个旧测试 + 10 个新测试全部通过。
+Expected: PASS，12 个旧测试 + 10 个新测试全部通过。
 
 **Step 5: Commit**
 
@@ -1509,7 +1527,7 @@ git commit -m "feat(update): surface update status in status bar and notificatio
 }
 ```
 
-`feedUrl` 必须以 `/` 结尾、只接受 http(s)，可在设置界面修改。内网部署时把它指向镜像目录，镜像需提供 `latest.yml`、安装包和 `.blockmap`。
+`feedUrl` 必须以 `/` 结尾、只接受 http(s)，可在设置界面修改。内网部署时把它指向镜像目录，镜像需提供 `latest.yml`、安装包和 `.blockmap`。配置文件采用临时文件 + rename 的原子替换，避免留下写坏的 JSON；不做 fsync，极端断电时可能丢失最后一次偏好变更，对开关类配置可接受。
 
 ## 发布新版本
 
