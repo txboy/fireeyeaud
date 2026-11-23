@@ -239,29 +239,38 @@ function registerIpc() {
   ipcMain.handle('update:get-state', () => updater?.getState() ?? null);
   ipcMain.handle('update:set-enabled', (_event, enabled) => {
     if (!updater) return { ok: false, error: 'unavailable', state: null };
-    if (typeof enabled !== 'boolean') return { ok: false, error: 'invalid_input' };
+    if (typeof enabled !== 'boolean') {
+      return { ok: false, error: 'invalid_input', state: updater.getState() };
+    }
     return updater.setEnabled(enabled);
   });
-  ipcMain.handle('update:set-feed', (_event, url) => {
-    if (!updater) return { ok: false, error: 'unavailable', state: null };
-    return updater.setFeedUrl(url);
-  });
+  ipcMain.handle(
+    'update:set-feed',
+    (_event, url) =>
+      updater?.setFeedUrl(url) ?? { ok: false, error: 'unavailable', state: null },
+  );
   ipcMain.handle('update:check', () =>
     updater
-      ? updater.check({ manual: true })
+      ? { ok: true, state: updater.check({ manual: true }) }
       : { ok: false, error: 'unavailable', state: null },
   );
-  ipcMain.handle(
-    'update:download',
-    () => updater?.download() ?? { ok: false, error: 'unavailable', state: null },
+  ipcMain.handle('update:download', () =>
+    updater
+      ? { ...updater.download(), state: updater.getState() }
+      : { ok: false, error: 'unavailable', state: null },
   );
   // 走正常退出路径：before-quit 会判断是否已下载并触发静默安装。
   ipcMain.handle('update:install', () => {
     if (!updater || !updater.isUpdateReady()) {
-      return { ok: false, error: 'not_available' };
+      return {
+        ok: false,
+        error: 'not_available',
+        state: updater?.getState() ?? null,
+      };
     }
+    const state = updater.getState();
     app.quit();
-    return { ok: true };
+    return { ok: true, state };
   });
   ipcMain.handle('window:minimize', () => {
     mainWindow?.minimize();

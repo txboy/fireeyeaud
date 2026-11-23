@@ -922,5 +922,6 @@ export interface UpdateState {
 export interface UpdateResult {
   ok: boolean;
   error?: UpdateErrorCode;
-  state: UpdateState;
+  /** updater 未创建或参数校验失败时为 null。 */
+  state: UpdateState | null;
 }

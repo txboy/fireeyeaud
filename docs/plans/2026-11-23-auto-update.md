@@ -98,7 +98,8 @@ export interface UpdateState {
 export interface UpdateResult {
   ok: boolean;
   error?: UpdateErrorCode;
-  state: UpdateState;
+  /** updater 未创建或参数校验失败时为 null。 */
+  state: UpdateState | null;
 }
 ```
 
@@ -1154,33 +1155,45 @@ let updater = null;
   ipcMain.handle('update:get-state', () => updater?.getState() ?? null);
   ipcMain.handle('update:set-enabled', (_event, enabled) => {
     if (!updater) return { ok: false, error: 'unavailable', state: null };
-    if (typeof enabled !== 'boolean') return { ok: false, error: 'invalid_input' };
+    if (typeof enabled !== 'boolean') {
+      return { ok: false, error: 'invalid_input', state: updater.getState() };
+    }
     return updater.setEnabled(enabled);
   });
-  ipcMain.handle('update:set-feed', (_event, url) => {
-    if (!updater) return { ok: false, error: 'unavailable', state: null };
-    return updater.setFeedUrl(url);
-  });
-  ipcMain.handle('update:check', () =>
-    updater ? updater.check({ manual: true }) : { ok: false, error: 'unavailable', state: null },
-  );
   ipcMain.handle(
-    'update:download',
-    () => updater?.download() ?? { ok: false, error: 'unavailable', state: null },
+    'update:set-feed',
+    (_event, url) =>
+      updater?.setFeedUrl(url) ?? { ok: false, error: 'unavailable', state: null },
+  );
+  ipcMain.handle('update:check', () =>
+    updater
+      ? { ok: true, state: updater.check({ manual: true }) }
+      : { ok: false, error: 'unavailable', state: null },
+  );
+  ipcMain.handle('update:download', () =>
+    updater
+      ? { ...updater.download(), state: updater.getState() }
+      : { ok: false, error: 'unavailable', state: null },
   );
   // 走正常退出路径：before-quit 会判断是否已下载并触发静默安装。
   ipcMain.handle('update:install', () => {
     if (!updater || !updater.isUpdateReady()) {
-      return { ok: false, error: 'not_available' };
+      return {
+        ok: false,
+        error: 'not_available',
+        state: updater?.getState() ?? null,
+      };
     }
+    const state = updater.getState();
     app.quit();
-    return { ok: true };
+    return { ok: true, state };
   });
 ```
 
-说明：`update:get-state` 保持返回状态本身或 `null`；其余命令在 updater 尚未创建时统一返回
-`{ ok: false, error: 'unavailable', state: null }`，避免渲染层拿到 `null` 后分不清“不可用”
-与“无状态”。`set-enabled` 只接受布尔值，不做隐式转换。
+说明：`update:get-state` 保持返回状态本身或 `null`；其余命令统一返回完整的
+`UpdateResult` 形状 `{ ok, error?, state }`（`state` 可为 `null`），避免渲染层拿到 `null`
+后分不清“不可用”与“无状态”。`download()` 在 `not_available` / `busy` 时不带 state，
+因此处理器必须补上 `state: updater.getState()`。`set-enabled` 只接受布尔值，不做隐式转换。
 
 **Step 3: 在 whenReady 中创建 updater 并启动**
 
@@ -1418,9 +1431,9 @@ import type {
         getState: () => Promise<UpdateState | null>;
         setEnabled: (enabled: boolean) => Promise<UpdateResult | null>;
         setFeedUrl: (url: string) => Promise<UpdateResult | null>;
-        check: () => Promise<UpdateState | null>;
-        download: () => Promise<{ ok: boolean; error?: UpdateErrorCode } | null>;
-        install: () => Promise<{ ok: boolean } | null>;
+        check: () => Promise<UpdateResult | null>;
+        download: () => Promise<UpdateResult | null>;
+        install: () => Promise<UpdateResult | null>;
         onState: (callback: (state: UpdateState) => void) => () => void;
       };
 ```
@@ -1478,11 +1491,12 @@ export const useUpdatesStore = create<UpdatesStore>((set) => ({
     return { ok: Boolean(result?.ok), error: result?.error };
   },
   check: async () => {
-    const state = await window.fireeyeaud?.updates?.check();
-    if (state) set(state);
+    const result = await window.fireeyeaud?.updates?.check();
+    if (result?.state) set(result.state);
   },
   download: async () => {
-    await window.fireeyeaud?.updates?.download();
+    const result = await window.fireeyeaud?.updates?.download();
+    if (result?.state) set(result.state);
   },
   install: async () => {
     try {
@@ -1527,8 +1541,8 @@ Expected: PASS。
 **Step 5: Commit**
 
 ```powershell
-git add apps/renderer/src/env.d.ts apps/renderer/src/store/updates.ts apps/renderer/src/App.tsx
-git commit -m "feat(update): add renderer update store and preload types"
+git add packages/shared/src/types.ts apps/desktop/src/main.cjs apps/renderer/src/env.d.ts apps/renderer/src/store/updates.ts apps/renderer/src/App.tsx docs/plans/2026-11-23-auto-update.md
+git commit -m "feat(update): add renderer update store and normalize IPC results"
 ```
 
 ---

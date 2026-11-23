@@ -12,6 +12,7 @@ import { SelectionCopyMenu } from './components/SelectionCopyMenu';
 import { WorkspaceWatcher } from './components/WorkspaceWatcher';
 import { useSidecarStore } from './store/sidecar';
 import { useWorkspaceStore } from './store/workspace';
+import { useUpdatesStore } from './store/updates';
 import { useUiStore } from './store/ui';
 import { useChatStore } from './store/chat';
 import { useDbSqlAssistantStore } from './store/dbSqlAssistant';
@@ -27,9 +28,15 @@ export default function App() {
   const clearDbSqlAssistant = useDbSqlAssistantStore((s) => s.clearAll);
   const loadSessions = useChatStore((s) => s.loadSessions);
 
+  const initUpdates = useUpdatesStore((s) => s.init);
+
   useEffect(() => {
     void init();
   }, [init]);
+
+  useEffect(() => {
+    void initUpdates();
+  }, [initUpdates]);
 
   // 工作区生命周期：仅在真正打开/切换工作区时清空右侧并自动打开最近一条会话。
   // 放在 App（工作区存续期间始终挂载），使右侧区域独立于左侧面板的挂载/切换视图。
