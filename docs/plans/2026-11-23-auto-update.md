@@ -179,6 +179,15 @@ test('normalizeFeedUrl 拒绝非法协议、空值与带凭据的地址', () => 
   assert.equal(normalizeFeedUrl('not a url'), null);
 });
 
+test('normalizeFeedUrl 处理空路径、大小写与 IPv6', () => {
+  assert.equal(normalizeFeedUrl('https://example.com'), 'https://example.com/');
+  assert.equal(
+    normalizeFeedUrl('HTTPS://Example.COM/updates'),
+    'https://example.com/updates/',
+  );
+  assert.equal(normalizeFeedUrl('http://[::1]:8080/feed'), 'http://[::1]:8080/feed/');
+});
+
 test('配置默认开启，并使用默认 GitHub 地址', () => {
   const store = createUpdatePrefsStore({ dir: tmpDir(), logger: silent() });
   assert.deepEqual(store.get(), { enabled: true, feedUrl: DEFAULT_FEED_URL });
@@ -198,10 +207,53 @@ test('配置写入后可跨实例读取', () => {
 
 test('非法地址不覆盖已保存配置', () => {
   const store = createUpdatePrefsStore({ dir: tmpDir(), logger: silent() });
+  store.set({ feedUrl: 'https://example.com/mirror' });
   const result = store.set({ feedUrl: 'ftp://example.com/' });
   assert.equal(result.ok, false);
   assert.equal(result.error, 'invalid_url');
+  assert.equal(store.get().feedUrl, 'https://example.com/mirror/');
+});
+
+test('配置文件损坏时回退默认值', () => {
+  const dir = tmpDir();
+  fs.writeFileSync(path.join(dir, 'update-settings.json'), '{bad', 'utf8');
+  const store = createUpdatePrefsStore({ dir, logger: silent() });
+  assert.deepEqual(store.get(), { enabled: true, feedUrl: DEFAULT_FEED_URL });
+});
+
+test('配置文件缺字段时逐项回退', () => {
+  const dir = tmpDir();
+  fs.writeFileSync(
+    path.join(dir, 'update-settings.json'),
+    JSON.stringify({ enabled: false }),
+    'utf8',
+  );
+  const store = createUpdatePrefsStore({ dir, logger: silent() });
+  assert.deepEqual(store.get(), { enabled: false, feedUrl: DEFAULT_FEED_URL });
+});
+
+test('配置中存了非法地址时回退默认地址', () => {
+  const dir = tmpDir();
+  fs.writeFileSync(
+    path.join(dir, 'update-settings.json'),
+    JSON.stringify({ enabled: true, feedUrl: 'ftp://example.com/' }),
+    'utf8',
+  );
+  const store = createUpdatePrefsStore({ dir, logger: silent() });
   assert.equal(store.get().feedUrl, DEFAULT_FEED_URL);
+});
+
+test('写入失败时返回 persist_failed 且不污染缓存', () => {
+  const root = tmpDir();
+  const dir = path.join(root, 'not-a-dir');
+  fs.writeFileSync(dir, 'x', 'utf8');
+  const store = createUpdatePrefsStore({ dir, logger: silent() });
+  const before = store.get();
+  const result = store.set({ enabled: false });
+  assert.equal(result.ok, false);
+  assert.equal(result.error, 'persist_failed');
+  assert.deepEqual(result.settings, before);
+  assert.deepEqual(store.get(), before);
 });
 ```
 
@@ -260,7 +312,8 @@ function createUpdatePrefsStore({ dir, logger = console }) {
     let raw;
     try {
       raw = fs.readFileSync(file, 'utf8');
-    } catch {
+    } catch (err) {
+      if (err?.code !== 'ENOENT') logger.error(`[update] failed to read settings: ${err}`);
       return { ...defaults };
     }
     let parsed;
@@ -270,8 +323,11 @@ function createUpdatePrefsStore({ dir, logger = console }) {
       logger.error(`[update] invalid json in ${file}, using defaults`);
       return { ...defaults };
     }
-    const feedUrl = normalizeFeedUrl(parsed?.feedUrl);
-    if (!feedUrl) logger.error(`[update] invalid feed url in ${file}, using default`);
+    const hasFeed = typeof parsed?.feedUrl === 'string';
+    const feedUrl = hasFeed ? normalizeFeedUrl(parsed.feedUrl) : null;
+    if (hasFeed && !feedUrl) {
+      logger.error(`[update] invalid feed url in ${file}, using default`);
+    }
     return {
       enabled:
         typeof parsed?.enabled === 'boolean' ? parsed.enabled : defaults.enabled,
@@ -294,11 +350,18 @@ function createUpdatePrefsStore({ dir, logger = console }) {
       next.feedUrl = feedUrl;
     }
     cache = next;
+    const tmp = `${file}.tmp`;
     try {
       fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(file, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
+      fs.writeFileSync(tmp, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
+      fs.renameSync(tmp, file);
     } catch (err) {
       logger.error(`[update] failed to persist settings: ${err}`);
+      try {
+        fs.rmSync(tmp, { force: true });
+      } catch {
+        /* ignore cleanup failure */
+      }
       cache = current;
       return { ok: false, error: 'persist_failed', settings: { ...current } };
     }
@@ -325,7 +388,7 @@ Run:
 npm run desktop:test
 ```
 
-Expected: PASS，全部 6 个测试通过。
+Expected: PASS，全部 11 个测试通过。
 
 **Step 5: Commit**
 
@@ -495,12 +558,13 @@ test('修改更新源后重置为 idle 并持久化', () => {
 });
 
 test('非法更新源被拒绝且状态不变', () => {
-  const { controller } = makeUpdater();
+  const { controller } = makeUpdater({ feedUrl: 'https://example.com/mirror' });
   const before = controller.getState();
   const result = controller.setFeedUrl('ftp://example.com/');
   assert.equal(result.ok, false);
   assert.equal(result.error, 'invalid_url');
   assert.equal(result.state.feedUrl, before.feedUrl);
+  assert.equal(result.state.feedUrl, 'https://example.com/mirror/');
 });
 ```
 
@@ -735,7 +799,7 @@ Run:
 npm run desktop:test
 ```
 
-Expected: PASS，6 个旧测试 + 10 个新测试全部通过。
+Expected: PASS，11 个旧测试 + 10 个新测试全部通过。
 
 **Step 5: Commit**
 

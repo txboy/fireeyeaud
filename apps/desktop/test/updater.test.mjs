@@ -45,6 +45,15 @@ test('normalizeFeedUrl 拒绝非法协议、空值与带凭据的地址', () => 
   assert.equal(normalizeFeedUrl('not a url'), null);
 });
 
+test('normalizeFeedUrl 处理空路径、大小写与 IPv6', () => {
+  assert.equal(normalizeFeedUrl('https://example.com'), 'https://example.com/');
+  assert.equal(
+    normalizeFeedUrl('HTTPS://Example.COM/updates'),
+    'https://example.com/updates/',
+  );
+  assert.equal(normalizeFeedUrl('http://[::1]:8080/feed'), 'http://[::1]:8080/feed/');
+});
+
 test('配置默认开启，并使用默认 GitHub 地址', () => {
   const store = createUpdatePrefsStore({ dir: tmpDir(), logger: silent() });
   assert.deepEqual(store.get(), { enabled: true, feedUrl: DEFAULT_FEED_URL });
@@ -64,8 +73,51 @@ test('配置写入后可跨实例读取', () => {
 
 test('非法地址不覆盖已保存配置', () => {
   const store = createUpdatePrefsStore({ dir: tmpDir(), logger: silent() });
+  store.set({ feedUrl: 'https://example.com/mirror' });
   const result = store.set({ feedUrl: 'ftp://example.com/' });
   assert.equal(result.ok, false);
   assert.equal(result.error, 'invalid_url');
+  assert.equal(store.get().feedUrl, 'https://example.com/mirror/');
+});
+
+test('配置文件损坏时回退默认值', () => {
+  const dir = tmpDir();
+  fs.writeFileSync(path.join(dir, 'update-settings.json'), '{bad', 'utf8');
+  const store = createUpdatePrefsStore({ dir, logger: silent() });
+  assert.deepEqual(store.get(), { enabled: true, feedUrl: DEFAULT_FEED_URL });
+});
+
+test('配置文件缺字段时逐项回退', () => {
+  const dir = tmpDir();
+  fs.writeFileSync(
+    path.join(dir, 'update-settings.json'),
+    JSON.stringify({ enabled: false }),
+    'utf8',
+  );
+  const store = createUpdatePrefsStore({ dir, logger: silent() });
+  assert.deepEqual(store.get(), { enabled: false, feedUrl: DEFAULT_FEED_URL });
+});
+
+test('配置中存了非法地址时回退默认地址', () => {
+  const dir = tmpDir();
+  fs.writeFileSync(
+    path.join(dir, 'update-settings.json'),
+    JSON.stringify({ enabled: true, feedUrl: 'ftp://example.com/' }),
+    'utf8',
+  );
+  const store = createUpdatePrefsStore({ dir, logger: silent() });
   assert.equal(store.get().feedUrl, DEFAULT_FEED_URL);
+});
+
+test('写入失败时返回 persist_failed 且不污染缓存', () => {
+  const root = tmpDir();
+  const dir = path.join(root, 'not-a-dir');
+  fs.writeFileSync(dir, 'x', 'utf8');
+  const store = createUpdatePrefsStore({ dir, logger: silent() });
+  const before = store.get();
+  const result = store.set({ enabled: false });
+  assert.equal(result.ok, false);
+  assert.equal(result.error, 'persist_failed');
+  assert.deepEqual(result.settings, before);
+  assert.deepEqual(store.get(), before);
 });

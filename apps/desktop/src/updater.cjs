@@ -38,7 +38,8 @@ function createUpdatePrefsStore({ dir, logger = console }) {
     let raw;
     try {
       raw = fs.readFileSync(file, 'utf8');
-    } catch {
+    } catch (err) {
+      if (err?.code !== 'ENOENT') logger.error(`[update] failed to read settings: ${err}`);
       return { ...defaults };
     }
     let parsed;
@@ -48,8 +49,11 @@ function createUpdatePrefsStore({ dir, logger = console }) {
       logger.error(`[update] invalid json in ${file}, using defaults`);
       return { ...defaults };
     }
-    const feedUrl = normalizeFeedUrl(parsed?.feedUrl);
-    if (!feedUrl) logger.error(`[update] invalid feed url in ${file}, using default`);
+    const hasFeed = typeof parsed?.feedUrl === 'string';
+    const feedUrl = hasFeed ? normalizeFeedUrl(parsed.feedUrl) : null;
+    if (hasFeed && !feedUrl) {
+      logger.error(`[update] invalid feed url in ${file}, using default`);
+    }
     return {
       enabled:
         typeof parsed?.enabled === 'boolean' ? parsed.enabled : defaults.enabled,
@@ -72,11 +76,18 @@ function createUpdatePrefsStore({ dir, logger = console }) {
       next.feedUrl = feedUrl;
     }
     cache = next;
+    const tmp = `${file}.tmp`;
     try {
       fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(file, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
+      fs.writeFileSync(tmp, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
+      fs.renameSync(tmp, file);
     } catch (err) {
       logger.error(`[update] failed to persist settings: ${err}`);
+      try {
+        fs.rmSync(tmp, { force: true });
+      } catch {
+        /* ignore cleanup failure */
+      }
       cache = current;
       return { ok: false, error: 'persist_failed', settings: { ...current } };
     }
