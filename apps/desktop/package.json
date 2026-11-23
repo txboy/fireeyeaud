@@ -15,6 +15,12 @@
   "build": {
     "appId": "com.fireeyeaud.app",
     "productName": "火眼审计助手",
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://github.com/txboy/fireeyeaud/releases/latest/download/"
+      }
+    ],
     "electronVersion": "44.7.0",
     "npmRebuild": false,
     "files": [
@@ -46,5 +52,8 @@
   "devDependencies": {
     "electron": "44.7.0",
     "electron-builder": "^26.0.0"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
   }
 }

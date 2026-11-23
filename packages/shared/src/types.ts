@@ -881,3 +881,31 @@ export interface AppSettings {
   };
   telemetry: boolean;
 }
+
+export type UpdatePhase =
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'downloading'
+  | 'downloaded'
+  | 'error';
+
+export interface UpdateState {
+  /** 是否在启动时自动检查。 */
+  enabled: boolean;
+  /** generic provider 的基地址，必须以 / 结尾。 */
+  feedUrl: string;
+  phase: UpdatePhase;
+  currentVersion: string;
+  availableVersion: string | null;
+  percent: number;
+  bytesPerSecond: number;
+  /** 'dev_mode' | 'invalid_url' | 'persist_failed' | 具体错误文本。 */
+  error: string | null;
+}
+
+export interface UpdateResult {
+  ok: boolean;
+  error?: string;
+  state: UpdateState;
+}
